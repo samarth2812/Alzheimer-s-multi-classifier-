@@ -1,0 +1,71 @@
+import React, { useEffect, useState } from "react";
+import { Box, Typography, Chip } from "@mui/material";
+import { SearchableDropdown } from "./searchableDropdown";
+
+export const AssignedToSelector = ({ availableUsers = [], value, onChange, error }) => {
+  const [selectedEmail, setSelectedEmail] = useState(value || "");
+
+  useEffect(() => {
+    setSelectedEmail(value || "");
+  }, [value]);
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setSelectedEmail(val);
+    onChange(val);
+  };
+
+  const handleDelete = () => {
+    setSelectedEmail("");
+    onChange("");
+  };
+
+  const showChip = Boolean(selectedEmail);
+  const showDropdown = !showChip && availableUsers.length > 1;
+
+  return (
+    <Box sx={{ mt: 1 }}>
+      {showChip ? (
+        <>
+          <Typography
+            fontSize="0.75rem"
+            fontWeight={500}
+            mb={0.5}
+            ml={1.2}
+            sx={{ color: (theme) => theme.palette.custom.text2 }}
+          >
+            Assigned To
+          </Typography>
+          <Chip
+            label={selectedEmail}
+            onDelete={availableUsers.length > 1 ? handleDelete : undefined}
+            sx={{
+              height: 24,
+              fontSize: "0.7rem",
+              bgcolor: (theme) => theme.palette.custom.two,
+              color: (theme) => theme.palette.custom.light,
+              "& .MuiChip-deleteIcon": {
+                color: (theme) => theme.palette.custom.one,
+              },
+            }}
+          />
+        </>
+      ) : (
+        showDropdown && (
+          <SearchableDropdown
+            label="Assigned To"
+            placeholder="Select a User"
+            name="assignedTo"
+            options={availableUsers.map((user) => ({
+              name: user.email,
+              value: user.email,
+            }))}
+            value={selectedEmail}
+            onChange={handleChange}
+            error={error}
+          />
+        )
+      )}
+    </Box>
+  );
+};
