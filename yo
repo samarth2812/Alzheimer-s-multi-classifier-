@@ -286,3 +286,24 @@ export const updateCommunicationById = async (
     throw new Error("Failed to update communication");
   }
 };
+
+model Attachment {
+  id             String   @id @default(uuid())
+  fileName       String
+  uploadedBy     String // User email
+  uploadedByRole String
+  uploadedAt     DateTime @default(now())
+  s3Key          String
+  moduleType     Module
+  moduleId       String // ID of the Indent, Incident, etc.
+  isDeleted      Boolean  @default(false)
+
+  indent   Indents? @relation(fields: [indentId], references: [indentId])
+  indentId String?
+  ISEObservations   ISEObservations?   @relation(fields: [moduleId], references: [observationId])
+  observationId String?
+  IncidentReporting IncidentReporting? @relation(fields: [moduleId], references: [incidentId], map: "fk_attachment_incident")
+  incidentId String?
+
+  @@index([moduleId])
+}
