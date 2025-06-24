@@ -67,3 +67,53 @@ export const fetchIndentsList = async (
     throw new Error("Failed to fetch indents");
   }
 };
+
+
+export const getObligationsForUser = async (
+  userRole: Position,
+  userDepartment: Department,
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const { filter } = workflowHelper.getObligationsForUser(userRole, userDepartment);
+    
+    // Additional validation: ensure user can only see obligations for their department
+    // (except compliance team who can see all)
+    if (userDepartment !== Department.COMPLIANCE) {
+      // For non-compliance users, add department filter
+      filter.AND.push({
+        OR: [
+          { department: userDepartment },
+          { department: null } // Handle cases where department is not set yet
+        ]
+      });
+    }
+    
+    const offset = (page - 1) * pageSize;
+    
+    const [obligations, total] = await Promise.all([
+      prisma.obligation.findMany({
+        where: filter,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: 'desc' }
+      }),
+      prisma.obligation.count({ where: filter })
+    ]);
+    
+    return {
+      success: true,
+      data: obligations,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    };
+  } catch (error: any) {
+    console.error('Error in getObligationsForUser:', error);
+    throw new Error(`Error retrieving obligations: ${error.message}`);
+  }
+};
