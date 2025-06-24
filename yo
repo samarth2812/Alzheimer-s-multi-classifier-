@@ -1,27 +1,16 @@
-    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
-    const params = {
-      Bucket: process.env.AWS_S3_BUCKET!,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    };
+let attachmentData: any = {
+  fileName: cleanFileName,
+  uploadedBy,
+  uploadedByRole,
+  s3Key: key,
+};
 
-    // Uploading to S3
-    await s3.putObject(params).promise();
-
-    // Creating attachment Record
-    const attachment = await prisma.attachment.create({
-      data: {
-        fileName: cleanFileName,
-        uploadedBy,
-        uploadedByRole,
-        s3Key: key,
-        moduleType: moduleName,
-        moduleId: entityId,
-      },
-    });
-
-    return {
-      fileUrl: key,
-      attachmentId: attachment.id,
-    };
+if (moduleName === "INDENT") {
+  attachmentData.indentId = entityId;
+} else if (moduleName === "OBSERVATION") {
+  attachmentData.observationId = entityId;
+} else if (moduleName === "INCIDENT") {
+  attachmentData.incidentId = entityId;
+} else {
+  throw new Error("Invalid module name provided");
+}
