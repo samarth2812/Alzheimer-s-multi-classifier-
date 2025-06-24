@@ -1,71 +1,288 @@
-import React, { useEffect, useState } from "react";
-import { Box, Typography, Chip } from "@mui/material";
-import { SearchableDropdown } from "./searchableDropdown";
+export const fetchCommunicationsList = async (
+  role: StepRoles,
+  department: string | undefined,
+  tab: string,
+  user: User
+) => {
+  try {
+    if (!role || !tab) {
+      throw new Error("role & tab is required");
+    }
 
-export const AssignedToSelector = ({ availableUsers = [], value, onChange, error }) => {
-  const [selectedEmail, setSelectedEmail] = useState(value || "");
+    if (role !== user.role) {
+      throw new Error(
+        "You are not authorized to view communication for this role"
+      );
+    }
 
-  useEffect(() => {
-    setSelectedEmail(value || "");
-  }, [value]);
+    const where = generateWhereFilter(role, department, tab, user.email);
+    return await prisma.communication.findMany({
+      where,
+      select: {
+        commId: true,
+        commType: true,
+        direction: true,
+        category: true,
+        subject: true,
+        refNo: true,
+        relatedIncidentId: true,
+        sentBy: true,
+        sentTo: true,
+        cc: true,
+        createdAt: true,
+        status: true,
+        responseDueBy: true,
+        priorityLevel: true,
+        summary: true,
+        isConfidential: true,
+        lastStepChangeTime: true,
+        updatedAt: true,
+        currStep: true,
+        prevStep: true,
+        remarkHistory: {
+          orderBy: { createdAt: "asc" }, //Chronological
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            isEdited: true,
+            role: true,
+            step: true,
+          },
+        },
+        attachments: {
+          where: {
+            isDeleted: false,
+          },
+          orderBy: { uploadedAt: "asc" }, //Chronological
+          select: {
+            id: true,
+            fileName: true,
+            uploadedBy: true,
+            uploadedByRole: true,
+            moduleId: true,
+            uploadedAt: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching communications:", error);
+    throw new Error("Failed to fetch  communications");
+  }
+};
 
-  const handleChange = (e) => {
-    const val = e.target.value;
-    setSelectedEmail(val);
-    onChange(val);
-  };
+export const createCommunication = async (
+  communicationData: {
+    commType: CommType;
+    direction: CommDirection;
+    category: CommCategoy;
+    subject: string;
+    refNo: string;
+    relatedIncidentId: string;
+    sentBy: string;
+    sentTo: string;
+    status: CommStatus;
+    cc: string[];
+    responseDueBy: string;
+    priorityLevel: CommPriorityLevel;
+    summary: string;
+    isConfidential: boolean;
+  },
+  role: string
+) => {
+  try {
+    const {
+      commType,
+      direction,
+      category,
+      subject,
+      refNo,
+      relatedIncidentId,
+      sentBy,
+      sentTo,
+      status,
+      cc,
+      responseDueBy,
+      priorityLevel,
+      summary,
+      isConfidential,
+    } = communicationData;
 
-  const handleDelete = () => {
-    setSelectedEmail("");
-    onChange("");
-  };
+    if (role !== "COMPLIANCE_MAKER") {
+      throw new Error(
+        "Unauthorized: Only Compliance Maker can create communication."
+      );
+    }
+    // define fields to omit from  communication data
+    const omitData = ["updatedAt", "refreshToken"];
 
-  const showChip = Boolean(selectedEmail);
-  const showDropdown = !showChip && availableUsers.length > 1;
+    const newCommunication = await prisma.communication.create({
+      data: {
+        commType: COMMUNICATION_TYPE_MAPPING[commType] as any,
+        direction: COMMUNICATION_DIRECTION_MAPPING[direction] as any,
+        category: COMMUNICATION_CATEGORY_MAPPING[category] as any,
+        subject,
+        refNo,
+        relatedIncidentId,
+        sentBy,
+        sentTo,
+        cc,
+        status: COMMUNICATION_STATUS_MAPPING[status] as any,
+        responseDueBy: new Date(responseDueBy),
+        priorityLevel: COMMUNICATION_PRIORITY_MAPPING[priorityLevel] as any,
+        summary,
+        isConfidential,
+        currStep: 0,
+        prevStep: 0,
+        openStatus: true,
+      },
+    });
 
-  return (
-    <Box sx={{ mt: 1 }}>
-      {showChip ? (
-        <>
-          <Typography
-            fontSize="0.75rem"
-            fontWeight={500}
-            mb={0.5}
-            ml={1.2}
-            sx={{ color: (theme) => theme.palette.custom.text2 }}
-          >
-            Assigned To
-          </Typography>
-          <Chip
-            label={selectedEmail}
-            onDelete={availableUsers.length > 1 ? handleDelete : undefined}
-            sx={{
-              height: 24,
-              fontSize: "0.7rem",
-              bgcolor: (theme) => theme.palette.custom.two,
-              color: (theme) => theme.palette.custom.light,
-              "& .MuiChip-deleteIcon": {
-                color: (theme) => theme.palette.custom.one,
-              },
-            }}
-          />
-        </>
-      ) : (
-        showDropdown && (
-          <SearchableDropdown
-            label="Assigned To"
-            placeholder="Select a User"
-            name="assignedTo"
-            options={availableUsers.map((user) => ({
-              name: user.email,
-              value: user.email,
-            }))}
-            value={selectedEmail}
-            onChange={handleChange}
-            error={error}
-          />
-        )
-      )}
-    </Box>
-  );
+    const communicationDataTobeSent = omit(newCommunication, omitData);
+    return communicationDataTobeSent;
+  } catch (error) {
+    console.error("Error creating Communication:", error);
+    throw new Error("Failed to create Communication");
+  }
+};
+
+export const updateCommunicationById = async (
+  commId: string,
+  role: StepRoles,
+  department: string | undefined,
+  user: User,
+  updatedFields: {
+    updateType: "FIELD_UPDATE" | "WORKFLOW_UPDATE";
+    commType: CommType;
+    direction: CommDirection;
+    category: CommCategoy;
+    subject: string;
+    refNo: string;
+    relatedIncidentId: string;
+    sentBy: string;
+    sentTo: string;
+    status: CommStatus;
+    cc: string[];
+    responseDueBy: string;
+    priorityLevel: CommPriorityLevel;
+    summary: string;
+    isConfidential: boolean;
+    rejectedStatus?: boolean;
+  }
+) => {
+  try {
+    if (!commId || !role) {
+      throw new Error("communicationId & role are required");
+    }
+
+    if (role !== user.role) {
+      throw new Error(
+        "You are not authorized to update communication for this role"
+      );
+    }
+
+    if (
+      (role === "DEPARTMENT_CHECKER" || role === "DEPARTMENT_MAKER") &&
+      department !== user.department
+    ) {
+      ("You are not authorized to update communication for this department");
+    }
+
+    //check if Communication exists
+    const existingCommunication = await prisma.communication.findUnique({
+      where: { commId },
+    });
+
+    if (!existingCommunication) {
+      throw new Error("communication is not found");
+    }
+
+    const { updateType, ...fieldsWithoutType } = updatedFields;
+    const updateData: Record<string, any> = {};
+
+    if (updatedFields.updateType === "WORKFLOW_UPDATE") {
+      const rejectedStatus = fieldsWithoutType?.rejectedStatus ?? false;
+
+      // Step update
+      const { newCurrStep, newPrevStep } = stepBasedUpdateFilter(
+        existingCommunication.currStep,
+        rejectedStatus,
+        user.role,
+        department
+      );
+
+      updateData.currStep = newCurrStep;
+      updateData.prevStep = newPrevStep;
+      updateData.rejectedStatus = rejectedStatus;
+
+      // Determine status based on newCurrStep
+      switch (newCurrStep) {
+        case 0: // Compliance Maker
+        case 1: // Compliance Checker
+          updateData.status = "PENDING";
+          break;
+        case 2: // Department Maker
+        case 3: // Department Checker
+          updateData.status = "IN_PROGRESS";
+          break;
+      }
+
+      // If final approval by Compliance Checker
+      if (
+        existingCommunication.currStep === 4 &&
+        user.role === "COMPLIANCE_CHECKER" &&
+        !rejectedStatus
+      ) {
+        updateData.closedDate = new Date();
+        updateData.status = "COMPLETED";
+        updateData.openStatus = false;
+      }
+      updateData.lastStepChangeTime = new Date();
+    }
+
+    //  Process other user-updated fields
+    for (const [key, value] of Object.entries(fieldsWithoutType)) {
+      if (value !== undefined) {
+        updateData[key] =
+          key === "responseDueBy"
+            ? new Date(value as string)
+            : (value as string | boolean | string[]);
+      }
+    }
+    // Special handling for mapped fields
+    if (fieldsWithoutType.commType) {
+      updateData.commType =
+        COMMUNICATION_TYPE_MAPPING[fieldsWithoutType.commType];
+    }
+    if (fieldsWithoutType.direction) {
+      updateData.direction =
+        COMMUNICATION_DIRECTION_MAPPING[fieldsWithoutType.direction];
+    }
+
+    if (fieldsWithoutType.category) {
+      updateData.category =
+        COMMUNICATION_CATEGORY_MAPPING[fieldsWithoutType.category];
+    }
+    if (fieldsWithoutType.status) {
+      updateData.status =
+        COMMUNICATION_STATUS_MAPPING[fieldsWithoutType.status];
+    }
+    if (fieldsWithoutType.priorityLevel) {
+      updateData.priorityLevel =
+        COMMUNICATION_PRIORITY_MAPPING[fieldsWithoutType.priorityLevel];
+    }
+
+    return await prisma.communication.update({
+      where: { commId },
+      data: updateData,
+    });
+  } catch (error) {
+    console.error("Error updating communication:", error);
+    throw new Error("Failed to update communication");
+  }
 };
