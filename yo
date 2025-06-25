@@ -1,35 +1,40 @@
-      <DialogTitle sx={{ px: 0, py: 0.5 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" px={0.5} pt={1.5}>
-          <Stack direction="row" alignItems="center">
-            <Button onClick={onClose} size="small" variant="text">
-              <ArrowBackIosNew />
-            </Button>
-            <Stack direction="row" alignItems="center" p={0}>
-              <Avatar {...stringAvatar(user?.name || "User")} />
-              <Stack direction="column" alignItems="center" p={0}>
-               <DialogContent>{user.name}</DialogContent>
-               <DialogContent>{user.email}</DialogContent>
-              </Stack>
-            </Stack>
-          </Stack>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <SearchableDropdown
-              name="commType"
-              options={commTypeLabels}
-              value={formData.commType}
-              onChange={handleChange}
-              placeholder="Comm. Type"
-              style={{ minWidth: 300 }}
-              size="small"
-            />
-            <IconButton>
-              <MoreVertOutlined />
-            </IconButton>
-            {initialData?.isReply && (
-              <IconButton>
-                <ReplayCircleFilledOutlined />
-              </IconButton>
-            )}
-          </Stack>
+<DialogTitle sx={{ p: 0 }}>
+  <Box display="flex" alignItems="center" justifyContent="space-between" px={2} pt={2}>
+    {/* Left side: Back + Avatar + User Info */}
+    <Stack direction="row" spacing={1.5} alignItems="center">
+      <Button onClick={onClose} size="small" variant="text" sx={{ minWidth: "auto", p: 0 }}>
+        ←
+      </Button>
+      <Avatar {...stringAvatar(user?.name || "User")} sx={{ width: 36, height: 36 }} />
+      <Box display="flex" flexDirection="column">
+        <Box sx={{ fontSize: "0.85rem", fontWeight: 500 }}>
+          {user?.name || "John Doe"}
         </Box>
-      </DialogTitle>
+        <Box sx={{ fontSize: "0.7rem", color: "gray" }}>
+          {user?.email || "user@example.com"}
+        </Box>
+      </Box>
+    </Stack>
+
+    {/* Right side: Comm Type Dropdown + 3-dot + Reply */}
+    <Stack direction="row" spacing={2} alignItems="center">
+      <SearchableDropdown
+        name="commType"
+        options={commTypeLabels}
+        value={formData.commType}
+        onChange={handleChange}
+        placeholder="Comm. Type"
+        style={{ minWidth: 200 }} // widened dropdown
+        size="small"
+      />
+      <IconButton>
+        <MoreVertIcon />
+      </IconButton>
+      {initialData?.isReply && (
+        <IconButton>
+          <ReplyIcon />
+        </IconButton>
+      )}
+    </Stack>
+  </Box>
+</DialogTitle>
