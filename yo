@@ -1,16 +1,63 @@
-import React, { useState } from "react";
-import { Box, Chip, InputBase, Typography } from "@mui/material";
+// GET /api/v1/users/search?query=anushka
+export const searchUsers = async (req: Request, res: Response) => {
+  const { query } = req.query;
 
-export const CustomChipField = ({
+  if (!query || typeof query !== "string") {
+    return res.status(400).json({ message: "Query is required" });
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { contains: query, mode: "insensitive" } },
+          { email: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      take: 10,
+    });
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching users" });
+  }
+};
+
+
+import React, { useRef, useState, useEffect } from "react";
+import {
+  Box,
+  Chip,
+  ClickAwayListener,
+  Fade,
+  InputAdornment,
+  InputBase,
+  Paper,
+  Popper,
+  Typography,
+} from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import { apiRequest } from "../../axios/apiRequest";
+
+export const DynamicEmailInput = ({
   label,
   value,
   onChange,
   placeholder = "Enter email",
   error,
-  disabled,
   name,
+  chipColor = "#5a3d83",
+  sx = {},
 }) => {
-  const [inputValue, setInputValue] = useState("");
+  const [input, setInput] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -18,23 +65,49 @@ export const CustomChipField = ({
     const trimmed = email.trim();
     if (trimmed && validateEmail(trimmed) && !value.includes(trimmed)) {
       onChange([...value, trimmed]);
-      setInputValue("");
+      setInput("");
+      setSuggestions([]);
+      setOpen(false);
+    }
+  };
+
+  const handleChange = async (e) => {
+    const val = e.target.value;
+    setInput(val);
+    setOpen(true);
+
+    if (val.length >= 1) {
+      try {
+        const res = await apiRequest(
+          "GET",
+          `${process.env.REACT_APP_BACKEND_URL}/api/v1/users/search?query=${val}`
+        );
+        setSuggestions(res);
+      } catch (e) {
+        console.error("Error fetching suggestions", e);
+      }
+    } else {
+      setSuggestions([]);
     }
   };
 
   const handleKeyDown = (e) => {
     if (["Enter", ",", " "].includes(e.key)) {
       e.preventDefault();
-      addEmail(inputValue);
+      addEmail(input);
     }
   };
 
-  const handleBlur = () => addEmail(inputValue);
+  const handleSelectSuggestion = (email) => {
+    addEmail(email);
+  };
+
+  const handleBlur = () => addEmail(input);
 
   const handleDelete = (email) => onChange(value.filter((e) => e !== email));
 
   return (
-    <Box sx={{ width: "100%" }}>
+    <Box sx={{ width: "100%", position: "relative", ...sx }}>
       {label && (
         <Typography
           component="label"
@@ -50,23 +123,19 @@ export const CustomChipField = ({
           {label}
         </Typography>
       )}
-
       <Box
+        ref={anchorRef}
         sx={{
           border: "2px solid",
           borderColor: error ? "red" : (theme) => theme.palette.custom.background1,
           borderRadius: 3,
           backgroundColor: "white",
           display: "flex",
-          alignItems: "center",
           flexWrap: "wrap",
           p: "4px 8px",
           minHeight: "35px",
-          height: "auto",
-          "&:hover": {
-            borderColor: "#5a3d83",
-          },
-          transition: "border-color 0.2s",
+          cursor: "text",
+          "&:hover": { borderColor: "#5a3d83" },
         }}
       >
         {value.map((email) => (
@@ -74,45 +143,32 @@ export const CustomChipField = ({
             key={email}
             label={email}
             onDelete={() => handleDelete(email)}
-            disabled={disabled}
             size="small"
             sx={{
               height: 24,
               fontSize: "0.65rem",
-              backgroundColor: (theme) => theme.palette.custom.two,
-              color: (theme) => theme.palette.custom.light,
+              backgroundColor: chipColor,
+              color: "white",
               mr: 0.5,
-              "& .MuiChip-deleteIcon": {
-                color: (theme) => theme.palette.custom.one,
-              },
             }}
           />
         ))}
 
         <InputBase
           name={name}
-          disabled={disabled}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          value={input}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onBlur={handleBlur}
           placeholder={placeholder}
           sx={{
             fontSize: "0.7rem",
             minHeight: "24px",
-            padding: 0,
             ml: 0.5,
             flex: 1,
-            "& .MuiInputBase-input": {
-              padding: 0,
-              color: (theme) => theme.palette.custom.text2,
-            },
+            color: (theme) => theme.palette.custom.text2,
             "&::placeholder": {
               color: (theme) => theme.palette.custom.text2,
-            },
-            "&.Mui-disabled": {
-              color: "#636363",
-              WebkitTextFillColor: "#636363",
             },
           }}
         />
@@ -122,11 +178,59 @@ export const CustomChipField = ({
         <Typography
           variant="h6"
           color="error"
-          sx={{ mt: 1, fontSize: "0.6rem", textAlign: "center", fontWeight: 400 }}
+          sx={{ mt: 1, fontSize: "0.6rem", textAlign: "center" }}
         >
           {error}
         </Typography>
       )}
+
+      <Popper
+        open={open && suggestions.length > 0}
+        anchorEl={anchorRef.current}
+        placement="bottom-start"
+        transition
+        style={{ zIndex: 1500, width: 400 }}
+      >
+        {({ TransitionProps }) => (
+          <Fade {...TransitionProps} timeout={200}>
+            <Paper
+              elevation={3}
+              sx={{
+                mt: 0.5,
+                borderRadius: 3,
+                maxHeight: 250,
+                overflow: "auto",
+                p: 1,
+                bgcolor: (theme) => theme.palette.custom.paper,
+                minWidth: 400,
+              }}
+            >
+              <ClickAwayListener onClickAway={() => setOpen(false)}>
+                <Box>
+                  {suggestions.map((user) => (
+                    <Box
+                      key={user.email}
+                      onClick={() => handleSelectSuggestion(user.email)}
+                      sx={{
+                        px: 2,
+                        py: 1,
+                        cursor: "pointer",
+                        borderRadius: 2,
+                        "&:hover": {
+                          backgroundColor: (theme) => theme.palette.custom.background1,
+                        },
+                      }}
+                    >
+                      <Typography sx={{ fontSize: "0.75rem" }}>{user.name}</Typography>
+                      <Typography sx={{ fontSize: "0.65rem", color: "gray" }}>{user.email}</Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </ClickAwayListener>
+            </Paper>
+          </Fade>
+        )}
+      </Popper>
     </Box>
   );
 };
