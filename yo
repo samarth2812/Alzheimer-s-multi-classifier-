@@ -1,134 +1,123 @@
-// Custom text field component
+import React, { useState } from "react";
+import { Box, Chip, InputBase, Typography } from "@mui/material";
 
-// @mui material components
-import Box from "@mui/material/Box";
-import InputBase from "@mui/material/InputBase";
-import Typography from "@mui/material/Typography";
-import React, { useRef } from "react";
-
-export const CustomTextField = ({
+export const CustomChipField = ({
   label,
-  placeholder,
   value,
   onChange,
-  name,
-  type = "text",
+  placeholder = "Enter email",
   error,
-  endAdornment,
   disabled,
+  name,
 }) => {
-  const inputRef = useRef(null);
-  const openDatePicker = () => {
-    if (type === "datetime-local" && inputRef.current) {
-      inputRef.current.showPicker && inputRef.current.showPicker();
+  const [inputValue, setInputValue] = useState("");
+
+  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const addEmail = (email) => {
+    const trimmed = email.trim();
+    if (trimmed && validateEmail(trimmed) && !value.includes(trimmed)) {
+      onChange([...value, trimmed]);
+      setInputValue("");
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (["Enter", ",", " "].includes(e.key)) {
+      e.preventDefault();
+      addEmail(inputValue);
+    }
+  };
+
+  const handleBlur = () => addEmail(inputValue);
+
+  const handleDelete = (email) => onChange(value.filter((e) => e !== email));
+
   return (
-    <Box sx={{ width: "100%" , opacity: disabled ? "0.5" : "1" }}>
-      <Typography
-        component="label"
-        sx={{
-          fontSize: "0.75rem",
-          fontWeight: 500,
-          color: (theme) => theme.palette.custom.text2,
-          mb: 0.5,
-          ml: 1.6,
-          display: "block",
-        }}
-      >
-        {label}
-      </Typography>
+    <Box sx={{ width: "100%" }}>
+      {label && (
+        <Typography
+          component="label"
+          sx={{
+            fontSize: "0.75rem",
+            fontWeight: 500,
+            color: (theme) => theme.palette.custom.text2,
+            mb: 0.5,
+            ml: 1.6,
+            display: "block",
+          }}
+        >
+          {label}
+        </Typography>
+      )}
+
       <Box
         sx={{
           border: "2px solid",
-          borderColor: (theme) => theme.palette.custom.background1,
+          borderColor: error ? "red" : (theme) => theme.palette.custom.background1,
           borderRadius: 3,
+          backgroundColor: "white",
           display: "flex",
           alignItems: "center",
-          backgroundColor: "white",
+          flexWrap: "wrap",
+          p: "4px 8px",
+          minHeight: "35px",
+          height: "auto",
           "&:hover": {
-            borderColor: "#5a3d83",
-          },
-          "&:focus": {
-            borderColor: "#5a3d83",
-          },
-          "&:active": {
             borderColor: "#5a3d83",
           },
           transition: "border-color 0.2s",
         }}
       >
+        {value.map((email) => (
+          <Chip
+            key={email}
+            label={email}
+            onDelete={() => handleDelete(email)}
+            disabled={disabled}
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: "0.65rem",
+              backgroundColor: (theme) => theme.palette.custom.two,
+              color: (theme) => theme.palette.custom.light,
+              mr: 0.5,
+              "& .MuiChip-deleteIcon": {
+                color: (theme) => theme.palette.custom.one,
+              },
+            }}
+          />
+        ))}
+
         <InputBase
-          inputRef={inputRef}
-          fullWidth
           name={name}
-          type={type}
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          endAdornment={
-            type === "datetime-local"
-              ? React.cloneElement(endAdornment, {
-                  onClick: openDatePicker,
-                  style: { cursor: "pointer" },
-                })
-              : endAdornment
-          }
           disabled={disabled}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={handleBlur}
+          placeholder={placeholder}
           sx={{
-            p: 1.5,
             fontSize: "0.7rem",
-            height: "35px",
+            minHeight: "24px",
+            padding: 0,
+            ml: 0.5,
+            flex: 1,
             "& .MuiInputBase-input": {
               padding: 0,
               color: (theme) => theme.palette.custom.text2,
             },
-
-            "& .Mui-disabled": {
-              color: "#636363",
-              WebkitTextFillColor: "#636363", // for Safari
-            },
-
             "&::placeholder": {
               color: (theme) => theme.palette.custom.text2,
             },
-
-            "& .MuiInputAdornment-root": {
-              color: (theme) => theme.palette.custom.text2,
+            "&.Mui-disabled": {
+              color: "#636363",
+              WebkitTextFillColor: "#636363",
             },
-            "&::-ms-reveal, &::-ms-clear": {
-              display: "none",
-            },
-            // For Chrome/Safari
-            "&::-webkit-contacts-auto-fill-button, &::-webkit-credentials-auto-fill-button": {
-              visibility: "hidden",
-              display: "none !important",
-              pointerEvents: "none",
-              height: "0",
-              width: "0",
-              margin: "0",
-            },
-            "& input[type='datetime-local']::-webkit-calendar-picker-indicator": {
-              display: "none",
-              opacity: 0,
-            },
-            "& input[type='datetime-local']::-webkit-inner-spin-button": {
-              display: "none",
-              opacity: 0,
-            },
-            "& input[type='password']::-webkit-calendar-picker-indicator": {
-              display: "none",
-              opacity: 0,
-            },
-            "& input[type='password']::-webkit-inner-spin-button": {
-              display: "none",
-              opacity: 0,
-            },
-            color: (theme) => theme.palette.custom.two,
           }}
         />
       </Box>
+
       {error && (
         <Typography
           variant="h6"
