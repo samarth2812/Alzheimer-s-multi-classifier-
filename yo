@@ -1,205 +1,143 @@
-import { useRef, useState } from "react";
-import {
-  Box,
-  ClickAwayListener,
-  Fade,
-  Paper,
-  Popper,
-  Typography,
-} from "@mui/material";
+// Custom text field component
 
-export const SimpleDropdown = ({
+// @mui material components
+import Box from "@mui/material/Box";
+import InputBase from "@mui/material/InputBase";
+import Typography from "@mui/material/Typography";
+import React, { useRef } from "react";
+
+export const CustomTextField = ({
   label,
-  placeholder = "Select an option",
-  options = [],
+  placeholder,
   value,
   onChange,
   name,
+  type = "text",
   error,
+  endAdornment,
   disabled,
-  sx = {}, // ✅ accept sx overrides
 }) => {
-  const [open, setOpen] = useState(false);
-  const anchorRef = useRef(null);
-
-  const handleToggle = () => setOpen((prev) => !prev);
-
-  const handleClose = (event) => {
-    if (anchorRef.current && anchorRef.current.contains(event.target)) return;
-    setOpen(false);
-  };
-
-  const handleOptionSelect = (optionName) => {
-    onChange({ target: { name, value: optionName } });
-    setOpen(false);
+  const inputRef = useRef(null);
+  const openDatePicker = () => {
+    if (type === "datetime-local" && inputRef.current) {
+      inputRef.current.showPicker && inputRef.current.showPicker();
+    }
   };
 
   return (
-    <Box sx={{ position: "relative", width: "100%", opacity: disabled ? "0.5" : "1" }}>
-      {label && (
-        <Typography
-          component="label"
-          sx={{
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            color: (theme) => theme.palette.custom.text2,
-            mb: 0.5,
-            ml: 1.6,
-            display: "block",
-          }}
-        >
-          {label}
-        </Typography>
-      )}
+    <Box sx={{ width: "100%" , opacity: disabled ? "0.5" : "1" }}>
+      <Typography
+        component="label"
+        sx={{
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          color: (theme) => theme.palette.custom.text2,
+          mb: 0.5,
+          ml: 1.6,
+          display: "block",
+        }}
+      >
+        {label}
+      </Typography>
       <Box
-        ref={anchorRef}
-        onClick={handleToggle}
         sx={{
           border: "2px solid",
           borderColor: (theme) => theme.palette.custom.background1,
           borderRadius: 3,
-          fontSize: "0.7rem",
-          height: "40px",
-          px: 1.5,
-          cursor: "pointer",
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
           backgroundColor: "white",
-          "&:hover, &:focus, &:active": {
+          "&:hover": {
             borderColor: "#5a3d83",
           },
-          ...sx, // ✅ allow custom styling
+          "&:focus": {
+            borderColor: "#5a3d83",
+          },
+          "&:active": {
+            borderColor: "#5a3d83",
+          },
+          transition: "border-color 0.2s",
         }}
       >
-        <Typography
+        <InputBase
+          inputRef={inputRef}
+          fullWidth
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          endAdornment={
+            type === "datetime-local"
+              ? React.cloneElement(endAdornment, {
+                  onClick: openDatePicker,
+                  style: { cursor: "pointer" },
+                })
+              : endAdornment
+          }
+          disabled={disabled}
           sx={{
-            color: (theme) => theme.palette.custom.text2,
+            p: 1.5,
             fontSize: "0.7rem",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            width: "100%",
-          }}
-        >
-          {value || placeholder}
-        </Typography>
-        <Box
-          sx={{
-            width: 0,
-            height: 0,
-            borderLeft: "5px solid transparent",
-            borderRight: "5px solid transparent",
-            borderTop: "5px solid #757575",
-            ml: 1,
+            height: "35px",
+            "& .MuiInputBase-input": {
+              padding: 0,
+              color: (theme) => theme.palette.custom.text2,
+            },
+
+            "& .Mui-disabled": {
+              color: "#636363",
+              WebkitTextFillColor: "#636363", // for Safari
+            },
+
+            "&::placeholder": {
+              color: (theme) => theme.palette.custom.text2,
+            },
+
+            "& .MuiInputAdornment-root": {
+              color: (theme) => theme.palette.custom.text2,
+            },
+            "&::-ms-reveal, &::-ms-clear": {
+              display: "none",
+            },
+            // For Chrome/Safari
+            "&::-webkit-contacts-auto-fill-button, &::-webkit-credentials-auto-fill-button": {
+              visibility: "hidden",
+              display: "none !important",
+              pointerEvents: "none",
+              height: "0",
+              width: "0",
+              margin: "0",
+            },
+            "& input[type='datetime-local']::-webkit-calendar-picker-indicator": {
+              display: "none",
+              opacity: 0,
+            },
+            "& input[type='datetime-local']::-webkit-inner-spin-button": {
+              display: "none",
+              opacity: 0,
+            },
+            "& input[type='password']::-webkit-calendar-picker-indicator": {
+              display: "none",
+              opacity: 0,
+            },
+            "& input[type='password']::-webkit-inner-spin-button": {
+              display: "none",
+              opacity: 0,
+            },
+            color: (theme) => theme.palette.custom.two,
           }}
         />
       </Box>
-
       {error && (
         <Typography
           variant="h6"
           color="error"
-          sx={{
-            mt: 1,
-            fontSize: "0.6rem",
-            textAlign: "center",
-            fontWeight: 400,
-          }}
+          sx={{ mt: 1, fontSize: "0.6rem", textAlign: "center", fontWeight: 400 }}
         >
           {error}
         </Typography>
       )}
-
-      <Popper
-        open={disabled ? false : open}
-        anchorEl={anchorRef.current}
-        placement="bottom-start"
-        transition
-        disablePortal={disabled}
-        style={{ zIndex: 1500, width: anchorRef.current?.offsetWidth || 200 }}
-      >
-        {({ TransitionProps }) => (
-          <Fade {...TransitionProps} timeout={200}>
-            <Paper
-              elevation={3}
-              sx={{
-                bgcolor: (theme) => theme.palette.custom.paper,
-                borderRadius: 3,
-                mt: 0.5,
-                maxHeight: 250,
-                overflowY: "auto",
-                p: 2,
-                "&::-webkit-scrollbar": { display: "none" },
-              }}
-            >
-              <ClickAwayListener onClickAway={handleClose}>
-                <Box>
-                  {options.length > 0 ? (
-                    options.map((option) => (
-                      <Box
-                        key={option.id}
-                        onClick={() => handleOptionSelect(option.name)}
-                        sx={{
-                          px: 1.5,
-                          py: 0.5,
-                          mb: 1,
-                          borderRadius: 1,
-                          cursor: "pointer",
-                          "&:hover": {
-                            backgroundColor: (theme) => theme.palette.custom.background1,
-                            color: "#000000",
-                          },
-                          ...(value === option.name && {
-                            backgroundColor: (theme) => theme.palette.custom.background1,
-                          }),
-                        }}
-                      >
-                        <Typography
-                          sx={{
-                            fontSize: "0.7rem",
-                            color: (theme) => theme.palette.custom.text2,
-                          }}
-                        >
-                          {option.name}
-                        </Typography>
-                      </Box>
-                    ))
-                  ) : (
-                    <Box sx={{ p: 1.5, textAlign: "center" }}>
-                      <Typography
-                        sx={{
-                          fontSize: "0.7rem",
-                          color: (theme) => theme.palette.custom.text2,
-                        }}
-                      >
-                        No options available
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-              </ClickAwayListener>
-            </Paper>
-          </Fade>
-        )}
-      </Popper>
     </Box>
   );
 };
-
-
-<SimpleDropdown
-  label="Approval Status"
-  name="approval"
-  value={formData.approval}
-  onChange={handleChange}
-  options={[
-    { id: 1, name: "Approved" },
-    { id: 2, name: "Rejected" },
-    { id: 3, name: "Pending" },
-  ]}
-  sx={{
-    borderColor: "#1976d2",
-    backgroundColor: "#f5f5f5",
-  }}
-/>
