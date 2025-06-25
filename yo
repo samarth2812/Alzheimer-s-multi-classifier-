@@ -1,86 +1,78 @@
+import React from "react";
+import {
+  Box,
+  Drawer,
+  Divider,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+  Typography,
+} from "@mui/material";
+import InboxIcon from "@mui/icons-material/MoveToInbox";
+import SendIcon from "@mui/icons-material/Send";
+import DraftsIcon from "@mui/icons-material/Drafts";
+import MenuIcon from "@mui/icons-material/Menu";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+
+const drawerWidth = 220;
+
+export default function SideDrawer({ open, handleDrawerToggle, selectedTab, onSelectTab }) {
+  const items = [
+    { text: "Inbox", icon: <InboxIcon />, value: "inbox" },
+    { text: "Sent Emails", icon: <SendIcon />, value: "sent" },
+    { text: "Drafts", icon: <DraftsIcon />, value: "drafts" },
+  ];
+
   return (
-    <>
-      <Box mb={3} sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-        <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
-          <TextField
-            fullWidth
-            placeholder="Search Communication Records..."
-            variant="outlined"
-            sx={topBarSearchStyle}
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon
-                    fontSize="medium"
-                    sx={{
-                      color: (theme) => theme.palette.custom.text2,
-                      fontSize: "1rem !important",
-                    }}
-                  />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={handleAddCommClick}
-            color="info"
-            sx={animatedButtonStyle}
-          >
-            Add Communication
-          </Button>
-        </Box>
-        {loading ? (
-          <Box>
-            {[...Array(5)].map((_, index) => (
-              <Skeleton
-                key={index}
-                variant="rectangular"
-                animation="wave"
-                height={40}
-                sx={{
-                  mb: 2,
-                  borderRadius: 2,
-                  backgroundColor: (theme) => theme.palette.custom.background1,
-                }}
-              />
-            ))}
-          </Box>
-        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
-          <Box pb={2} sx={{ maxHeight: "calc(100vh - 180px)", overflow: "auto" }}>
-            <SideDrawer
-              open={drawerOpen}
-              handleDrawerToggle={() => setDrawerOpen(!drawerOpen)}
-              selectedTab={tab}
-              onSelectTab={(val) => setTab(val)}
-            />
-            <DataTable
-              table={tableData}
-              isSorted={false}
-              entriesPerPage={true}
-              showTotalEntries={true}
-              noEndBorder
-            />
-          </Box>
-        ) : (
-          <EmptyStateBox
-            icon={BsTable}
-            title="Currently there are no created Communications"
-            description="Start a new communication by tapping the 'Add Communication' button "
-          />
-        )}
-      </Box>
-      <CommunicationFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editCommData}
-        user={user}
-        onSubmit={() => {
-          fetchData();
+    <Drawer
+      sx={{
+        width: open ? 240 : 0,
+        minWidth: open ? 240 : 0,
+        overflow: "hidden",
+        // flexShrink: 0,
+        // "& .MuiDrawer-paper": {
+        //   width: drawerWidth,
+        //   boxSizing: "border-box",
+        // },
+      }}
+      variant="persistent"
+      anchor="left"
+      open={open}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          px: 2,
+          py: 1.5,
         }}
-      />
-    </>
+      >
+        <Typography variant="h6" fontSize={16} fontWeight={600}>
+          Mail
+        </Typography>
+        <IconButton onClick={handleDrawerToggle}>
+          <ChevronLeftIcon />
+        </IconButton>
+      </Box>
+      <Divider />
+
+      <List>
+        {items.map((item) => (
+          <ListItem key={item.text} disablePadding>
+            <ListItemButton
+              selected={selectedTab === item.value}
+              onClick={() => onSelectTab(item.value)}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+    </Drawer>
   );
+}
