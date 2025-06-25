@@ -1,147 +1,361 @@
-import { PrismaClient } from "@prisma/client";
-import { omit } from "lodash";
+import React, { useEffect, useState } from "react";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Box,
+  InputAdornment,
+} from "@mui/material";
+import { CustomTextField } from "layouts/resuableComponents/customTextField";
+import { SearchableDropdown } from "layouts/resuableComponents/searchableDropdown";
+import { formSchema } from "./formSchema";
+import { z } from "zod";
+import toast from "react-hot-toast";
+import { apiRequest } from "../../axios/apiRequest";
+import { CalendarToday } from "@mui/icons-material";
+import { dialogStyle } from "layouts/resuableComponents/styles";
+import { dialogCancelButtonStyle } from "layouts/resuableComponents/styles";
+import { dialogButtonStyle } from "layouts/resuableComponents/styles";
+import { CustomChipField } from "layouts/resuableComponents/customChipField";
 
-const prisma = new PrismaClient();
+export const commTypeLabels = [
+  { name: "Inward", value: "INWARD" },
+  { name: "Outward", value: "OUTWARD" },
+];
+export const categoryLabels = [
+  { name: "Incident Report", value: "INCIDENT_REPORT" },
+  { name: "Indent", value: "INDENT" },
+  { name: "Penalty Notice", value: "PENALTY_NOTICE" },
+  { name: "Advisory", value: "ADVISORY" },
+  { name: "ISE Observation", value: "ISE_OBSERVATION" },
+  { name: "General Query", value: "GENERAL_QUERY" },
+  { name: "Acknowledgement", value: "ACKNOWLDGEMENT" },
+  { name: "Clarifictaion", value: "CLARIFICATION" },
+];
+export const priorityLabels = [
+  { name: "High", value: "HIGH" },
+  { name: "Low", value: "LOW" },
+  { name: "Medium", value: "MEDIUM" },
+];
 
-// ===================== Types =====================
-type CommunicationInput = {
-  commType: string;
-  category: string;
-  subject: string;
-  refNo?: string;
-  relatedIncidentId?: string;
-  sentBy: string;
-  sentTo: string[];
-  cc?: string[];
-  status: string;
-  responseDueBy?: string;
-  priorityLevel: string;
-  summary: string;
-  isConfidential: boolean;
-  parentCommId?: string;
+const formatDatetimeLocal = (isoString) => {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localISO = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+  return localISO;
 };
 
-// ===================== Helpers =====================
-const buildCreatePayload = (data: CommunicationInput) => {
-  return {
-    commType: data.commType,
-    category: data.category,
-    subject: data.subject,
-    refNo: data.refNo,
-    relatedIncidentId: data.relatedIncidentId,
-    sentBy: data.sentBy,
-    sentTo: data.sentTo,
-    cc: data.cc || [],
-    status: data.status,
-    responseDueBy: data.responseDueBy ? new Date(data.responseDueBy) : undefined,
-    priorityLevel: data.priorityLevel,
-    summary: data.summary,
-    isConfidential: data.isConfidential,
-    parentCommId: data.parentCommId || null,
+const addCommunicationRecordUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication/`;
+
+export default function CommunicationFormDialog({ open, onClose, onSubmit, initialData , user}) {
+  const [formData, setFormData] = useState({
+    commId: "",
+    commType: "",
+    direction: "",
+    category: "",
+    refNo: "",
+    relatedIncidentId: "",
+    sentBy: "",
+    sentTo: "",
+    cc: [],
+    subject: "",
+    responseDueBy: "",
+    status: "",
+    priorityLevel: "",
+    summary: "",
+    isConfidential: false,
+  });
+
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (initialData) {
+      setFormData({
+        ...initialData,
+        responseDueBy : initialData?.responseDueBy ? formatDatetimeLocal(initialData?.responseDueBy) : "",
+        status: statusLabels.find((s) => s.value === initialData.status)?.name || value,
+        priorityLevel: priorityLabels.find((s) => s.value === initialData.priorityLevel)?.name || value,
+        commType: commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
+        direction:
+          directionLabels.find((s) => s.value === initialData.direction)?.name || "",
+        category: categoryLabels.find((s) => s.value === initialData.category)?.name || "",
+      });
+    } else {
+      setFormData({
+        commType: "",
+        direction: "",
+        category: "",
+        refNo: "",
+        relatedIncidentId: "",
+        sentBy: "",
+        sentTo: "",
+        cc: [],
+        subject: "",
+        responseDueBy: "",
+        status: "",
+        priorityLevel: "",
+        summary: "",
+        isConfidential: false,
+      });
+    }
+  }, [initialData]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (errors[name]) {
+      setErrors({
+        ...errors,
+        [name]: undefined,
+      });
+    }
   };
-};
+  const handleValidationError = (error) => {
+    if (error instanceof z.ZodError) {
+      const formattedErrors = {};
+      error.errors.forEach((err) => {
+        const path = err.path[0];
+        formattedErrors[path] = err.message;
+      });
+      setErrors(formattedErrors);
+    } else {
+      toast.error("An error occurred while submitting the form.");
+    }
+  };
 
-const buildUpdatePayload = (data: Partial<CommunicationInput>) => {
-  const updateData: any = {};
+  const handleAddCommunicationRecord = async () => {
+    try {
+      let result;
+      setIsSubmitting(true);
+      const validatedData = formSchema.parse(formData);
+      result = await apiRequest("POST", addCommunicationRecordUrl, validatedData);
+      if (result.status === 201 || result.status === 204) {
+        toast.success("Communication Added Successfully");
+      }
+      onSubmit();
+      onClose();
+    } catch (error) {
+      handleValidationError(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  if (data.commType) updateData.commType = data.commType;
-  if (data.category) updateData.category = data.category;
-  if (data.subject) updateData.subject = data.subject;
-  if (data.refNo) updateData.refNo = data.refNo;
-  if (data.relatedIncidentId) updateData.relatedIncidentId = data.relatedIncidentId;
-  if (data.sentBy) updateData.sentBy = data.sentBy;
-  if (data.sentTo) updateData.sentTo = data.sentTo;
-  if (data.cc) updateData.cc = data.cc;
-  if (data.status) updateData.status = data.status;
-  if (data.responseDueBy) updateData.responseDueBy = new Date(data.responseDueBy);
-  if (data.priorityLevel) updateData.priorityLevel = data.priorityLevel;
-  if (data.summary) updateData.summary = data.summary;
-  if (typeof data.isConfidential === 'boolean') updateData.isConfidential = data.isConfidential;
-  if (data.parentCommId !== undefined) updateData.parentCommId = data.parentCommId;
+  const handleUpdateCommunicationRecord = async () => {
+    try {
+      setIsSubmitting(true);
+      let updatedFields = {};
+      const updatableFields = [
+        "category",
+        "refNo",
+        "sentBy",
+        "sentTo",
+        "cc",
+        "subject",
+        "responseDueBy",
+        "status",
+        "priorityLevel",
+        "summary",
+        "commType",
+      ];
 
-  return updateData;
-};
+      updatableFields.forEach((field) => {
+        let newValue = formData[field];
+        let initialValue = initialData[field];
 
-const buildFetchFilter = (type: 'inbox' | 'sent' | 'drafts' | 'thread', userId: string, threadId?: string) => {
-  if (type === 'inbox') {
-    return {
-      status: 'Sent',
-      isDeleted: false,
-      OR: [{ sentTo: { has: userId } }, { cc: { has: userId } }],
-    };
-  }
-  if (type === 'sent') {
-    return {
-      sentBy: userId,
-      status: 'Sent',
-      isDeleted: false,
-    };
-  }
-  if (type === 'drafts') {
-    return {
-      sentBy: userId,
-      status: 'Draft',
-      isDeleted: false,
-    };
-  }
-  if (type === 'thread' && threadId) {
-    return {
-      OR: [
-        { commId: threadId },
-        { parentCommId: threadId },
-        { parentCommunication: { commId: threadId } },
-      ],
-    };
-  }
-  return {};
-};
+        if (field === "responseDueBy") {
+          newValue = new Date(formData[field]).toISOString();
+          initialValue = new Date(initialData[field]).toISOString();
+        }
 
-// ===================== API Functions =====================
+        if (field === "priorityLevel") {
+          newValue = priorityLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
 
-// 1. Create Communication
-export const createCommunication = async (data: CommunicationInput) => {
-  try {
-    const payload = buildCreatePayload(data);
-    return await prisma.communication.create({ data: payload });
-  } catch (error) {
-    console.error("Error creating communication:", error);
-    throw new Error("Failed to create communication");
-  }
-};
+        if (field === "commType") {
+          newValue = commTypeLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
 
-// 2. Update Communication
-export const updateCommunication = async (commId: string, data: Partial<CommunicationInput>) => {
-  try {
-    const updatePayload = buildUpdatePayload(data);
-    return await prisma.communication.update({
-      where: { commId },
-      data: updatePayload,
-    });
-  } catch (error) {
-    console.error("Error updating communication:", error);
-    throw new Error("Failed to update communication");
-  }
-};
+       if (field === "category") {
+          newValue = categoryLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
 
-// 3. Fetch Communication (inbox / sent / drafts / thread)
-export const fetchCommunications = async (
-  type: 'inbox' | 'sent' | 'drafts' | 'thread',
-  userId: string,
-  threadId?: string
-) => {
-  try {
-    const where = buildFetchFilter(type, userId, threadId);
-    return await prisma.communication.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        replies: true,
-        attachments: { where: { isDeleted: false } },
-        remarkHistory: true,
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching communications:", error);
-    throw new Error("Failed to fetch communications");
-  }
-};
+        if (newValue !== initialValue) {
+          updatedFields[field] = formData[field];
+        }
+      });
+
+      if (Object.keys(updatedFields).length > 0) {
+        updatedFields = { ...updatedFields, updateType: "FIELD_UPDATE" };
+        const payload = {
+          updatedFields,
+        };
+        const result = await apiRequest(
+          "PUT",
+          `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication/${user.role}/${user.department}/${formData.commId}`,
+          payload
+        );
+
+        if (result.status === 200 || result.status === 204) {
+          toast.success("communication updated successfully!");
+        }
+      } else {
+        toast.error("Looks like you haven't made any changes yet!");
+      }
+      onSubmit();
+      onClose();
+    } catch (error) {
+      handleValidationError(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (initialData) {
+      handleUpdateCommunicationRecord();
+    } else {
+      handleAddCommunicationRecord();
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" sx={dialogStyle}>
+      <DialogTitle
+        sx={{
+          color: (theme) => theme.palette.custom.two,
+          fontSize: "0.9rem !important",
+          display: " flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          pr: 2,
+        }}
+      >
+        {initialData ? "Edit Communication" : "Add New Communication"}
+      </DialogTitle>
+
+      <DialogContent>
+        <Box display="flex" flexDirection="column" gap={3} mt={2}>
+            <SearchableDropdown
+              label="Communication Type"
+              name="commType"
+              options={commTypeLabels}
+              placeholder="Enter Communication Type"
+              value={formData.commType}
+              onChange={handleChange}
+              error={errors.commType}
+            />
+          <SearchableDropdown
+            label="Category"
+            placeholder="Enter Category"
+            name="category"
+            options={categoryLabels}
+            value={formData.category}
+            onChange={handleChange}
+            error={errors.category}
+          />
+            <CustomTextField
+              label="Reference Number"
+              name="refNo"
+              placeholder="Enter Reference Number"
+              value={formData.refNo}
+              onChange={handleChange}
+              error={errors.refNo}
+            />
+          <Box display="flex" gap={2}>
+            <CustomTextField
+              label="Sent By"
+              name="sentBy"
+              placeholder="Sender Email Address"
+              value={formData.sentBy}
+              onChange={handleChange}
+              error={errors.sentBy}
+            />
+            <CustomTextField
+              label="Sent To"
+              name="sentTo"
+              placeholder="Receiver Email Address"
+              value={formData.sentTo}
+              onChange={handleChange}
+              error={errors.sentTo}
+            />
+          </Box>
+          <CustomChipField
+            label="CC"
+            value={formData.cc}
+            onChange={(newCc) => setFormData((prev) => ({ ...prev, cc: newCc }))}
+            error={errors.cc}
+          />
+          <CustomTextField
+            label="Subject"
+            name="subject"
+            placeholder="Enter Subject of the Email"
+            value={formData.subject}
+            onChange={handleChange}
+            error={errors.subject}
+          />
+          <Box display="flex" gap={2}>
+            <CustomTextField
+              label="Response Due By"
+              name="responseDueBy"
+              placeholder="Enter Due Date"
+              type="datetime-local"
+              value={formData.responseDueBy}
+              onChange={handleChange}
+              error={errors.responseDueBy}
+              endAdornment={
+                <InputAdornment position="end">
+                  <CalendarToday
+                    sx={{ color: (theme) => theme.palette.custom.two, fontSize: "1.2rem" }}
+                  />
+                </InputAdornment>
+              }
+            />
+          </Box>
+          <Box display="flex" gap={2}>
+            <SearchableDropdown
+              label="Priority"
+              placeholder="Enter Priority Level"
+              name="priorityLevel"
+              options={priorityLabels}
+              value={formData.priorityLevel}
+              onChange={handleChange}
+              error={errors.priorityLevel}
+            />
+          </Box>
+          <CustomTextField
+            label="Summary"
+            placeholder="Enter Summary"
+            name="summary"
+            multiline
+            rows={2}
+            value={formData.summary}
+            onChange={handleChange}
+            error={errors.summary}
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            setErrors({});
+            onClose();
+          }}
+          size="small"
+          sx={dialogCancelButtonStyle}
+        >
+          Cancel
+        </Button>
+
+        <Button onClick={handleSubmit} disabled={isSubmitting} sx={dialogButtonStyle} size="small">
+          {initialData ? "Update" : "Add"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
