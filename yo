@@ -26,12 +26,12 @@ import {
 import { CustomSmartPasteField } from "layouts/resuableComponents/customSmartPasteField";
 import { CustomSelectDropdown } from "layouts/resuableComponents/customSelectDropdown";
 import { DynamicEmailInput } from "layouts/resuableComponents/dynamicEmailInput";
-import { useSelector } from "react-redux";
 
 export const commTypeLabels = [
   { name: "Inward", value: "INWARD" },
   { name: "Outward", value: "OUTWARD" },
 ];
+
 export const categoryLabels = [
   { name: "Incident Report", value: "INCIDENT_REPORT" },
   { name: "Indent", value: "INDENT" },
@@ -43,6 +43,7 @@ export const categoryLabels = [
   { name: "Acknowledgement", value: "ACKNOWLDGEMENT" },
   { name: "Clarifictaion", value: "CLARIFICATION" },
 ];
+
 export const priorityLabels = [
   { name: "High", value: "HIGH" },
   { name: "Low", value: "LOW" },
@@ -53,9 +54,9 @@ const formatDatetimeLocal = (isoString) => {
   if (!isoString) return "";
   const date = new Date(isoString);
   const tzOffset = date.getTimezoneOffset() * 60000;
-  const localISO = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
-  return localISO;
+  return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
 };
+
 const addCommunicationRecordUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication/`;
 
 export default function CommunicationFormDialog({ open, onClose, onSubmit, initialData, user }) {
@@ -77,7 +78,6 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
 
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const isReply = !!initialData;
 
   useEffect(() => {
@@ -85,26 +85,12 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
       setFormData({
         ...initialData,
         responseDueBy: initialData?.responseDueBy
-          ? formatDatetimeLocal(initialData?.responseDueBy)
+          ? formatDatetimeLocal(initialData.responseDueBy)
           : "",
         priorityLevel: priorityLabels.find((s) => s.value === initialData.priorityLevel)?.name || "",
         commType: commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
         category: categoryLabels.find((s) => s.value === initialData.category)?.name || "",
         sentBy: user.email,
-        status: "Sent",
-      });
-    } else {
-      setFormData({
-        commType: "",
-        category: "",
-        refNo: "",
-        sentBy: user.email,
-        sentTo: [],
-        cc: [],
-        subject: "",
-        responseDueBy: "",
-        priorityLevel: "",
-        summary: "",
         status: "Sent",
       });
     }
@@ -113,9 +99,11 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors({ ...errors, [name]: undefined });
-    }
+    if (errors[name]) setErrors({ ...errors, [name]: undefined });
+  };
+
+  const handleDescriptionChange = (htmlContent) => {
+    setFormData((prev) => ({ ...prev, summary: htmlContent }));
   };
 
   const handleValidationError = (error) => {
@@ -131,23 +119,20 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
     }
   };
 
-  const handleAddCommunicationRecord = async () => {
+  const handleAddCommunicationRecord = async (data) => {
     try {
-      let result;
       setIsSubmitting(true);
-      console.log(1, formData);
-      let validatedData = formSchema.parse(formData);
-      console.log(2, validatedData);
-      if (formData.parentCommId) {
-        validatedData = {
-          ...validatedData,
-          parentCommId: formData.parentCommId,
-        };
-      }
-      result = await apiRequest("POST", addCommunicationRecordUrl, validatedData);
+      const validatedData = formSchema.parse(data);
+      const payload = data.parentCommId
+        ? { ...validatedData, parentCommId: data.parentCommId }
+        : validatedData;
+
+      const result = await apiRequest("POST", addCommunicationRecordUrl, payload);
+
       if (result.status === 201 || result.status === 204) {
         toast.success("Communication Added Successfully");
       }
+
       onSubmit();
       onClose();
     } catch (error) {
@@ -157,12 +142,10 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
     }
   };
 
-  const handleSubmit = async () => {
-    handleAddCommunicationRecord();
-  };
-
-  const handleDescriptionChange = (htmlContent) => {
-    setFormData((prev) => ({ ...prev, summary: htmlContent }));
+  const handleSubmit = (isDraft = false) => {
+    const finalData = { ...formData, status: isDraft ? "Draft" : "Sent" };
+    setFormData(finalData); // just in case UI needs to reflect status
+    handleAddCommunicationRecord(finalData);
   };
 
   return (
@@ -170,48 +153,25 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
       <DialogTitle sx={{ p: 0, pb: 2 }}>
         <Box display="flex" alignItems="center" justifyContent="space-between" px={2} pt={2}>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <IconButton
-              onClick={onClose}
-              size="small"
-              sx={{ color: (theme) => theme.palette.custom.text2 }}
-            >
+            <IconButton onClick={onClose} size="small">
               <ArrowBackIosNew />
             </IconButton>
-            <Avatar
-              src={user?.avatar || "/path/to/avatar.jpg"}
-              alt={user?.name || "User"}
-              sx={{
-                width: 50,
-                height: 50,
-                mb: 2,
-                textTransform: "capitalize",
-                bgcolor: (theme) => theme.palette.custom.background1,
-                color: (theme) => theme.palette.custom.two,
-              }}
-            />
-            <Box display="flex" flexDirection="column">
-              <Box
-                sx={{
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                  color: (theme) => theme.palette.custom.two,
-                }}
-              >
-                {user?.name}
-              </Box>
-              <Box sx={{ fontSize: "0.7rem", color: (theme) => theme.palette.custom.text2 }}>
-                {user?.email}
-              </Box>
+            <Avatar sx={{ width: 50, height: 50 }}>
+              {user?.name?.split(" ")[0]?.[0] ?? ""}
+              {user?.name?.split(" ")[1]?.[0] ?? ""}
+            </Avatar>
+            <Box>
+              <Box sx={{ fontSize: "0.85rem", fontWeight: 500 }}>{user?.name}</Box>
+              <Box sx={{ fontSize: "0.7rem" }}>{user?.email}</Box>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction="row" spacing={2}>
             <CustomSelectDropdown
               placeholder="Priority Level"
               name="priorityLevel"
               value={formData.priorityLevel}
               onChange={handleChange}
               options={priorityLabels}
-              sx={{ minWidth: 100, width: "100%" }}
               disabled={isReply}
             />
             <CustomSelectDropdown
@@ -220,12 +180,12 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               onChange={handleChange}
               options={commTypeLabels}
               placeholder="Type"
-              sx={{ minWidth: 100, width: "100%" }}
               disabled={isReply}
             />
           </Stack>
         </Box>
       </DialogTitle>
+
       <DialogContent>
         <Box display="flex" flexDirection="column" gap={3} mt={2}>
           <Box display="flex" gap={2}>
@@ -239,19 +199,15 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               error={errors.category}
               disabled={isReply}
             />
-            {formData.refNo ? (
+            {formData.refNo && (
               <CustomTextField
                 label="Reference Number"
                 name="refNo"
-                placeholder="Enter Reference Number"
                 value={formData.refNo}
-                onChange={handleChange}
-                error={errors.refNo}
                 disabled
               />
-            ) : null}
+            )}
           </Box>
-
           <DynamicEmailInput
             label="Sent To"
             name="sentTo"
@@ -259,10 +215,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             value={formData.sentTo}
             onChange={(val) => setFormData((prev) => ({ ...prev, sentTo: val }))}
             error={errors.sentTo}
-            chipbgColor={(theme) => theme.palette.custom.one}
-            chipTxtColor={(theme) => theme.palette.custom.text2}
           />
-
           <DynamicEmailInput
             label="CC"
             name="cc"
@@ -270,10 +223,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             value={formData.cc}
             onChange={(val) => setFormData((prev) => ({ ...prev, cc: val }))}
             error={errors.cc}
-            chipbgColor={(theme) => theme.palette.custom.two}
-            chipTxtColor={(theme) => theme.palette.custom.light}
           />
-
           <CustomTextField
             label="Subject"
             name="subject"
@@ -282,42 +232,38 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             onChange={handleChange}
             error={errors.subject}
           />
-
           <Box display="flex" gap={2}>
             <CustomTextField
               label="Response Due By"
               name="responseDueBy"
-              placeholder="Enter Due Date"
               type="datetime-local"
               value={formData.responseDueBy}
               onChange={handleChange}
               error={errors.responseDueBy}
               endAdornment={
                 <InputAdornment position="end">
-                  <CalendarToday
-                    sx={{ color: (theme) => theme.palette.custom.two, fontSize: "1.2rem" }}
-                  />
+                  <CalendarToday sx={{ fontSize: "1.2rem" }} />
                 </InputAdornment>
               }
               disabled={isReply}
             />
           </Box>
-
           <CustomSmartPasteField
             value={formData.summary}
             label="Summary"
-            placeholder="enter summary"
+            placeholder="Enter summary"
             onChange={handleDescriptionChange}
             error={errors.summary}
           />
         </Box>
       </DialogContent>
+
       <DialogActions>
-        <Button size="small" sx={dialogButtonStyleTwo}>
+        <Button size="small" sx={dialogButtonStyleTwo} onClick={() => handleSubmit(true)}>
           Save as Draft
         </Button>
-        <Button onClick={handleSubmit} disabled={isSubmitting} sx={dialogButtonStyle} size="small">
-          {initialData ? "Reply" : "Sent"}
+        <Button onClick={() => handleSubmit(false)} disabled={isSubmitting} sx={dialogButtonStyle} size="small">
+          {initialData ? "Reply" : "Send"}
         </Button>
       </DialogActions>
     </Dialog>
