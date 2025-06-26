@@ -1,88 +1,105 @@
-import React from "react";
-import {
-  Box,
-  Divider,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  IconButton,
-  Typography,
-} from "@mui/material";
-import InboxIcon from "@mui/icons-material/MoveToInbox";
-import SendIcon from "@mui/icons-material/Send";
-import DraftsIcon from "@mui/icons-material/Drafts";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import MenuIcon from "@mui/icons-material/Menu";
-
-const drawerWidth = 220;
-
-export default function SideDrawer({ open, handleDrawerToggle, selectedTab, onSelectTab }) {
-  const items = [
-    { text: "Inbox", icon: <InboxIcon />, value: "inbox" },
-    { text: "Sent Emails", icon: <SendIcon />, value: "sent" },
-    { text: "Drafts", icon: <DraftsIcon />, value: "drafts" },
-  ];
-
   return (
-    <Box
-      sx={{
-        width: open ? drawerWidth : 60,
-        transition: "width 0.3s ease",
-        borderRight: "1px solid #eee",
-        backgroundColor: "#fff",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: open ? "space-between" : "center",
-          px: 2,
-          py: 1.5,
-        }}
-      >
-        {open && (
-          <Typography variant="h6" fontSize={16} fontWeight={600}>
-            Mail
-          </Typography>
-        )}
-        <IconButton onClick={handleDrawerToggle} size="small">
-          {open ? <ChevronLeftIcon /> : <MenuIcon />}
-        </IconButton>
-      </Box>
-
-      <Divider />
-
-      <List>
-        {items.map((item) => (
-          <ListItem key={item.text} disablePadding sx={{ justifyContent: open ? "initial" : "center" }}>
-            <ListItemButton
-              selected={selectedTab === item.value}
-              onClick={() => onSelectTab(item.value)}
+    <>
+      <Box mb={3} sx={{ width: "100%", height: "100%", display: "flex" }}>
+        <SideDrawer
+          open={drawerOpen}
+          handleDrawerToggle={() => setDrawerOpen(!drawerOpen)}
+          selectedTab={tab}
+          onSelectTab={(val) => setTab(val)}
+        />
+        <Box sx={{flexGrow:1,px:2,py:2}}>
+<Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
+          <TextField
+            fullWidth
+            placeholder="Search Communication Records..."
+            variant="outlined"
+            sx={topBarSearchStyle}
+            value={searchTerm}
+            onChange={handleSearch}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon
+                    fontSize="medium"
+                    sx={{
+                      color: (theme) => theme.palette.custom.text2,
+                      fontSize: "1rem !important",
+                    }}
+                  />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={handleAddCommClick}
+            color="info"
+            sx={animatedButtonStyle}
+          >
+            Add Communication
+          </Button>
+        </Box>
+        {loading ? (
+          <Box>
+            {[...Array(5)].map((_, index) => (
+              <Skeleton
+                key={index}
+                variant="rectangular"
+                animation="wave"
+                height={40}
+                sx={{
+                  mb: 2,
+                  borderRadius: 2,
+                  backgroundColor: (theme) => theme.palette.custom.background1,
+                }}
+              />
+            ))}
+          </Box>
+        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
+          <Box
+            pb={2}
+            sx={{
+              display: "flex",
+              flexDirection: "row",
+              maxHeight: "calc(100vh - 180px)",
+              overflow: "hidden",
+            }}
+          >
+            <Box
               sx={{
-                justifyContent: open ? "flex-start" : "center",
-                px: 2,
+                flexGrow: 1,
+                overflow: "auto",
+                ml: drawerOpen ? 0 : "-240px",
+                transition: "margin-left 0.3s ease",
               }}
             >
-              <ListItemIcon
-                sx={{
-                  minWidth: 0,
-                  mr: open ? 2 : "auto",
-                  justifyContent: "center",
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              {open && <ListItemText primary={item.text} />}
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
-    </Box>
+              <DataTable
+                table={tableData}
+                isSorted={false}
+                entriesPerPage={true}
+                showTotalEntries={true}
+                noEndBorder
+              />
+            </Box>
+          </Box>
+        ) : (
+          <EmptyStateBox
+            icon={BsTable}
+            title="Currently there are no created Communications"
+            description="Start a new communication by tapping the 'Add Communication' button "
+          />
+        )}
+        </Box>
+      </Box>
+      <CommunicationFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editCommData}
+        user={user}
+        onSubmit={() => {
+          fetchData();
+        }}
+      />
+    </>
   );
-}
