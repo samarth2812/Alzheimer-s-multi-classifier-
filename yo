@@ -1,5 +1,3 @@
-`${name.split(" ")[0][0]}${name.split(" ")[1]?.[0] || ""}`
-
 import React, { useEffect, useState } from "react";
 import {
   Dialog,
@@ -27,6 +25,7 @@ import { CustomSmartPasteField } from "layouts/resuableComponents/customSmartPas
 import { dialogButtonStyleTwo } from "layouts/resuableComponents/styles";
 import { CustomSelectDropdown } from "layouts/resuableComponents/customSelectDropdown";
 import { DynamicEmailInput } from "layouts/resuableComponents/dynamicEmailInput";
+import { useSelector } from "react-redux";
 
 export const commTypeLabels = [
   { name: "Inward", value: "INWARD" },
@@ -56,7 +55,6 @@ const formatDatetimeLocal = (isoString) => {
   const localISO = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
   return localISO;
 };
-
 const addCommunicationRecordUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication/`;
 
 function stringAvatar(name) {
@@ -64,7 +62,7 @@ function stringAvatar(name) {
     sx: {
       bgcolor: (theme) => theme.palette.custom.background1,
     },
-    children: `${name.split(" ")[0][0]}${name.split(" ")[1][0]}`,
+    children: `${name.split(" ")[0][0]}${name.split(" ")[1]?.[0] || ""}`,
   };
 }
 
@@ -94,8 +92,6 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
         responseDueBy: initialData?.responseDueBy
           ? formatDatetimeLocal(initialData?.responseDueBy)
           : "",
-        priorityLevel:
-          priorityLabels.find((s) => s.value === initialData.priorityLevel)?.name || value,
         commType: commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
         category: categoryLabels.find((s) => s.value === initialData.category)?.name || "",
       });
@@ -308,26 +304,26 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               error={errors.refNo}
             />
           </Box>
-            <DynamicEmailInput
+          <DynamicEmailInput
             label="Sent To"
-              name="sentTo"
-              placeholder="Receiver Email Address"
-              value={formData.sentTo}
-              onChange={(val) => setFormData((prev) => ({...prev, sentTo: val}))}
-              error={errors.sentTo}
-              chipbgColor = {(theme) => theme.palette.custom.one}
-              chipTxtColor = {(theme) => theme.palette.custom.text2}
-              />   
+            name="sentTo"
+            placeholder="Receiver Email Address"
+            value={formData.sentTo}
+            onChange={(val) => setFormData((prev) => ({ ...prev, sentTo: val }))}
+            error={errors.sentTo}
+            chipbgColor={(theme) => theme.palette.custom.one}
+            chipTxtColor={(theme) => theme.palette.custom.text2}
+          />
           <DynamicEmailInput
             label="CC"
-              name="cc"
-              placeholder="Add CC recipients"
-              value={formData.cc}
-              onChange={(val) => setFormData((prev) => ({...prev, cc: val}))}
-              error={errors.cc}
-              chipbgColor = {(theme) => theme.palette.custom.two}
-              chipTxtColor = {(theme) => theme.palette.custom.light}
-              /> 
+            name="cc"
+            placeholder="Add CC recipients"
+            value={formData.cc}
+            onChange={(val) => setFormData((prev) => ({ ...prev, cc: val }))}
+            error={errors.cc}
+            chipbgColor={(theme) => theme.palette.custom.two}
+            chipTxtColor={(theme) => theme.palette.custom.light}
+          />
           <CustomTextField
             label="Subject"
             name="subject"
