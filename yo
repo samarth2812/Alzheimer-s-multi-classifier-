@@ -1,271 +1,232 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   Box,
-  InputAdornment,
-  Stack,
-  Avatar,
+  Button,
   IconButton,
+  Skeleton,
+  TextField,
+  InputAdornment,
+  Tooltip,
 } from "@mui/material";
-import { CustomTextField } from "layouts/resuableComponents/customTextField";
-import { SearchableDropdown } from "layouts/resuableComponents/searchableDropdown";
-import { formSchema } from "./formSchema";
-import { z } from "zod";
+import SearchIcon from "@mui/icons-material/Search";
+import AddIcon from "@mui/icons-material/Add";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import debounce from "lodash.debounce";
+import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
+
+// Components
+import SideDrawer from "layouts/resuableComponents/sideDrawer";
+import CommunicationList from "layouts/resuableComponents/listComponent";
+import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
+import MailTrailAccordion from "./MailTrailAccordion";
+import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
+import { BsTable } from "react-icons/bs";
+
+// Helpers
 import { apiRequest } from "../../axios/apiRequest";
-import { ArrowBackIosNew, CalendarToday } from "@mui/icons-material";
 import {
-  dialogStyle,
-  dialogButtonStyle,
-  dialogButtonStyleTwo,
+  topBarStyle,
+  topBarSearchStyle,
+  animatedButtonStyle,
 } from "layouts/resuableComponents/styles";
-import { CustomSmartPasteField } from "layouts/resuableComponents/customSmartPasteField";
-import { CustomSelectDropdown } from "layouts/resuableComponents/customSelectDropdown";
-import { DynamicEmailInput } from "layouts/resuableComponents/dynamicEmailInput";
 
-export const commTypeLabels = [
-  { name: "Inward", value: "INWARD" },
-  { name: "Outward", value: "OUTWARD" },
-];
-
-export const categoryLabels = [
-  { name: "Incident Report", value: "INCIDENT_REPORT" },
-  { name: "Indent", value: "INDENT" },
-  { name: "Obligation", value: "OBLIGATION" },
-  { name: "Penalty Notice", value: "PENALTY_NOTICE" },
-  { name: "Advisory", value: "ADVISORY" },
-  { name: "ISE Observation", value: "ISE_OBSERVATION" },
-  { name: "General Query", value: "GENERAL_QUERY" },
-  { name: "Acknowledgement", value: "ACKNOWLDGEMENT" },
-  { name: "Clarifictaion", value: "CLARIFICATION" },
-];
-
-export const priorityLabels = [
-  { name: "High", value: "HIGH" },
-  { name: "Low", value: "LOW" },
-  { name: "Medium", value: "MEDIUM" },
-];
-
-const formatDatetimeLocal = (isoString) => {
-  if (!isoString) return "";
-  const date = new Date(isoString);
-  const tzOffset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+const getCommTypeFromTab = (tab) => {
+  switch (tab) {
+    case "inbox":
+      return "inbox";
+    case "sent":
+      return "sent";
+    case "drafts":
+      return "drafts";
+    default:
+      return "inbox";
+  }
 };
 
-const addCommunicationRecordUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication/`;
+const CreateCommunicationPage = () => {
+  const [data, setData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editCommData, setEditCommData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("inbox");
 
-export default function CommunicationFormDialog({ open, onClose, onSubmit, initialData, user }) {
-  const [formData, setFormData] = useState({
-    commId: "",
-    commType: "",
-    category: "",
-    refNo: "",
-    sentBy: user.email,
-    sentTo: [],
-    cc: [],
-    subject: "",
-    responseDueBy: "",
-    priorityLevel: "",
-    summary: "",
-    status: "Sent",
-    parentCommId: "",
-  });
+  const [selectedComm, setSelectedComm] = useState(null); // updated to store full communication
 
-  const [errors, setErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const isReply = !!initialData;
+  const user = useSelector((state) => state.user.user);
+
+  const fetchData = async (tabType = "inbox") => {
+    setLoading(true);
+    const typeParam = getCommTypeFromTab(tabType);
+    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
+    try {
+      const response = await apiRequest("GET", fetchUrl);
+      setData(response.data);
+      setFilteredData(response.data);
+    } catch {
+      toast.error("Failed to fetch communications");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        ...initialData,
-        responseDueBy: initialData?.responseDueBy
-          ? formatDatetimeLocal(initialData.responseDueBy)
-          : "",
-        priorityLevel: priorityLabels.find((s) => s.value === initialData.priorityLevel)?.name || "",
-        commType: commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
-        category: categoryLabels.find((s) => s.value === initialData.category)?.name || "",
-        sentBy: user.email,
-        status: "Sent",
-      });
-    }
-  }, [initialData]);
+    fetchData(tab);
+  }, [tab]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name]) setErrors({ ...errors, [name]: undefined });
+  // Debounced search
+  const debouncedFilter = useMemo(
+    () =>
+      debounce((term, list) => {
+        if (!term) {
+          setFilteredData(list);
+          return;
+        }
+        const lower = term.toLowerCase();
+        const filtered = list.filter((item) =>
+          Object.values(item).some((val) => val?.toString().toLowerCase().includes(lower))
+        );
+        setFilteredData(filtered);
+      }, 300),
+    []
+  );
+
+  useEffect(() => {
+    debouncedFilter(searchTerm, data);
+    return () => debouncedFilter.cancel();
+  }, [searchTerm, data]);
+
+  const handleAddCommClick = () => {
+    setEditCommData(null);
+    setIsModalOpen(true);
   };
 
-  const handleDescriptionChange = (htmlContent) => {
-    setFormData((prev) => ({ ...prev, summary: htmlContent }));
-  };
-
-  const handleValidationError = (error) => {
-    if (error instanceof z.ZodError) {
-      const formattedErrors = {};
-      error.errors.forEach((err) => {
-        const path = err.path[0];
-        formattedErrors[path] = err.message;
-      });
-      setErrors(formattedErrors);
-    } else {
-      toast.error("An error occurred while submitting the form.");
-    }
-  };
-
-  const handleAddCommunicationRecord = async (data) => {
-    try {
-      setIsSubmitting(true);
-      const validatedData = formSchema.parse(data);
-      const payload = data.parentCommId
-        ? { ...validatedData, parentCommId: data.parentCommId }
-        : validatedData;
-
-      const result = await apiRequest("POST", addCommunicationRecordUrl, payload);
-
-      if (result.status === 201 || result.status === 204) {
-        toast.success("Communication Added Successfully");
-      }
-
-      onSubmit();
-      onClose();
-    } catch (error) {
-      handleValidationError(error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSubmit = (isDraft = false) => {
-    const finalData = { ...formData, status: isDraft ? "Draft" : "Sent" };
-    setFormData(finalData); // just in case UI needs to reflect status
-    handleAddCommunicationRecord(finalData);
-  };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" sx={dialogStyle}>
-      <DialogTitle sx={{ p: 0, pb: 2 }}>
-        <Box display="flex" alignItems="center" justifyContent="space-between" px={2} pt={2}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <IconButton onClick={onClose} size="small">
-              <ArrowBackIosNew />
-            </IconButton>
-            <Avatar sx={{ width: 50, height: 50 }}>
-              {user?.name?.split(" ")[0]?.[0] ?? ""}
-              {user?.name?.split(" ")[1]?.[0] ?? ""}
-            </Avatar>
-            <Box>
-              <Box sx={{ fontSize: "0.85rem", fontWeight: 500 }}>{user?.name}</Box>
-              <Box sx={{ fontSize: "0.7rem" }}>{user?.email}</Box>
-            </Box>
-          </Stack>
-          <Stack direction="row" spacing={2}>
-            <CustomSelectDropdown
-              placeholder="Priority Level"
-              name="priorityLevel"
-              value={formData.priorityLevel}
-              onChange={handleChange}
-              options={priorityLabels}
-              disabled={isReply}
-            />
-            <CustomSelectDropdown
-              name="commType"
-              value={formData.commType}
-              onChange={handleChange}
-              options={commTypeLabels}
-              placeholder="Type"
-              disabled={isReply}
-            />
-          </Stack>
+    <>
+      {/* If a communication is selected, show accordion only */}
+      {selectedComm ? (
+        <Box sx={{ px: 2, py: 2 }}>
+          <Box sx={{ mb: 2 }}>
+            <Button
+              variant="text"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setSelectedComm(null)}
+            >
+              Back
+            </Button>
+          </Box>
+          <MailTrailAccordion
+            mailTrail={[...(selectedComm.replies || []), selectedComm]}
+            onReply={(comm) => {
+              console.log(100,comm);
+              setEditCommData({
+                refNo: comm.refNo,
+                category: comm.category,
+                sentTo: [comm.sentBy],
+                subject: `Re: ${comm.subject}`,
+                cc: comm.cc,
+                category: comm.category,
+                commType: comm.commType,
+                responseDueBy: comm.responseDueBy,
+                parentCommId: comm.commId,
+                priorityLevel: comm.priorityLevel
+              });
+              setIsModalOpen(true);
+            }}
+          />
         </Box>
-      </DialogTitle>
+      ) : (
+        <Box sx={{ width: "100%", height: "100%", display: "flex" }}>
+          {/* Sidebar */}
+          <SideDrawer
+            open
+            handleDrawerToggle={() => {}}
+            selectedTab={tab}
+            onSelectTab={(val) => setTab(val)}
+          />
+          {/* Main Content */}
+          <Box sx={{ flexGrow: 1, px: 2, py: 2 }}>
+            {/* Top Bar */}
+            <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
+              <TextField
+                fullWidth
+                placeholder="Search Communication Records..."
+                variant="outlined"
+                sx={topBarSearchStyle}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="medium" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Button
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={handleAddCommClick}
+                color="info"
+                sx={animatedButtonStyle}
+              >
+                Add Communication
+              </Button>
+            </Box>
 
-      <DialogContent>
-        <Box display="flex" flexDirection="column" gap={3} mt={2}>
-          <Box display="flex" gap={2}>
-            <SearchableDropdown
-              label="Category"
-              placeholder="Enter Category"
-              name="category"
-              options={categoryLabels}
-              value={formData.category}
-              onChange={handleChange}
-              error={errors.category}
-              disabled={isReply}
-            />
-            {formData.refNo && (
-              <CustomTextField
-                label="Reference Number"
-                name="refNo"
-                value={formData.refNo}
-                disabled
+            {/* Content Area */}
+            {loading ? (
+              <Box>
+                {[...Array(5)].map((_, idx) => (
+                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
+                ))}
+              </Box>
+            ) : filteredData.length > 0 ? (
+              <Box
+                pb={2}
+                sx={{
+                  display: "flex",
+                  flexDirection: "row",
+                  maxHeight: "calc(100vh - 180px)",
+                  overflow: "hidden",
+                }}
+              >
+                <Box
+                  sx={{
+                    flexGrow: 1,
+                    overflow: "auto",
+                  }}
+                ></Box>
+                <CommunicationList
+                  communications={filteredData}
+                  selectedId={selectedComm?.commId}
+                  onSelect={(comm) => setSelectedComm(comm)}
+                />
+              </Box>
+            ) : (
+              <EmptyStateBox
+                icon={BsTable}
+                title="No Communications Found"
+                description="Try changing your filters or adding a new communication."
               />
             )}
           </Box>
-          <DynamicEmailInput
-            label="Sent To"
-            name="sentTo"
-            placeholder="Receiver Email Address"
-            value={formData.sentTo}
-            onChange={(val) => setFormData((prev) => ({ ...prev, sentTo: val }))}
-            error={errors.sentTo}
-          />
-          <DynamicEmailInput
-            label="CC"
-            name="cc"
-            placeholder="Add CC recipients"
-            value={formData.cc}
-            onChange={(val) => setFormData((prev) => ({ ...prev, cc: val }))}
-            error={errors.cc}
-          />
-          <CustomTextField
-            label="Subject"
-            name="subject"
-            placeholder="Enter Subject of the Email"
-            value={formData.subject}
-            onChange={handleChange}
-            error={errors.subject}
-          />
-          <Box display="flex" gap={2}>
-            <CustomTextField
-              label="Response Due By"
-              name="responseDueBy"
-              type="datetime-local"
-              value={formData.responseDueBy}
-              onChange={handleChange}
-              error={errors.responseDueBy}
-              endAdornment={
-                <InputAdornment position="end">
-                  <CalendarToday sx={{ fontSize: "1.2rem" }} />
-                </InputAdornment>
-              }
-              disabled={isReply}
-            />
-          </Box>
-          <CustomSmartPasteField
-            value={formData.summary}
-            label="Summary"
-            placeholder="Enter summary"
-            onChange={handleDescriptionChange}
-            error={errors.summary}
-          />
         </Box>
-      </DialogContent>
+      )}
 
-      <DialogActions>
-        <Button size="small" sx={dialogButtonStyleTwo} onClick={() => handleSubmit(true)}>
-          Save as Draft
-        </Button>
-        <Button onClick={() => handleSubmit(false)} disabled={isSubmitting} sx={dialogButtonStyle} size="small">
-          {initialData ? "Reply" : "Send"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+      {/* Modal */}
+      <CommunicationFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editCommData}
+        user={user}
+        onSubmit={() => fetchData(tab)}
+      />
+    </>
   );
-}
+};
+
+export default CreateCommunicationPage;
