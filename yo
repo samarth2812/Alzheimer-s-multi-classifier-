@@ -1,7 +1,58 @@
-export const priorityLabels = [
-  { name: "High", value: "HIGH" },
-  { name: "Low", value: "LOW" },
-  { name: "Medium", value: "MEDIUM" },
-];
+export const buildFetchFilter = (
+  type: "inbox" | "sent" | "drafts" | "thread",
+  userEmail: string,
+  threadId?: string
+) => {
+  if (type === "inbox") {
+    return {
+      status: COMMUNICATION_STATUS_MAPPING["Sent"] as any,
+      isDeleted: false,
+      OR: [{ sentTo: { has: userEmail } }, { cc: { has: userEmail } }],
+    };
+  }
+  if (type === "sent") {
+    return {
+      sentBy: userEmail,
+      status: COMMUNICATION_STATUS_MAPPING["Sent"] as any,
+      isDeleted: false,
+    };
+  }
+  if (type === "drafts") {
+    return {
+      sentBy: userEmail,
+      status: COMMUNICATION_STATUS_MAPPING["Draft"] as any,
+      isDeleted: false,
+    };
+  }
+  if (type === "thread" && threadId) {
+    return {
+      OR: [
+        { commId: threadId },
+        { parentCommId: threadId },
+        { parentCommunication: { commId: threadId } },
+      ],
+    };
+  }
+  return {};
+};
 
-commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
+export const fetchCommunications = async (
+  type: 'inbox' | 'sent' | 'drafts' | 'thread',
+  userEmail: string,
+  threadId?: string
+) => {
+  try {
+    const where = buildFetchFilter(type, userEmail, threadId);
+    const g =  await prisma.communication.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        replies: true,
+      },
+    });
+    return g;
+  } catch (error) {
+    console.error("Error fetching communications:", error);
+    throw new Error("Failed to fetch communications");
+  }
+};
