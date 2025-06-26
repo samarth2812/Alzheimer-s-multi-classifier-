@@ -17,12 +17,9 @@ import { formSchema } from "./formSchema";
 import { z } from "zod";
 import toast from "react-hot-toast";
 import { apiRequest } from "../../axios/apiRequest";
-import { ArrowBackIosNew, CalendarToday, ReplyAll } from "@mui/icons-material";
-import { dialogStyle } from "layouts/resuableComponents/styles";
-
-import { dialogButtonStyle } from "layouts/resuableComponents/styles";
+import { ArrowBackIosNew, CalendarToday } from "@mui/icons-material";
+import { dialogStyle, dialogButtonStyle, dialogButtonStyleTwo } from "layouts/resuableComponents/styles";
 import { CustomSmartPasteField } from "layouts/resuableComponents/customSmartPasteField";
-import { dialogButtonStyleTwo } from "layouts/resuableComponents/styles";
 import { CustomSelectDropdown } from "layouts/resuableComponents/customSelectDropdown";
 import { DynamicEmailInput } from "layouts/resuableComponents/dynamicEmailInput";
 import { useSelector } from "react-redux";
@@ -85,13 +82,13 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isReply = !!initialData;
+
   useEffect(() => {
     if (initialData) {
       setFormData({
         ...initialData,
-        responseDueBy: initialData?.responseDueBy
-          ? formatDatetimeLocal(initialData?.responseDueBy)
-          : "",
+        responseDueBy: initialData?.responseDueBy ? formatDatetimeLocal(initialData?.responseDueBy) : "",
         commType: commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
         category: categoryLabels.find((s) => s.value === initialData.category)?.name || "",
       });
@@ -115,14 +112,11 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
     if (errors[name]) {
-      setErrors({
-        ...errors,
-        [name]: undefined,
-      });
+      setErrors({ ...errors, [name]: undefined });
     }
   };
+
   const handleValidationError = (error) => {
     if (error instanceof z.ZodError) {
       const formattedErrors = {};
@@ -152,9 +146,6 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
     } finally {
       setIsSubmitting(false);
     }
-  };
-  const handleDescriptionChange = (htmlContent) => {
-    setFormData((prev) => ({ ...prev, summary: htmlContent }));
   };
 
   const handleUpdateCommunicationRecord = async () => {
@@ -203,9 +194,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
 
       if (Object.keys(updatedFields).length > 0) {
         updatedFields = { ...updatedFields, updateType: "FIELD_UPDATE" };
-        const payload = {
-          updatedFields,
-        };
+        const payload = { updatedFields };
         const result = await apiRequest(
           "PUT",
           `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication/${user.role}/${user.department}/${formData.commId}`,
@@ -235,6 +224,10 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
     }
   };
 
+  const handleDescriptionChange = (htmlContent) => {
+    setFormData((prev) => ({ ...prev, summary: htmlContent }));
+  };
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" sx={dialogStyle}>
       <DialogTitle sx={{ p: 0, pb: 2 }}>
@@ -250,28 +243,11 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             <Avatar
               src={user?.avatar || "/path/to/avatar.jpg"}
               alt={user?.name || "User"}
-              sx={{
-                width: 50,
-                height: 50,
-                mb: 2,
-                textTransform: "capitalize",
-                bgcolor: (theme) => theme.palette.custom.background1,
-                color: (theme) => theme.palette.custom.two,
-              }}
+              sx={{ width: 50, height: 50, mb: 2, textTransform: "capitalize", bgcolor: (theme) => theme.palette.custom.background1, color: (theme) => theme.palette.custom.two }}
             />
             <Box display="flex" flexDirection="column">
-              <Box
-                sx={{
-                  fontSize: "0.85rem",
-                  fontWeight: 500,
-                  color: (theme) => theme.palette.custom.two,
-                }}
-              >
-                {user?.name}
-              </Box>
-              <Box sx={{ fontSize: "0.7rem", color: (theme) => theme.palette.custom.text2 }}>
-                {user?.email}
-              </Box>
+              <Box sx={{ fontSize: "0.85rem", fontWeight: 500, color: (theme) => theme.palette.custom.two }}>{user?.name}</Box>
+              <Box sx={{ fontSize: "0.7rem", color: (theme) => theme.palette.custom.text2 }}>{user?.email}</Box>
             </Box>
           </Stack>
           <Stack direction="row" spacing={2} alignItems="center">
@@ -282,6 +258,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               onChange={handleChange}
               options={priorityLabels}
               sx={{ minWidth: 100, width: "100%" }}
+              disabled={isReply}
             />
             <CustomSelectDropdown
               name="commType"
@@ -290,6 +267,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               options={commTypeLabels}
               placeholder="Type"
               sx={{ minWidth: 100, width: "100%" }}
+              disabled={isReply}
             />
           </Stack>
         </Box>
@@ -305,16 +283,21 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               value={formData.category}
               onChange={handleChange}
               error={errors.category}
+              disabled={isReply}
             />
-            <CustomTextField
-              label="Reference Number"
-              name="refNo"
-              placeholder="Enter Reference Number"
-              value={formData.refNo}
-              onChange={handleChange}
-              error={errors.refNo}
-            />
+            {formData.refNo ? (
+              <CustomTextField
+                label="Reference Number"
+                name="refNo"
+                placeholder="Enter Reference Number"
+                value={formData.refNo}
+                onChange={handleChange}
+                error={errors.refNo}
+                disabled
+              />
+            ) : null}
           </Box>
+
           <DynamicEmailInput
             label="Sent To"
             name="sentTo"
@@ -325,6 +308,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             chipbgColor={(theme) => theme.palette.custom.one}
             chipTxtColor={(theme) => theme.palette.custom.text2}
           />
+
           <DynamicEmailInput
             label="CC"
             name="cc"
@@ -335,6 +319,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             chipbgColor={(theme) => theme.palette.custom.two}
             chipTxtColor={(theme) => theme.palette.custom.light}
           />
+
           <CustomTextField
             label="Subject"
             name="subject"
@@ -343,6 +328,7 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             onChange={handleChange}
             error={errors.subject}
           />
+
           <Box display="flex" gap={2}>
             <CustomTextField
               label="Response Due By"
@@ -354,13 +340,13 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
               error={errors.responseDueBy}
               endAdornment={
                 <InputAdornment position="end">
-                  <CalendarToday
-                    sx={{ color: (theme) => theme.palette.custom.two, fontSize: "1.2rem" }}
-                  />
+                  <CalendarToday sx={{ color: (theme) => theme.palette.custom.two, fontSize: "1.2rem" }} />
                 </InputAdornment>
               }
+              disabled={isReply}
             />
           </Box>
+
           <CustomSmartPasteField
             value={formData.summary}
             label="Summary"
@@ -371,11 +357,9 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button size="small" sx={dialogButtonStyleTwo}>
-          Save as Draft
-        </Button>
+        <Button size="small" sx={dialogButtonStyleTwo}>Save as Draft</Button>
         <Button onClick={handleSubmit} disabled={isSubmitting} sx={dialogButtonStyle} size="small">
-          {initialData ? "Update" : "Sent"}
+          {initialData ? "Reply" : "Sent"}
         </Button>
       </DialogActions>
     </Dialog>
