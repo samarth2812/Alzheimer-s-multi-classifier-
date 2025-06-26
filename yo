@@ -1,246 +1,78 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  Box,
-  Button,
-  Skeleton,
-  TextField,
-  InputAdornment,
-  Typography,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { Search } from "@mui/icons-material";
-import debounce from "lodash.debounce";
-import { useSelector } from "react-redux";
-import toast from "react-hot-toast";
+<Box
+  sx={{
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    mb: 2,
+    flexWrap: "wrap",
+  }}
+>
+  {/* Left: Tabs */}
+  <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
+    {["Inbox", "Sent Items"].map((label) => {
+      const value = label === "Inbox" ? "inbox" : "sent";
+      const isActive = tab === value;
+      return (
+        <Button
+          key={value}
+          onClick={() => setTab(value)}
+          sx={{
+            fontSize: "0.85rem",
+            fontWeight: isActive ? 600 : 400,
+            color: (theme) =>
+              isActive
+                ? theme.palette.custom.two
+                : theme.palette.custom.text2,
+            position: "relative",
+            borderRadius: 0,
+            textTransform: "none",
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              bottom: -2,
+              left: 0,
+              width: "100%",
+              height: "2px",
+              backgroundColor: (theme) => theme.palette.custom.two,
+              transform: isActive ? "scaleX(1)" : "scaleX(0)",
+              transformOrigin: "left",
+              transition: "transform 0.3s ease-out",
+            },
+            "&:hover::after": {
+              transform: "scaleX(1)",
+            },
+          }}
+        >
+          {label}
+        </Button>
+      );
+    })}
+  </Box>
 
-import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
-import MailTrailAccordion from "./MailTrailAccordion";
-import CommunicationList from "layouts/resuableComponents/listComponent";
-import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
-import { BsTable } from "react-icons/bs";
-import { apiRequest } from "../../axios/apiRequest";
-
-const animatedButtonStyle = {
-  color: (theme) => theme.palette.custom.text2,
-  fontWeight: 400,
-  display: "flex",
-  alignItems: "center",
-  py: 1,
-  fontSize: ".7rem",
-  borderRadius: 0,
-  whiteSpace: "nowrap",
-  textTransform: "capitalize !important",
-  position: "relative",
-  overflow: "hidden",
-  "&:hover": {
-    color: (theme) => theme.palette.custom.two,
-    textDecoration: "none",
-  },
-  "&::after": {
-    content: '""',
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    width: "100%",
-    height: "2px",
-    backgroundColor: (theme) => theme.palette.custom.two,
-    transform: "scaleX(0)",
-    transformOrigin: "left",
-    transition: "transform 0.3s ease-out",
-  },
-  "&:disabled": { color: (theme) => theme.palette.custom.text3 },
-  "&:hover::after": {
-    transform: "scaleX(1)",
-  },
-};
-
-const tabStyle = (active) => ({
-  fontSize: "0.875rem",
-  fontWeight: 600,
-  color: (theme) => (active ? theme.palette.custom.two : theme.palette.custom.text2),
-  px: 2,
-  py: 1.5,
-  cursor: "pointer",
-  borderBottom: active ? "2px solid" : "2px solid transparent",
-  borderColor: (theme) => (active ? theme.palette.custom.two : "transparent"),
-  transition: "all 0.2s ease",
-});
-
-const CommunicationPage = () => {
-  const [data, setData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editCommData, setEditCommData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("inbox");
-  const [selectedComm, setSelectedComm] = useState(null);
-  const user = useSelector((state) => state.user.user);
-
-  const fetchData = async (tabType = "inbox") => {
-    setLoading(true);
-    const typeParam = tabType;
-    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
-    try {
-      const response = await apiRequest("GET", fetchUrl);
-      setData(response.data);
-      setFilteredData(response.data);
-    } catch {
-      toast.error("Failed to fetch communications");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData(tab);
-  }, [tab]);
-
-  const debouncedFilter = useMemo(
-    () =>
-      debounce((term, list) => {
-        if (!term) {
-          setFilteredData(list);
-          return;
-        }
-        const lower = term.toLowerCase();
-        const filtered = list.filter((item) =>
-          Object.values(item).some((val) => val?.toString().toLowerCase().includes(lower))
-        );
-        setFilteredData(filtered);
-      }, 300),
-    []
-  );
-
-  useEffect(() => {
-    debouncedFilter(searchTerm, data);
-    return () => debouncedFilter.cancel();
-  }, [searchTerm, data]);
-
-  const handleAddCommClick = () => {
-    setEditCommData(null);
-    setIsModalOpen(true);
-  };
-
-  return (
-    <>
-      {selectedComm ? (
-        <Box sx={{ px: 2, py: 2 }}>
-          <Box sx={{ mb: 2 }}>
-            <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => setSelectedComm(null)}>
-              Back
-            </Button>
-          </Box>
-          <MailTrailAccordion
-            mailTrail={[...(selectedComm.replies || []), selectedComm]}
-            onReply={(comm) => {
-              setEditCommData({
-                refNo: comm.refNo,
-                category: comm.category,
-                sentTo: [comm.sentBy],
-                subject: `Re: ${comm.subject}`,
-                cc: comm.cc,
-                category: comm.category,
-                commType: comm.commType,
-                responseDueBy: comm.responseDueBy,
-                parentCommId: comm.commId,
-                priorityLevel: comm.priorityLevel,
-              });
-              setIsModalOpen(true);
-            }}
-          />
-        </Box>
-      ) : (
-        <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-          {/* Top Bar */}
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              px: 3,
-              py: 2,
-              borderBottom: "1px solid #ddd",
-            }}
-          >
-            <Button
-              size="small"
-              startIcon={<AddIcon />}
-              onClick={handleAddCommClick}
-              color="info"
-              sx={animatedButtonStyle}
-            >
-              Add Communication
-            </Button>
-
-            <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <TextField
-                placeholder="Search Communication..."
-                size="small"
-                variant="outlined"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
-              <Box sx={{ display: "flex", gap: 2 }}>
-                <Typography
-                  sx={tabStyle(tab === "inbox")}
-                  onClick={() => setTab("inbox")}
-                >
-                  Inbox
-                </Typography>
-                <Typography
-                  sx={tabStyle(tab === "sent")}
-                  onClick={() => setTab("sent")}
-                >
-                  Sent Items
-                </Typography>
-              </Box>
-            </Box>
-          </Box>
-
-          {/* Content */}
-          <Box sx={{ flexGrow: 1, px: 3, py: 2 }}>
-            {loading ? (
-              <Box>
-                {[...Array(5)].map((_, idx) => (
-                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
-                ))}
-              </Box>
-            ) : filteredData.length > 0 ? (
-              <CommunicationList
-                communications={filteredData}
-                selectedId={selectedComm?.commId}
-                onSelect={(comm) => setSelectedComm(comm)}
-              />
-            ) : (
-              <EmptyStateBox
-                icon={BsTable}
-                title="No Communications Found"
-                description="Try changing your filters or adding a new communication."
-              />
-            )}
-          </Box>
-        </Box>
-      )}
-
-      <CommunicationFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editCommData}
-        user={user}
-        onSubmit={() => fetchData(tab)}
-      />
-    </>
-  );
-};
-
-export default CommunicationPage;
+  {/* Right: Search and Add */}
+  <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 2, sm: 0 } }}>
+    <TextField
+      fullWidth
+      placeholder="Search Communication..."
+      variant="outlined"
+      sx={{ minWidth: 250 }}
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start">
+            <Search fontSize="medium" sx={iconButtonStyle} />
+          </InputAdornment>
+        ),
+      }}
+    />
+    <Button
+      size="small"
+      startIcon={<AddIcon />}
+      onClick={handleAddCommClick}
+      sx={animatedButtonStyle}
+    >
+      Add Communication
+    </Button>
+  </Box>
+</Box>
