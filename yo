@@ -1,2 +1,7 @@
-let validatedData = formSchema.parse(formData);
-      validatedData = {...validatedData, {formData.parentCommId ? parentCommId: formData.parentCommId; : '' }
+export const priorityLabels = [
+  { name: "High", value: "HIGH" },
+  { name: "Low", value: "LOW" },
+  { name: "Medium", value: "MEDIUM" },
+];
+
+commTypeLabels.find((s) => s.value === initialData.commType)?.name || "",
