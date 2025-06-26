@@ -1,105 +1,223 @@
-  return (
-    <>
-      <Box mb={3} sx={{ width: "100%", height: "100%", display: "flex" }}>
-        <SideDrawer
-          open={drawerOpen}
-          handleDrawerToggle={() => setDrawerOpen(!drawerOpen)}
-          selectedTab={tab}
-          onSelectTab={(val) => setTab(val)}
+  const formatTableData = (rawData) => {
+    const columns = [
+      { Header: "S.No", accessor: "serialNumber", width: "5%", align: "center" },
+      { Header: "Type", accessor: "commType", width: "10%", align: "left" },
+      { Header: "Category", accessor: "category", width: "10%", align: "left" },
+      { Header: "Subject", accessor: "subject", width: "15%", align: "center" },
+      { Header: "Reference Number", accessor: "refNo", width: "5%", align: "center" },
+      { Header: "Sent By", accessor: "sentBy", width: "10%", align: "center" },
+      { Header: "Sent To", accessor: "sentTo", width: "10%", align: "center" },
+      { Header: "CC", accessor: "cc", width: "15%", align: "left" },
+      { Header: "Response Due By", accessor: "responseDueBy", width: "10%", align: "center" },
+      { Header: "Created At", accessor: "createdAt", width: "10%", align: "center" },
+      { Header: "Priority", accessor: "priorityLevel", width: "10%", align: "center" },
+      { Header: "Summary", accessor: "summary", width: "15%", align: "left" },
+      { Header: "Actions", accessor: "actions", width: "15%", align: "center" },
+      { Header: "Attachments", accessor: "attachments", width: "15%", align: "center" },
+      { Header: "Approval", accessor: "approval", width: "10%", align: "center" },
+      { Header: "Remarks", accessor: "remarks", width: "15%", align: "center" },
+      { Header: "Submit", accessor: "submit", width: "10%", align: "center" },
+    ];
+    const rows = rawData.map((item, index) => ({
+      serialNumber: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {page * rowsPerPage + index + 1}
+        </MDTypography>
+      ),
+      commType: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.commType}
+        </MDTypography>
+      ),
+      category: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.category.replace(/_/g, " ")}
+        </MDTypography>
+      ),
+      subject: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.subject}
+        </MDTypography>
+      ),
+      sentBy: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.sentBy}
+        </MDTypography>
+      ),
+      sentTo: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.sentTo}
+        </MDTypography>
+      ),
+      cc: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.cc}
+        </MDTypography>
+      ),
+      status: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.status.replace(/_/g, " ")}
+        </MDTypography>
+      ),
+      responseDueBy: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {formatDateTime(item.responseDueBy)}
+        </MDTypography>
+      ),
+      createdAt: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {formatDateTime(item.createdAt)}
+        </MDTypography>
+      ),
+      priorityLevel: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.priorityLevel}
+        </MDTypography>
+      ),
+      summary: (
+        <InputWithDialog
+          value={item.summary}
+          dialogTitle="Summary"
+          dialogPlaceholder="Summary"
+          cancelButtonLabel="Cancel"
+          icon={VisibilityIcon}
+          name="name"
+          type="text"
+          callOnSave={false}
+          isDisabled={true}
         />
-        <Box sx={{flexGrow:1,px:2,py:2}}>
-<Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
-          <TextField
-            fullWidth
-            placeholder="Search Communication Records..."
-            variant="outlined"
-            sx={topBarSearchStyle}
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon
-                    fontSize="medium"
-                    sx={{
-                      color: (theme) => theme.palette.custom.text2,
-                      fontSize: "1rem !important",
-                    }}
-                  />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={handleAddCommClick}
-            color="info"
-            sx={animatedButtonStyle}
-          >
-            Add Communication
-          </Button>
-        </Box>
-        {loading ? (
-          <Box>
-            {[...Array(5)].map((_, index) => (
-              <Skeleton
-                key={index}
-                variant="rectangular"
-                animation="wave"
-                height={40}
-                sx={{
-                  mb: 2,
-                  borderRadius: 2,
-                  backgroundColor: (theme) => theme.palette.custom.background1,
-                }}
-              />
-            ))}
-          </Box>
-        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
-          <Box
-            pb={2}
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              maxHeight: "calc(100vh - 180px)",
-              overflow: "hidden",
-            }}
-          >
-            <Box
-              sx={{
-                flexGrow: 1,
-                overflow: "auto",
-                ml: drawerOpen ? 0 : "-240px",
-                transition: "margin-left 0.3s ease",
+      ),
+      actions: (
+        <Stack direction="row" spacing={1} justifyContent="center">
+          <Tooltip title="Edit Communication Details">
+            <IconButton
+              sx={iconButtonStyle}
+              onClick={() => {
+                handleEdit(item);
+                setIsModalOpen(true);
               }}
             >
-              <DataTable
-                table={tableData}
-                isSorted={false}
-                entriesPerPage={true}
-                showTotalEntries={true}
-                noEndBorder
-              />
-            </Box>
-          </Box>
-        ) : (
-          <EmptyStateBox
-            icon={BsTable}
-            title="Currently there are no created Communications"
-            description="Start a new communication by tapping the 'Add Communication' button "
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete Communication">
+            <IconButton
+              sx={iconButtonStyle}
+              onClick={() => {
+                setCommunicationToDelete(item);
+                setIsDeleteDialogOpen(true);
+              }}
+            >
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ),
+      attachments: (
+        <>
+          <Tooltip title="View Attachments">
+            <span>
+              <IconButton
+                sx={iconButtonStyle}
+                onClick={() => {
+                  setCommId(item.commId);
+                  setAttachments(item.attachments);
+                  setViewAttachementDialogOpen(true);
+                }}
+              >
+                <VisibilityIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </>
+      ),
+      approval: (
+        <CustomDropdownChip
+          options={statusOptions}
+          value={formData[item.commId]?.approvalStatus || ""}
+          onChange={(e) => {
+            handleChange(e, item.commId);
+          }}
+          name="approvalStatus"
+        />
+      ),
+      remarks: (
+        <Box sx={{ minWidth: "150px" }}>
+          <RemarksInputDialog
+            name="remarks"
+            value={formData[item.commId]?.remarks || ""}
+            onChange={(e) => handleChange(e, item.commId)}
+            remarks={item.remarkHistory || []}
+            currentUser={user}
+            onSendRemark={(newRemark) => handleSubmitRemark(item.commId, newRemark)}
+            onEditRemark={(commId, remarkText) => handleEditRemark(commId, remarkText)}
+            icon={ChatBubbleOutline}
           />
-        )}
         </Box>
-      </Box>
-      <CommunicationFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editCommData}
-        user={user}
-        onSubmit={() => {
-          fetchData();
-        }}
-      />
-    </>
-  );
+      ),
+      submit: (
+        <CustomIconButton
+          icon={ArrowCircleUp}
+          label="Submit"
+          disabled={(() => {
+            const approvalStatus = formData[item.commId]?.approvalStatus;
+            const remarks = item.remarkHistory || [];
+
+            const lastMyRemark = [...remarks].reverse().find((r) => r.role === user.role);
+
+            const lastMyRemarkTime = lastMyRemark?.createdAt;
+
+            const lastBackToMeTime = item.lastStepChangeTime;
+
+            const addedNewRemark =
+              lastMyRemarkTime && new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
+
+            return !approvalStatus || !addedNewRemark;
+          })()}
+          onClick={() => handleSubmitComm(item.commId, item.department)}
+        />
+      ),
+    }));
+    return { rows, columns };
+  };
+
+                <DataTable
+                  table={tableData}
+                  isSorted={false}
+                  entriesPerPage={true}
+                  showTotalEntries={true}
+                  noEndBorder
+                />
