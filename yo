@@ -1,145 +1,65 @@
-import React from "react";
-import {
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Typography,
-  Box,
-  Chip,
-  Divider,
-  IconButton,
-  Tooltip,
-} from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
-import ReplyIcon from "@mui/icons-material/Reply";
+<AccordionSummary expandIcon={<ExpandMoreIcon />}>
+  <Box sx={{ width: "100%" }}>
+    {/* Subject + Top Right Actions */}
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "flex-start",
+        flexWrap: "wrap",
+        gap: 1,
+      }}
+    >
+      <Typography
+        variant="subtitle1"
+        fontWeight={600}
+        sx={{
+          flex: 1,
+          maxWidth: "70%",
+          wordBreak: "break-word",
+        }}
+      >
+        {comm.subject}
+      </Typography>
 
-const stripHtml = (html) => {
-  const temp = document.createElement("div");
-  temp.innerHTML = html;
-  return temp.textContent || temp.innerText || "";
-};
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          {comm.createdAt}
+        </Typography>
 
-export default function MailTrailAccordion({ mailTrail = [], onReply }) {
-  return (
-    <Box sx={{ maxWidth: "900px", margin: "0 auto" }}>
-      {mailTrail.map((comm, index) => (
-        <Accordion
-          key={comm.refNo || index}
-          defaultExpanded={index === 0}
-          disableGutters
-          sx={{
-            mb: 2,
-            borderRadius: 2,
-            border: "1px solid #ddd",
-            boxShadow: "none",
-            "&:before": { display: "none" },
-          }}
-        >
-          {/* Accordion Header */}
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box sx={{ width: "100%" }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                }}
-              >
-                <Typography
-                  variant="subtitle1"
-                  fontWeight={600}
-                  sx={{
-                    maxWidth: "60%",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {comm.subject}
-                </Typography>
+        {comm.priorityLevel?.toLowerCase() === "high" && (
+          <Chip
+            icon={<PriorityHighIcon />}
+            label="High Priority"
+            color="error"
+            size="small"
+          />
+        )}
 
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {comm.createdAt}
-                  </Typography>
-
-                  {comm.priorityLevel?.toLowerCase() === "high" && (
-                    <Chip
-                      icon={<PriorityHighIcon />}
-                      label="High Priority"
-                      color="error"
-                      size="small"
-                    />
-                  )}
-
-                  <Tooltip title="Reply">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent toggle
-                        onReply?.(comm);
-                      }}
-                    >
-                      <ReplyIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
-
-              <Box
-                sx={{
-                  mt: 0.5,
-                  fontSize: "0.85rem",
-                  color: "text.secondary",
-                }}
-              >
-                From: {comm.sentBy} | To: {comm.sentTo?.join(", ")}
-              </Box>
-            </Box>
-          </AccordionSummary>
-
-          {/* Accordion Details */}
-          <AccordionDetails>
-            {/* Basic Info */}
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 4, mb: 2 }}>
-              <InfoItem label="Communication Type" value={comm.commType} />
-              <InfoItem label="Category" value={comm.category} />
-              <InfoItem label="Reference No" value={comm.refNo} />
-            </Box>
-
-            {/* Timing & Routing */}
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 4, mb: 2 }}>
-              <InfoItem label="CC" value={comm.cc?.join(", ") || "—"} />
-              <InfoItem label="Response Due By" value={comm.responseDueBy || "—"} />
-              <InfoItem label="Created At" value={comm.createdAt || "—"} />
-              <InfoItem label="Priority" value={comm.priorityLevel || "—"} />
-            </Box>
-
-            <Divider sx={{ my: 2 }} />
-
-            {/* Summary */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Summary
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {stripHtml(comm.summary) || "No summary available."}
-              </Typography>
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-      ))}
+        <Tooltip title="Reply">
+          <IconButton
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent accordion toggle
+              onReply?.(comm);
+            }}
+          >
+            <ReplyIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
     </Box>
-  );
-}
 
-const InfoItem = ({ label, value }) => (
-  <Box>
-    <Typography variant="caption" color="text.secondary">
-      {label}
-    </Typography>
-    <Typography variant="body2">{value || "—"}</Typography>
+    {/* From / To */}
+    <Box
+      sx={{
+        mt: 0.5,
+        fontSize: "0.85rem",
+        color: "text.secondary",
+        wordBreak: "break-word",
+      }}
+    >
+      From: {comm.sentBy} | To: {comm.sentTo?.join(", ")}
+    </Box>
   </Box>
-);
+</AccordionSummary>
