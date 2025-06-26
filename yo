@@ -1,223 +1,126 @@
-import { useEffect, useState, useMemo } from "react";
-import toast from "react-hot-toast";
-
+import React from "react";
 import {
   Box,
-  Button,
-  Skeleton,
-  TextField,
-  InputAdornment,
+  Typography,
+  List,
+  ListItem,
+  ListItemButton,
+  Chip,
+  Divider,
+  Tooltip,
 } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import SearchIcon from "@mui/icons-material/Search";
-import { useSelector } from "react-redux";
+import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
 
-import debounce from "lodash.debounce";
-
-import { apiRequest } from "../../axios/apiRequest";
-import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
-import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
-import SideDrawer from "layouts/resuableComponents/sideDrawer";
-import CommunicationList from "layouts/resuableComponents/listComponent";
-import MailTrailAccordion from "./MailTrailAccordion";
-
-import { topBarStyle, topBarSearchStyle, animatedButtonStyle } from "layouts/resuableComponents/styles";
-import { BsTable } from "react-icons/bs";
-
-const getCommTypeFromTab = (tab) => {
-  switch (tab) {
-    case "inbox":
-      return "inbox";
-    case "sent":
-      return "send";
-    case "drafts":
-      return "drafts";
-    default:
-      return "inbox";
-  }
+const columnStyles = {
+  serial: { width: "5%" },
+  from: { width: "20%" },
+  subject: { width: "30%" },
+  category: { width: "20%" },
+  date: { width: "15%" },
 };
 
-const CreateCommunicationPage = () => {
-  const [data, setData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editCommData, setEditCommData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("sent");
-  const [drawerOpen, setDrawerOpen] = useState(true);
-  const [selectedCommId, setSelectedCommId] = useState("");
-  const [selectedComm, setSelectedComm] = useState(null);
-
-  const user = useSelector((state) => state.user.user);
-
-  const fetchData = async (tabType = "inbox") => {
-    setLoading(true);
-    const typeParam = getCommTypeFromTab(tabType);
-    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
-
-    try {
-      const response = await apiRequest("GET", fetchUrl);
-      setData(response.data);
-      setFilteredData(response.data);
-
-      if (selectedCommId) {
-        const updatedComm = response.data.find((comm) => comm.commId === selectedCommId);
-        setSelectedComm(updatedComm);
-      }
-    } catch {
-      toast.error("Failed to fetch communications");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData(tab);
-  }, [tab]);
-
-  const debouncedFilter = useMemo(
-    () =>
-      debounce((term, data) => {
-        if (term) {
-          const lowercased = term.toLowerCase();
-          const filtered = data.filter((item) =>
-            Object.keys(item).some((key) => {
-              const value = item[key];
-              return value && value.toString().toLowerCase().includes(lowercased);
-            })
-          );
-          setFilteredData(filtered);
-        } else {
-          setFilteredData(data);
-        }
-      }, 300),
-    []
-  );
-
-  useEffect(() => {
-    const normalized = searchTerm.toLowerCase().trim();
-    debouncedFilter(normalized, data);
-    return () => debouncedFilter.cancel();
-  }, [searchTerm, data]);
-
-  const handleSearch = (event) => setSearchTerm(event.target.value);
-
-  const handleAddCommClick = () => {
-    setEditCommData(null);
-    setIsModalOpen(true);
-  };
-
-  const handleSelectComm = (id) => {
-    const comm = data.find((item) => item.commId === id);
-    setSelectedCommId(id);
-    setSelectedComm(comm);
-  };
-
+export default function CommunicationList({ communications = [], selectedId, onSelect }) {
   return (
-    <>
-      {selectedComm && (
-        <MailTrailAccordion
-          mailTrail={[selectedComm, ...(selectedComm.replies || [])]}
-          onReply={(comm) => {
-            setEditCommData({
-              refNo: comm.refNo,
-              category: comm.category,
-              sentTo: [comm.sentBy],
-              subject: `Re: ${comm.subject}`,
-            });
-            setIsModalOpen(true);
-          }}
-        />
-      )}
-
-      <Box sx={{ width: "100%", height: "100%", display: "flex" }}>
-        <SideDrawer
-          open={drawerOpen}
-          handleDrawerToggle={() => setDrawerOpen(!drawerOpen)}
-          selectedTab={tab}
-          onSelectTab={(val) => setTab(val)}
-        />
-
-        <Box sx={{ flexGrow: 1, px: 2, py: 2 }}>
-          <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
-            <TextField
-              fullWidth
-              placeholder="Search Communication Records..."
-              variant="outlined"
-              sx={topBarSearchStyle}
-              value={searchTerm}
-              onChange={handleSearch}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon
-                      fontSize="medium"
-                      sx={{
-                        color: (theme) => theme.palette.custom.text2,
-                        fontSize: "1rem !important",
-                      }}
-                    />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Button
-              size="small"
-              startIcon={<AddIcon />}
-              onClick={handleAddCommClick}
-              color="info"
-              sx={animatedButtonStyle}
-            >
-              Add Communication
-            </Button>
-          </Box>
-
-          {loading ? (
-            <Box>
-              {[...Array(5)].map((_, index) => (
-                <Skeleton
-                  key={index}
-                  variant="rectangular"
-                  animation="wave"
-                  height={40}
-                  sx={{
-                    mb: 2,
-                    borderRadius: 2,
-                    backgroundColor: (theme) => theme.palette.custom.background1,
-                  }}
-                />
-              ))}
-            </Box>
-          ) : filteredData.length > 0 ? (
-            <Box pb={2} sx={{ display: "flex", flexDirection: "row", maxHeight: "calc(100vh - 180px)", overflow: "hidden" }}>
-              <Box sx={{ flexGrow: 1, overflow: "auto" }}>
-                <CommunicationList
-                  communications={filteredData}
-                  selectedId={selectedCommId}
-                  onSelect={handleSelectComm}
-                />
-              </Box>
-            </Box>
-          ) : (
-            <EmptyStateBox
-              icon={BsTable}
-              title="Currently there are no created Communications"
-              description="Start a new communication by tapping the 'Add Communication' button"
-            />
-          )}
-        </Box>
+    <Box sx={{ width: "100%" }}>
+      {/* Table Heading */}
+      <Box
+        sx={{
+          display: "flex",
+          px: 2,
+          py: 1,
+          backgroundColor: (theme) => theme.palette.custom.background1,
+          color: (theme) => theme.palette.custom.text2,
+          fontWeight: 600,
+          fontSize: "0.8rem",
+          borderRadius: 2,
+          mb:1
+        }}
+      >
+        <Box sx={columnStyles.serial}>S.No</Box>
+        <Box sx={columnStyles.from}>From</Box>
+        <Box sx={columnStyles.subject}>Subject</Box>
+        <Box sx={columnStyles.category}>Category</Box>
+        <Box sx={columnStyles.date}>Received</Box>
       </Box>
 
-      <CommunicationFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editCommData}
-        user={user}
-        onSubmit={() => fetchData(tab)}
-      />
-    </>
-  );
-};
+      {/* Email Rows */}
+      <List sx={{ p: 0 }}>
+        {communications.map((comm, idx) => (
+          <React.Fragment key={comm.id || idx}>
+            <ListItem
+              disablePadding
+              sx={{
+                backgroundColor: selectedId === comm.id ? "#e3f2fd" : "white",
+                "&:hover": {
+                  backgroundColor: "#f5f5f5",
+                },
+              }}
+            >
+              <ListItemButton
+                onClick={() => onSelect?.(comm.id)}
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  px: 2,
+                  py: 1,
+                  borderLeft:
+                    selectedId === comm.id ? "4px solid #1976d2" : "4px solid transparent",
+                }}
+              >
+                {/* First Row */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    width: "100%",
+                    alignItems: "center",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  <Box sx={{ ...columnStyles.serial, fontWeight: 600 }}>{idx + 1}</Box>
+                  <Box sx={columnStyles.from} noWrap>
+                    {comm.sentBy || "Unknown Sender"}
+                  </Box>
+                  <Box sx={{ ...columnStyles.subject, fontWeight: 500 }} noWrap>
+                    {comm.subject || "(No Subject)"}
+                  </Box>
+                  <Box sx={columnStyles.category} noWrap>
+                    {comm.category || "General"}
+                  </Box>
+                  <Box sx={columnStyles.date}>
+                    {comm.createdAt || "-"}
+                    {comm.priorityLevel && comm.priorityLevel === "HIGH" && (
+                      <Tooltip title="High Priority">
+                        <PriorityHighIcon
+                          fontSize="small"
+                          color="error"
+                          sx={{ ml: 1, verticalAlign: "middle" }}
+                        />
+                      </Tooltip>
+                    )}
+                  </Box>
+                </Box>
 
-export default CreateCommunicationPage;
+                {/* Second Row: Summary */}
+                <Box
+                  sx={{
+                    width: "100%",
+                    mt: 0.5,
+                    fontSize: "0.75rem",
+                    color: "text.secondary",
+                    textOverflow: "ellipsis",
+                    overflow: "hidden",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {comm.summary || "No additional summary."}
+                </Box>
+              </ListItemButton>
+            </ListItem>
+            {idx < communications.length - 1 && <Divider component="li" />}
+          </React.Fragment>
+        ))}
+      </List>
+    </Box>
+  );
+}
