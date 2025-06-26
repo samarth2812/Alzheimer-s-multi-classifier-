@@ -7,11 +7,14 @@ import {
   Box,
   Chip,
   Divider,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
+import ReplyIcon from "@mui/icons-material/Reply";
 
-export default function MailTrailAccordion({ mailTrail = [] }) {
+export default function MailTrailAccordion({ mailTrail = [], onReply }) {
   return (
     <Box>
       {mailTrail.map((comm, index) => (
@@ -34,18 +37,20 @@ export default function MailTrailAccordion({ mailTrail = [] }) {
                 sx={{
                   display: "flex",
                   justifyContent: "space-between",
-                  flexWrap: "wrap",
                   alignItems: "center",
+                  flexWrap: "wrap",
                 }}
               >
                 <Typography variant="subtitle1" fontWeight={600} noWrap>
                   {comm.subject}
                 </Typography>
+
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Typography variant="body2" color="text.secondary">
                     {comm.createdAt}
                   </Typography>
-                  {comm.priorityLevel === "High" && (
+
+                  {comm.priorityLevel?.toLowerCase() === "high" && (
                     <Chip
                       icon={<PriorityHighIcon />}
                       label="High Priority"
@@ -53,8 +58,21 @@ export default function MailTrailAccordion({ mailTrail = [] }) {
                       size="small"
                     />
                   )}
+
+                  <Tooltip title="Reply">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation(); // prevent accordion toggle
+                        onReply?.(comm);
+                      }}
+                    >
+                      <ReplyIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </Box>
               </Box>
+
               <Box
                 sx={{
                   mt: 0.5,
@@ -111,130 +129,3 @@ const InfoItem = ({ label, value }) => (
     <Typography variant="body2">{value || "—"}</Typography>
   </Box>
 );
-
-import React from "react";
-import {
-  Box,
-  Typography,
-  List,
-  ListItem,
-  ListItemButton,
-  Chip,
-  Divider,
-  Tooltip,
-} from "@mui/material";
-import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
-
-const columnStyles = {
-  serial: { width: "5%" },
-  from: { width: "20%" },
-  subject: { width: "30%" },
-  category: { width: "20%" },
-  date: { width: "15%" },
-};
-
-export default function CommunicationList({ communications = [], selectedId, onSelect }) {
-  return (
-    <Box sx={{ width: "100%" }}>
-      {/* Table Heading */}
-      <Box
-        sx={{
-          display: "flex",
-          px: 2,
-          py: 1,
-          backgroundColor: (theme) => theme.palette.custom.background1,
-          color: (theme) => theme.palette.custom.text2,
-          fontWeight: 600,
-          fontSize: "0.8rem",
-          borderRadius: 2,
-          mb:1
-        }}
-      >
-        <Box sx={columnStyles.serial}>S.No</Box>
-        <Box sx={columnStyles.from}>From</Box>
-        <Box sx={columnStyles.subject}>Subject</Box>
-        <Box sx={columnStyles.category}>Category</Box>
-        <Box sx={columnStyles.date}>Received</Box>
-      </Box>
-
-      {/* Email Rows */}
-      <List sx={{ p: 0 }}>
-        {communications.map((comm, idx) => (
-          <React.Fragment key={comm.id || idx}>
-            <ListItem
-              disablePadding
-              sx={{
-                backgroundColor: selectedId === comm.id ? "#e3f2fd" : "white",
-                "&:hover": {
-                  backgroundColor: "#f5f5f5",
-                },
-              }}
-            >
-              <ListItemButton
-                onClick={() => onSelect?.(comm.id)}
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "stretch",
-                  px: 2,
-                  py: 1,
-                  borderLeft:
-                    selectedId === comm.id ? "4px solid #1976d2" : "4px solid transparent",
-                }}
-              >
-                {/* First Row */}
-                <Box
-                  sx={{
-                    display: "flex",
-                    width: "100%",
-                    alignItems: "center",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  <Box sx={{ ...columnStyles.serial, fontWeight: 600 }}>{idx + 1}</Box>
-                  <Box sx={columnStyles.from} noWrap>
-                    {comm.sentBy || "Unknown Sender"}
-                  </Box>
-                  <Box sx={{ ...columnStyles.subject, fontWeight: 500 }} noWrap>
-                    {comm.subject || "(No Subject)"}
-                  </Box>
-                  <Box sx={columnStyles.category} noWrap>
-                    {comm.category || "General"}
-                  </Box>
-                  <Box sx={columnStyles.date}>
-                    {comm.createdAt || "-"}
-                    {comm.priorityLevel && comm.priorityLevel === "HIGH" && (
-                      <Tooltip title="High Priority">
-                        <PriorityHighIcon
-                          fontSize="small"
-                          color="error"
-                          sx={{ ml: 1, verticalAlign: "middle" }}
-                        />
-                      </Tooltip>
-                    )}
-                  </Box>
-                </Box>
-
-                {/* Second Row: Summary */}
-                <Box
-                  sx={{
-                    width: "100%",
-                    mt: 0.5,
-                    fontSize: "0.75rem",
-                    color: "text.secondary",
-                    textOverflow: "ellipsis",
-                    overflow: "hidden",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {comm.summary || "No additional summary."}
-                </Box>
-              </ListItemButton>
-            </ListItem>
-            {idx < communications.length - 1 && <Divider component="li" />}
-          </React.Fragment>
-        ))}
-      </List>
-    </Box>
-  );
-}
