@@ -247,7 +247,18 @@ export default function CommunicationFormDialog({ open, onClose, onSubmit, initi
             >
               <ArrowBackIosNew />
             </IconButton>
-            <Avatar {...stringAvatar(user?.name || "User")} sx={{ width: 36, height: 36 }} />
+            <Avatar
+              src={user?.avatar || "/path/to/avatar.jpg"}
+              alt={user?.name || "User"}
+              sx={{
+                width: 50,
+                height: 50,
+                mb: 2,
+                textTransform: "capitalize",
+                bgcolor: (theme) => theme.palette.custom.background1,
+                color: (theme) => theme.palette.custom.two,
+              }}
+            />
             <Box display="flex" flexDirection="column">
               <Box
                 sx={{
