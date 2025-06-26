@@ -1,197 +1,146 @@
-import React from "react";
-import {
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Typography,
-  Box,
-  Chip,
-  Divider,
-  IconButton,
-  Tooltip,
-} from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import PriorityHighIcon from "@mui/icons-material/PriorityHigh";
-import ReplyIcon from "@mui/icons-material/Reply";
 
-const stripHtml = (html) => {
-  const temp = document.createElement("div");
-  temp.innerHTML = html;
-  return temp.textContent || temp.innerText || "";
-};
-
-const formatDateTime = (dateString) => {
-  return new Date(dateString).toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-};
-
-export default function MailTrailAccordion({ mailTrail = [], onReply }) {
   return (
-    <Box sx={{ maxWidth: "1000px", margin: "0 auto" }}>
-      {mailTrail.map((comm, index) => (
-        <Accordion
-          key={comm.refNo || index}
-          defaultExpanded={index === 0}
-          disableGutters
-          sx={{
-            mb: 2,
-            borderRadius: 2,
-            border: "1px solid #ddd",
-            boxShadow: "none",
-            "&:before": { display: "none" },
-          }}
-        >
-          {/* Accordion Header */}
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Box sx={{ width: "100%" }}>
-              {/* Subject + Top Right Actions */}
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
-                  flexWrap: "wrap",
-                  gap: 1,
-                }}
-              >
-                <Typography
-                  variant="subtitle1"
-                  fontWeight={600}
-                  sx={{
-                    flex: 1,
-                    maxWidth: "70%",
-                    wordBreak: "break-word",
-                    color: (theme) => theme.palette.custom.text2,
-                    fontSize: "0.9rem !important",
-                  }}
-                >
-                  {comm.subject}
-                </Typography>
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 2,
-                    color: (theme) => theme.palette.custom.text2,
-                    fontSize: "0.9rem !important",
-                  }}
-                >
-                  <Typography
-                    color={(theme) => theme.palette.custom.text2}
-                    fontSize="0.9rem !important"
-                  >
-                    {formatDateTime(comm.createdAt)}
-                  </Typography>
-
-                  {comm.priorityLevel?.toLowerCase() === "high" && (
-                    <Chip
-                      icon={<PriorityHighIcon />}
-                      label="High Priority"
-                      color="error"
-                      size="small"
-                    />
-                  )}
-
-                  <Tooltip title="Reply">
-                    <IconButton
-                      size="small"
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent accordion toggle
-                        onReply?.(comm);
-                      }}
-                    >
-                      <ReplyIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
-              </Box>
-
-              {/* From / To */}
-              <Box
-                sx={{
-                  mt: 0.5,
-                  wordBreak: "break-word",
-                  color: (theme) => theme.palette.custom.text2,
-                  fontSize: "0.7rem !important",
-                }}
-              >
-                From: {comm.sentBy} | To: {comm.sentTo?.join(", ")}
-              </Box>
-            </Box>
-          </AccordionSummary>
-
-          {/* Accordion Details */}
-          <AccordionDetails>
-            {/* Basic Info */}
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 4,
-                mb: 2,
-                color: (theme) => theme.palette.custom.text2,
-                fontSize: "0.7rem !important",
-              }}
+    <>
+      {selectedComm ? (
+        <Box sx={{ px: 2, py: 2 }}>
+          <Box sx={{ mb: 0}}>
+            <Button
+              variant="text"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setSelectedComm(null)}
             >
-              <InfoItem label="Communication Type" value={comm.commType} />
-              <InfoItem label="Category" value={comm.category} />
-              <InfoItem label="Reference No" value={comm.refNo} />
+              Back
+            </Button>
+          </Box>
+          <MailTrailAccordion
+            mailTrail={[...(selectedComm.replies || []), selectedComm]}
+            onReply={(comm) => {
+              setEditCommData({
+                refNo: comm.refNo,
+                category: comm.category,
+                sentTo: [comm.sentBy],
+                subject: `Re: ${comm.subject}`,
+                cc: comm.cc,
+                category: comm.category,
+                commType: comm.commType,
+                responseDueBy: comm.responseDueBy,
+                parentCommId: comm.commId,
+                priorityLevel: comm.priorityLevel,
+              });
+              setIsModalOpen(true);
+            }}
+          />
+        </Box>
+      ) : (
+        <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+          {/* Top Bar */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              mb: 0,
+              mx: 3,
+              flexWrap: "wrap",
+            }}
+          >
+            {/* Left: Tabs */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {["Inbox", "Sent Items"].map((label) => {
+                const value = label === "Inbox" ? "inbox" : "sent";
+                const isActive = tab === value;
+                return (
+                  <Button
+                    key={value}
+                    onClick={() => setTab(value)}
+                    sx={{
+                      fontSize: "0.7rem",
+                      fontWeight: isActive ? 600 : 400,
+                      color: (theme) =>
+                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
+                      position: "relative",
+                      borderRadius: 0,
+                      textTransform: "none",
+                      "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        bottom: -1,
+                        left: 0,
+                        width: "100%",
+                        height: "2px",
+                        backgroundColor: (theme) => theme.palette.custom.two,
+                        transform: isActive ? "scaleX(1)" : "scaleX(0)",
+                        transformOrigin: "left",
+                        transition: "transform 0.3s ease-out",
+                      },
+                      "&:hover::after": {
+                        transform: "scaleX(1)",
+                      },
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
             </Box>
 
-            {/* Timing & Routing */}
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 4, mb: 2 }}>
-              <InfoItem label="CC" value={comm.cc?.join(", ") || "—"} />
-              <InfoItem label="Response Due By" value={formatDateTime(comm.responseDueBy) || "—"} />
-              <InfoItem label="Created At" value={formatDateTime(comm.createdAt) || "—"} />
-              <InfoItem label="Priority" value={comm.priorityLevel || "—"} />
+            {/* Right: Search and Add */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 1, sm: 0 } }}>
+              <TextField
+                fullWidth
+                placeholder="Search Communication..."
+                variant="outlined"
+                sx={{ minWidth: 250 , minHeight:20}}
+                onChange={handleSearch}
+                value={searchTerm}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="medium" sx={iconButtonStyle} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <CustomIconButton
+              size = "medium"
+              label="Add Communication"
+              onClick={handleAddCommClick}
+              />
             </Box>
+          </Box>
 
-            <Divider sx={{ my: 2 }} />
+          {/* Content */}
+          <Box sx={{ flexGrow: 1, px: 3, py: 2 }}>
+            {loading ? (
+              <Box>
+                {[...Array(5)].map((_, idx) => (
+                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
+                ))}
+              </Box>
+            ) : filteredData.length > 0 ? (
+              <CommunicationList
+                communications={filteredData}
+                selectedId={selectedComm?.commId}
+                onSelect={(comm) => setSelectedComm(comm)}
+              />
+            ) : (
+              <EmptyStateBox
+                icon={BsTable}
+                title="No Communications Found"
+                description="Try changing your filters or adding a new communication."
+              />
+            )}
+          </Box>
+        </Box>
+      )}
 
-            {/* Summary */}
-            <Box>
-              <Typography
-                variant="subtitle2"
-                gutterBottom
-                color={(theme) => theme.palette.custom.text2}
-                fontSize="0.7rem !important"
-                fontWeight="500"
-              >
-                Summary
-              </Typography>
-              <Typography
-                variant="body2"
-                color={(theme) => theme.palette.custom.text2}
-                fontSize="0.7rem !important"
-              >
-                {stripHtml(comm.summary) || "No summary available."}
-              </Typography>
-            </Box>
-          </AccordionDetails>
-        </Accordion>
-      ))}
-    </Box>
+      <CommunicationFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editCommData}
+        user={user}
+        onSubmit={() => fetchData(tab)}
+      />
+    </>
   );
-}
-
-const InfoItem = ({ label, value }) => (
-  <Box>
-    <Typography
-      color={(theme) => theme.palette.custom.text2}
-      fontSize="0.7rem !important"
-      fontWeight="500"
-    >
-      {label}
-    </Typography>
-    <Typography color={(theme) => theme.palette.custom.text2} fontSize="0.7rem !important">
-      {value || "—"}
-    </Typography>
-  </Box>
-);
+};
