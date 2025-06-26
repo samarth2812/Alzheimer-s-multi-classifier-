@@ -1,5 +1,284 @@
-   {selectedCommId && (
-      <CommunicationAccordion
+import { useEffect, useState, useMemo } from "react";
+import toast from "react-hot-toast";
+
+// @mui material components
+import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import SearchIcon from "@mui/icons-material/Search";
+import { IconButton } from "@mui/material";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import { Stack } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import debounce from "lodash.debounce";
+
+// Athena Guard components
+import MDTypography from "components/MDTypography";
+import DataTable from "examples/Tables/DataTable";
+
+import { apiRequest } from "../../axios/apiRequest";
+import CustomDeleteDialog from "layouts/resuableComponents/customDeleteDialog";
+import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
+
+import { topBarStyle } from "layouts/resuableComponents/styles";
+import { topBarSearchStyle } from "layouts/resuableComponents/styles";
+import { animatedButtonStyle } from "layouts/resuableComponents/styles";
+import { iconButtonStyle } from "layouts/resuableComponents/styles";
+import { GiDatabase } from "react-icons/gi";
+import Skeleton from "@mui/material/Skeleton";
+import InputWithDialog from "layouts/resuableComponents/InputWithDialog ";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import { CustomDropdownChip } from "layouts/resuableComponents/customDropdownChipField";
+import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
+import RemarksInputDialog from "layouts/resuableComponents/RemarksInputDialog";
+import { AttachmentDrawer } from "layouts/resuableComponents/attachmentDrawer";
+import { useSelector } from "react-redux";
+import { ArrowCircleUp, ChatBubbleOutline } from "@mui/icons-material";
+import { BsTable } from "react-icons/bs";
+import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
+import SideDrawer from "layouts/resuableComponents/sideDrawer";
+import CommunicationList from "layouts/resuableComponents/listComponent";
+import MailTrailAccordion from "./MailTrailAccordion";
+
+const getCommTypeFromTab = (tab) => {
+  switch (tab) {
+    case "inbox":
+      return "inbox"; 
+    case "sent":
+      return "send";
+    case "drafts":
+      return "drafts";
+    default:
+      return "inbox";
+  }
+};
+
+const CreateCommunicationPage = () => {
+  const [data, setData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [editCommData, setEditCommData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [commId, setCommId] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [tab, setTab] = useState("sent");
+  const [selectedCommId, setSelectCommId] = useState("");
+
+  const user = useSelector((state) => state.user.user);
+
+  const fetchData = async (tabType = "inbox") => {
+    setLoading(true);
+    const typeParam = getCommTypeFromTab(tabType);
+    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
+    console.log(2, fetchUrl);
+
+    try {
+      const response = await apiRequest("GET", fetchUrl);
+      setData(response.data);
+      console.log(0, response);
+      if (commId) {
+        const updatedComm = response.data.find((comm) => comm.commId === commId);
+        if (updatedComm) {
+          setAttachments(updatedComm.attachments || []);
+        }
+      }
+    } catch {
+      toast.error("Failed to fetch communications");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(tab);
+  }, [tab]);
+
+  // Debounced filter function
+  const debouncedFilter = useMemo(
+    () =>
+      debounce((term, data) => {
+        if (term) {
+          const lowercasedFilter = term.toLowerCase();
+          const filtered = data.filter((item) =>
+            Object.keys(item).some((key) => {
+              const value = item[key];
+              return value !== null && value.toString().toLowerCase().includes(lowercasedFilter);
+            })
+          );
+          setFilteredData(filtered);
+        } else {
+          setFilteredData(data);
+        }
+      }, 300),
+    []
+  );
+
+  useEffect(() => {
+    const normalizeSearchTerm = (term) => {
+      const mappings = {
+        "to rbi": "to_rbi",
+        "from rbi": "from_rbi",
+        "to vandor": "to_vendor",
+        "incident report": "incident_report",
+        "penalty notice": "penalty_notice",
+        "ise observation": "ise_observation",
+        "general query": "general_query",
+        "pending reply": "pending_reply",
+        // Add more mappings as needed
+      };
+      const lowerTerm = term.toLowerCase().trim();
+      if (!lowerTerm) return ""; // Return empty string if nothing is typed
+      // Exact match
+      if (mappings[lowerTerm]) {
+        return mappings[lowerTerm];
+      }
+      // Partial match
+      for (const [key, value] of Object.entries(mappings)) {
+        if (key.startsWith(lowerTerm) || lowerTerm.includes(key)) {
+          return value;
+        }
+      }
+      return lowerTerm;
+    };
+    const normalizedTerm = normalizeSearchTerm(searchTerm);
+
+    if (!normalizedTerm) {
+      // If search bar is empty, show all data
+      setFilteredData(data);
+    } else {
+      debouncedFilter(normalizedTerm, data);
+    }
+
+    return () => debouncedFilter.cancel();
+  }, [searchTerm, data]);
+
+  const handleSearch = (event) => {
+    setSearchTerm(event.target.value);
+  };
+  const handleAddCommClick = () => {
+    setEditCommData(null);
+    setIsModalOpen(true);
+  };
+  const formatDateTime = (dateString) => {
+    return new Date(dateString).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
+
+  const formatTableData = (rawData) => {
+    const rows = rawData.map((item, index) => ({
+      serialNumber: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {page * rowsPerPage + index + 1}
+        </MDTypography>
+      ),
+      commType: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.commType}
+        </MDTypography>
+      ),
+      category: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.category.replace(/_/g, " ")}
+        </MDTypography>
+      ),
+      subject: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.subject}
+        </MDTypography>
+      ),
+      sentBy: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.sentBy}
+        </MDTypography>
+      ),
+      sentTo: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.sentTo}
+        </MDTypography>
+      ),
+      cc: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.cc}
+        </MDTypography>
+      ),
+      responseDueBy: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {formatDateTime(item.responseDueBy)}
+        </MDTypography>
+      ),
+      createdAt: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {formatDateTime(item.createdAt)}
+        </MDTypography>
+      ),
+      priorityLevel: (
+        <MDTypography
+          variant="button"
+          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
+        >
+          {item.priorityLevel}
+        </MDTypography>
+      ),
+      summary: (
+        <InputWithDialog
+          value={item.summary}
+          dialogTitle="Summary"
+          dialogPlaceholder="Summary"
+          cancelButtonLabel="Cancel"
+          icon={VisibilityIcon}
+          name="name"
+          type="text"
+          callOnSave={false}
+          isDisabled={true}
+        />
+      ),
+    }));
+    return { rows };
+  };
+  const tableData = formatTableData(filteredData);
+  return (
+    <>
+      {selectedCommId && (
+      <MailTrailAccordion
         communication={data.find((d) => d.commId === selectedCommId)}
         onReply={(comm) => {
           setEditCommData({
@@ -12,3 +291,104 @@
         }}
       />
     )}
+      <Box sx={{ width: "100%", height: "100%", display: "flex" }}>
+        <SideDrawer
+          open={drawerOpen}
+          handleDrawerToggle={() => setDrawerOpen(!drawerOpen)}
+          selectedTab={tab}
+          onSelectTab={(val) => setTab(val)}
+        />
+        <Box sx={{ flexGrow: 1, px: 2, py: 2 }}>
+          <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
+            <TextField
+              fullWidth
+              placeholder="Search Communication Records..."
+              variant="outlined"
+              sx={topBarSearchStyle}
+              value={searchTerm}
+              onChange={handleSearch}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon
+                      fontSize="medium"
+                      sx={{
+                        color: (theme) => theme.palette.custom.text2,
+                        fontSize: "1rem !important",
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleAddCommClick}
+              color="info"
+              sx={animatedButtonStyle}
+            >
+              Add Communication
+            </Button>
+          </Box>
+          {loading ? (
+            <Box>
+              {[...Array(5)].map((_, index) => (
+                <Skeleton
+                  key={index}
+                  variant="rectangular"
+                  animation="wave"
+                  height={40}
+                  sx={{
+                    mb: 2,
+                    borderRadius: 2,
+                    backgroundColor: (theme) => theme.palette.custom.background1,
+                  }}
+                />
+              ))}
+            </Box>
+          ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
+            <Box
+              pb={2}
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                maxHeight: "calc(100vh - 180px)",
+                overflow: "hidden",
+              }}
+            >
+              <Box
+                sx={{
+                  flexGrow: 1,
+                  overflow: "auto",
+                }}
+              >
+                <CommunicationList
+                  communications={tableData.rows}
+                  selectedId={selectedCommId}
+                  onSelect={(id) => setSelectCommId(id)}
+                />
+              </Box>
+            </Box>
+          ) : (
+            <EmptyStateBox
+              icon={BsTable}
+              title="Currently there are no created Communications"
+              description="Start a new communication by tapping the 'Add Communication' button "
+            />
+          )}
+        </Box>
+      </Box>
+      <CommunicationFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editCommData}
+        user={user}
+        onSubmit={() => {
+          fetchData();
+        }}
+      />
+    </>
+  );
+};
+export default CreateCommunicationPage;
