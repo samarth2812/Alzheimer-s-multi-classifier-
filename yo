@@ -1,33 +1,22 @@
-const getCommTypeFromTab = (tab) => {
-  switch (tab) {
-    case "inbox":
-      return "inbox"; // or whatever your API expects
-    case "sent":
-      return "send";
-    case "drafts":
-      return "draft";
-    default:
-      return "send";
-  }
-};
-const fetchData = async (tabType = "send") => {
-  setLoading(true);
-  const typeParam = getCommTypeFromTab(tabType);
-  const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
-
+communicationRouter.get(
+  "/",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  getCommunication
+);
+    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
+export const getCommunication = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const response = await apiRequest("GET", fetchUrl);
-    setData(response.data);
-
-    if (commId) {
-      const updatedComm = response.data.find((comm) => comm.commId === commId);
-      if (updatedComm) {
-        setAttachments(updatedComm.attachments || []);
-      }
-    }
-  } catch {
-    toast.error("Failed to fetch communications");
-  } finally {
-    setLoading(false);
+    console.log(4, req.params);
+    const type = req.params.type as any;
+    const { userEmail, threadId } = req.params;
+    const communications = await fetchCommunications(type, userEmail, threadId);
+    res.status(200).json(communications);
+  } catch (error) {
+    next(error);
   }
 };
