@@ -2,12 +2,11 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   Box,
   Button,
-  IconButton,
   Skeleton,
   TextField,
   InputAdornment,
-  Tooltip,
-  Typography,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import AddIcon from "@mui/icons-material/Add";
@@ -17,7 +16,6 @@ import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 
 // Components
-import SideDrawer from "layouts/resuableComponents/sideDrawer";
 import CommunicationList from "layouts/resuableComponents/listComponent";
 import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
 import MailTrailAccordion from "./MailTrailAccordion";
@@ -28,12 +26,10 @@ import { BsTable } from "react-icons/bs";
 import { apiRequest } from "../../axios/apiRequest";
 import {
   topBarStyle,
-  topBarSearchStyle,
+  topBarSearchStyle2,
   animatedButtonStyle,
+  iconButtonStyle,
 } from "layouts/resuableComponents/styles";
-import { topBarSearchStyle2 } from "layouts/resuableComponents/styles";
-import { Search } from "@mui/icons-material";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
 
 const getCommTypeFromTab = (tab) => {
   switch (tab) {
@@ -54,8 +50,7 @@ const CommunicationPage = () => {
   const [editCommData, setEditCommData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("inbox");
-
-  const [selectedComm, setSelectedComm] = useState(null); // updated to store full communication
+  const [selectedComm, setSelectedComm] = useState(null);
 
   const user = useSelector((state) => state.user.user);
 
@@ -78,7 +73,6 @@ const CommunicationPage = () => {
     fetchData(tab);
   }, [tab]);
 
-  // Debounced search
   const debouncedFilter = useMemo(
     () =>
       debounce((term, list) => {
@@ -106,30 +100,27 @@ const CommunicationPage = () => {
   };
 
   return (
-    <>
-      {/* If a communication is selected, show accordion only */}
+    <Box sx={{ width: "100%", height: "100%" }}>
+      {/* If a communication is selected, show accordion */}
       {selectedComm ? (
         <Box sx={{ px: 2, py: 2 }}>
-          <Box sx={{ mb: 2 }}>
-            <Button
-              variant="text"
-              startIcon={<ArrowBackIcon />}
-              onClick={() => setSelectedComm(null)}
-            >
-              Back
-            </Button>
-          </Box>
+          <Button
+            variant="text"
+            startIcon={<ArrowBackIcon />}
+            onClick={() => setSelectedComm(null)}
+            sx={{ mb: 2 }}
+          >
+            Back
+          </Button>
           <MailTrailAccordion
             mailTrail={[...(selectedComm.replies || []), selectedComm]}
             onReply={(comm) => {
-              console.log(100, comm);
               setEditCommData({
                 refNo: comm.refNo,
                 category: comm.category,
                 sentTo: [comm.sentBy],
                 subject: `Re: ${comm.subject}`,
                 cc: comm.cc,
-                category: comm.category,
                 commType: comm.commType,
                 responseDueBy: comm.responseDueBy,
                 parentCommId: comm.commId,
@@ -140,88 +131,77 @@ const CommunicationPage = () => {
           />
         </Box>
       ) : (
-        <Box sx={{ width: "100%", height: "100%", display: "flex" }}>
-          {/* Sidebar */}
-          <SideDrawer
-            open
-            handleDrawerToggle={() => {}}
-            selectedTab={tab}
-            onSelectTab={(val) => setTab(val)}
-          />
-          {/* Main Content */}
-          <Box sx={{ flexGrow: 1, px: 2, py: 2 }}>
-            {/* Top Bar */}
-            <Box sx={{ ...topBarStyle, mb: 1 }}>
-              <Button
-                size="small"
-                startIcon={<AddIcon />}
-                onClick={handleAddCommClick}
-                color="info"
-                sx={animatedButtonStyle}
-              >
-                Add Communication
-              </Button>
+        <Box sx={{ px: 2, py: 2 }}>
+          {/* Top Bar */}
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 2,
+              mb: 2,
+              flexWrap: "wrap",
+            }}
+          >
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={handleAddCommClick}
+              color="info"
+              sx={animatedButtonStyle}
+            >
+              Add Communication
+            </Button>
 
-              <Box sx={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <TextField
-                  fullWidth
-                  placeholder="Search Communication..."
-                  variant="outlined"
-                  sx={topBarSearchStyle2}
-                  value={searchTerm}
-                  // onChange={handleSearch}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Search fontSize="medium" sx={iconButtonStyle} />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </Box>
-            </Box>
+            <TextField
+              placeholder="Search Communication..."
+              variant="outlined"
+              sx={topBarSearchStyle2}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="medium" sx={iconButtonStyle} />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-            {/* Content Area */}
-            {loading ? (
-              <Box>
-                {[...Array(5)].map((_, idx) => (
-                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
-                ))}
-              </Box>
-            ) : filteredData.length > 0 ? (
-              <Box
-                pb={2}
-                sx={{
-                  display: "flex",
-                  flexDirection: "row",
-                  maxHeight: "calc(100vh - 180px)",
-                  overflow: "hidden",
-                }}
-              >
-                <Box
-                  sx={{
-                    flexGrow: 1,
-                    overflow: "auto",
-                  }}
-                ></Box>
-                <CommunicationList
-                  communications={filteredData}
-                  selectedId={selectedComm?.commId}
-                  onSelect={(comm) => setSelectedComm(comm)}
-                />
-              </Box>
-            ) : (
-              <EmptyStateBox
-                icon={BsTable}
-                title="No Communications Found"
-                description="Try changing your filters or adding a new communication."
-              />
-            )}
+            <Tabs
+              value={tab}
+              onChange={(e, val) => setTab(val)}
+              textColor="primary"
+              indicatorColor="primary"
+            >
+              <Tab value="inbox" label="Focused" />
+              <Tab value="sent" label="Other" />
+            </Tabs>
           </Box>
+
+          {/* Main Content */}
+          {loading ? (
+            <Box>
+              {[...Array(5)].map((_, idx) => (
+                <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
+              ))}
+            </Box>
+          ) : filteredData.length > 0 ? (
+            <CommunicationList
+              communications={filteredData}
+              selectedId={selectedComm?.commId}
+              onSelect={(comm) => setSelectedComm(comm)}
+            />
+          ) : (
+            <EmptyStateBox
+              icon={BsTable}
+              title="No Communications Found"
+              description="Try changing your filters or adding a new communication."
+            />
+          )}
         </Box>
       )}
 
-      {/* Modal */}
       <CommunicationFormDialog
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -229,7 +209,7 @@ const CommunicationPage = () => {
         user={user}
         onSubmit={() => fetchData(tab)}
       />
-    </>
+    </Box>
   );
 };
 
