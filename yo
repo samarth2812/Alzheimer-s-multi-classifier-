@@ -1,10 +1,8 @@
-export const fetchIncidentsList = async (
+export const fetchObservationsList = async (
   role: StepRoles,
   department: string | undefined,
   tab: string,
-  user: User,
-  page: number = 1,
-  pageSize: number = 10
+  user: User
 ) => {
   try {
     if (!role || !tab) {
@@ -12,80 +10,63 @@ export const fetchIncidentsList = async (
     }
 
     if (role !== user.role) {
-      throw new Error("You are not authorized to view incidents for this role");
+      throw new Error(
+        "You are not authorized to view observation for this role"
+      );
     }
 
     const where = generateWhereFilter(role, department, tab, user.email);
-    const offset = (page - 1) * pageSize;
 
-    const [incidents, total] = await Promise.all([
-      prisma.incidentReporting.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: {
-          createdAt: "desc",
-        },
-        select: {
-          incidentId: true,
-          type: true,
-          department: true,
-          status: true,
-          severity: true,
-          description: true,
-          assignedTo: true,
-          comments: true,
-          createdAt: true,
-          updatedAt: true,
-          currStep: true,
-          prevStep: true,
-          lastStepChangeTime: true,
-          reportedDate: true,
-          dueDate: true,
-          remarkHistory: {
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
-              updatedAt: true,
-              isEdited: true,
-              role: true,
-              step: true,
-            },
-          },
-          attachments: {
-            where: {
-              isDeleted: false,
-            },
-            orderBy: { uploadedAt: "asc" },
-            select: {
-              id: true,
-              fileName: true,
-              uploadedBy: true,
-              uploadedByRole: true,
-              incidentId: true,
-              uploadedAt: true,
-            },
+    return await prisma.iSEObservations.findMany({
+      where,
+      select: {
+        observationId: true,
+        department: true,
+        status: true,
+        description: true,
+        assignedTo: true,
+        comments: true,
+        createdAt: true,
+        updatedAt: true,
+        currStep: true,
+        prevStep: true,
+        lastStepChangeTime: true,
+        dueDate: true,
+        observationTheme: true,
+        priority: true,
+        remarkHistory: {
+          orderBy: { createdAt: "asc" }, //Chronological
+          select: {
+            id: true,
+            content: true,
+            createdAt: true,
+            updatedAt: true,
+            isEdited: true,
+            role: true,
+            step: true,
           },
         },
-      }),
-
-      prisma.incidentReporting.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: incidents,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
+        attachments: {
+          where: {
+            isDeleted: false,
+          },
+          orderBy: { uploadedAt: "asc" }, //Chronological
+          select: {
+            id: true,
+            fileName: true,
+            uploadedBy: true,
+            uploadedByRole: true,
+            observationId: true,
+            uploadedAt: true,
+          },
+        },
       },
-    };
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
   } catch (error) {
-    console.error("Error fetching incidents:", error);
-    throw new Error("Failed to fetch incidents");
+    console.error("Error fetching observations", error);
+    throw new Error("Failed to fetch observations");
   }
 };
