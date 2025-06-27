@@ -1,244 +1,285 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Box, Button, Skeleton, TextField, InputAdornment } from "@mui/material";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { Add, PlusOne, Search } from "@mui/icons-material";
-import debounce from "lodash.debounce";
-import { useSelector } from "react-redux";
-import toast from "react-hot-toast";
+export const getObligationRepository = async (
+  userRole: Position,
+  userDepartment: Department,
+  filters: {
+    regulator?: string;
+    status?: string; // 'closed' or 'open'
+    department?: Department;
+    year?: string;
+    startDate?: string;
+    endDate?: string;
+    compliance?: string;
+    search?: string; // NEW: search functionality
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const whereFilter: any = {
+      AND: []
+    };
 
-import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
-import MailTrailAccordion from "./MailTrailAccordion";
-import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
-import { BsTable } from "react-icons/bs";
-import { apiRequest } from "../../axios/apiRequest";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
-import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
-import CommunicationList from "./listComponent";
-import { topBarSearchStyle2 } from "layouts/resuableComponents/styles";
-import { topBarStyle } from "layouts/resuableComponents/styles";
-import { animatedButtonStyle } from "layouts/resuableComponents/styles";
+    // Base filter - don't show temp saved obligations
+    whereFilter.AND.push({ isTempSaved: false });
 
-const CommunicationPage = () => {
-  const [data, setData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editCommData, setEditCommData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("inbox");
-  const [selectedComm, setSelectedComm] = useState(null);
-  const user = useSelector((state) => state.user.user);
-
-  const fetchData = async (tabType = "inbox") => {
-    setLoading(true);
-    const typeParam = tabType;
-    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
-    try {
-      const response = await apiRequest("GET", fetchUrl);
-      setData(response.data);
-      setFilteredData(response.data);
-    } catch {
-      toast.error("Failed to fetch communications");
-    } finally {
-      setLoading(false);
+    // DEPARTMENT-BASED PRE-FILTERING
+    if (userDepartment !== Department.COMPLIANCE) {
+      // Non-compliance users can only see their department's obligations
+      whereFilter.AND.push({ department: userDepartment });
     }
-  };
 
-  useEffect(() => {
-    fetchData(tab);
-  }, [tab]);
+    // Apply status filter (finalStatus logic)
+    if (filters.status === 'closed') {
+      whereFilter.AND.push({ currStep: 6 });
+    } else if (filters.status === 'open') {
+      whereFilter.AND.push({ currStep: { not: 6 } });
+    }
 
-  const debouncedFilter = useMemo(
-    () =>
-      debounce((term, list) => {
-        if (!term) {
-          setFilteredData(list);
-          return;
+    // Apply other filters
+    if (filters.regulator) {
+      whereFilter.AND.push({ 
+        regulator: { 
+          contains: filters.regulator, 
+          mode: 'insensitive' 
+        } 
+      });
+    }
+
+    if (filters.department) {
+      whereFilter.AND.push({ department: filters.department });
+    }
+
+    if (filters.year) {
+      whereFilter.AND.push({ year: filters.year });
+    }
+
+    if (filters.compliance) {
+      whereFilter.AND.push({ compliance: convertToComplianceStatus(filters.compliance) });
+    }
+
+    // Date range filter
+    if (filters.startDate || filters.endDate) {
+      const dateFilter: any = {};
+      if (filters.startDate) {
+        dateFilter.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        dateFilter.lte = new Date(filters.endDate);
+      }
+      whereFilter.AND.push({ createdAt: dateFilter });
+    }
+
+    // NEW: Search functionality
+    if (filters.search && filters.search.trim()) {
+      const searchTerm = filters.search.trim();
+      whereFilter.AND.push({
+        OR: [
+          { title: { contains: searchTerm, mode: 'insensitive' } },
+          { circularReference: { contains: searchTerm, mode: 'insensitive' } },
+          { id: { contains: searchTerm, mode: 'insensitive' } },
+          { regulator: { contains: searchTerm, mode: 'insensitive' } }
+        ]
+      });
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    const [obligations, total] = await Promise.all([
+      prisma.obligation.findMany({
+        where: whereFilter,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: 'asc' }
+          }
         }
-        const lower = term.toLowerCase();
-        const filtered = list.filter((item) =>
-          Object.values(item).some((val) => val?.toString().toLowerCase().includes(lower))
-        );
-        setFilteredData(filtered);
-      }, 300),
-    []
-  );
+      }),
+      prisma.obligation.count({ where: whereFilter })
+    ]);
 
-  useEffect(() => {
-    debouncedFilter(searchTerm, data);
-    return () => debouncedFilter.cancel();
-  }, [searchTerm, data]);
+    // Add finalStatus and metadata to obligations
+    const obligationsWithMetadata = obligations.map(obligation => ({
+      ...addFinalStatusToObligation(obligation),
+      currentStepName: workflowHelper.getStepName(obligation.currStep),
+      isReadOnly: obligation.currStep === 6 && userDepartment !== Department.COMPLIANCE
+    }));
 
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value);
-  };
-  const handleAddCommClick = () => {
-    setEditCommData(null);
-    setIsModalOpen(true);
-  };
-
-  return (
-    <>
-      {selectedComm ? (
-        <Box
-          sx={{
-            px: 0,
-            py: 0,
-            width: "100%",
-            maxWidth: "1000px",
-            margin: "0 auto",
-            minHeight: "calc(100vh - 120px)",
-          }}
-        >
-          <Box sx={{ mb: 0 }}>
-            <Button
-              variant="text"
-              startIcon={<ArrowBackIcon />}
-              onClick={() => setSelectedComm(null)}
-              sx={{ color: (theme) => theme.palette.custom.two }}
-            >
-              Back
-            </Button>
-          </Box>
-
-          <MailTrailAccordion
-            mailTrail={[...(selectedComm.replies || []), selectedComm]}
-            onReply={(comm) => {
-              setEditCommData({
-                refNo: comm.refNo,
-                category: comm.category,
-                sentTo: [comm.sentBy],
-                subject: `Re: ${comm.subject}`,
-                cc: comm.cc,
-                category: comm.category,
-                commType: comm.commType,
-                responseDueBy: comm.responseDueBy,
-                parentCommId: comm.commId,
-                priorityLevel: comm.priorityLevel,
-              });
-              setIsModalOpen(true);
-            }}
-          />
-        </Box>
-      ) : (
-        <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-          {/* Top Bar */}
-          <Box
-            sx={{
-              ...topBarStyle,
-            }}
-          >
-            {/* Left: Tabs */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {["Inbox", "Sent Items"].map((label) => {
-                const value = label === "Inbox" ? "inbox" : "sent";
-                const isActive = tab === value;
-                return (
-                  <Button
-                    key={value}
-                    onClick={() => setTab(value)}
-                    sx={{
-                      fontSize: "0.7rem",
-                      fontWeight: isActive ? 600 : 400,
-                      color: (theme) =>
-                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
-                      position: "relative",
-                      borderRadius: 0,
-                      textTransform: "none",
-                      "&::after": {
-                        content: '""',
-                        position: "absolute",
-                        bottom: 3,
-                        left: 0,
-                        width: "100%",
-                        height: "2px",
-                        backgroundColor: (theme) => theme.palette.custom.two,
-                        transform: isActive ? "scaleX(1)" : "scaleX(0)",
-                        transformOrigin: "left",
-                        transition: "transform 0.3s ease-out",
-                      },
-                      "&:hover": {
-                        color: (theme) => theme.palette.custom.two,
-                      },
-                      "&:hover::after": {
-                        color: (theme) => theme.palette.custom.two,
-                        transform: "scaleX(1)",
-                      },
-                    }}
-                  >
-                    {label}
-                  </Button>
-                );
-              })}
-            </Box>
-
-            {/* Right: Search and Add */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 1, sm: 0 } }}>
-              <Button
-                size="small"
-                startIcon={<Add />}
-                onClick={handleAddCommClick}
-                sx={{ ...animatedButtonStyle, minWidth: "150px" }}
-              >
-                Add Communication
-              </Button>
-              <TextField
-                fullWidth
-                placeholder="Search Communication..."
-                variant="outlined"
-                sx={topBarSearchStyle2}
-                onChange={handleSearch}
-                value={searchTerm}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search fontSize="medium" sx={iconButtonStyle} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              {/* <CustomIconButton
-                size="small"
-                label="Add Communication"
-                onClick={handleAddCommClick}
-              /> */}
-            </Box>
-          </Box>
-
-          {/* Content */}
-          <Box sx={{ flexGrow: 1, py: 1 }}>
-            {loading ? (
-              <Box>
-                {[...Array(5)].map((_, idx) => (
-                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
-                ))}
-              </Box>
-            ) : filteredData.length > 0 ? (
-              <CommunicationList
-                communications={filteredData}
-                selectedId={selectedComm?.commId}
-                onSelect={(comm) => setSelectedComm(comm)}
-              />
-            ) : (
-              <EmptyStateBox
-                icon={BsTable}
-                title="No Communications Found"
-                description="Try changing your filters or adding a new communication."
-              />
-            )}
-          </Box>
-        </Box>
-      )}
-
-      <CommunicationFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editCommData}
-        user={user}
-        onSubmit={() => fetchData(tab)}
-      />
-    </>
-  );
+    return {
+      success: true,
+      data: obligationsWithMetadata,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      },
+      filters: {
+        applied: Object.keys(filters).filter(key => filters[key as keyof typeof filters]),
+        search: filters.search || null
+      }
+    };
+  } catch (error: any) {
+    console.error('Error in getObligationRepository:', error);
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw ApiError.internal(`Error retrieving obligation repository: ${error.message}`);
+  }
 };
 
-export default CommunicationPage;
+model Indents {
+  indentId           String         @id @default(uuid())
+  department         Department
+  description        String
+  status             IndentStatus   @default(PENDING)
+  priority           IndentPriority
+  assignedTo         String
+  dueDate            DateTime
+  closedDate         DateTime?
+  assignedDate       DateTime?
+  category           IndentCategory
+  comments           String
+  file               String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  isDeleted          Boolean        @default(false)
+  currStep           Int            @default(0)
+  prevStep           Int            @default(0)
+  lastStepChangeTime DateTime?
+  openStatus         Boolean        @default(false)
+  rejectedStatus     Boolean        @default(false)
+  remarkHistory      IndentRemark[] @relation("IndentRemarks")
+  attachments        Attachment[]   @relation("Attachment_indentId")
+}
+export const stepBasedUpdateFilter = (
+  currStep: number,
+  rejectedStatus: boolean,
+  role?: string,
+  department?: string
+): { newCurrStep: number; newPrevStep: number } => {
+  const isComplianceFlow = department === "COMPLIANCE";
+
+  // === APPROVAL FLOW ===
+  if (!rejectedStatus) {
+    // Compliance-only closure handling
+    if (isComplianceFlow) {
+      if (currStep === 0 && role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 1, newPrevStep: 0 }; // CM → CC
+      }
+      if (currStep === 1 && role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 0 }; // CC → Closure for CM
+      }
+      if (currStep === 4 && role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 4, newPrevStep: 1 }; // Closure CM → Closure CC
+      }
+      if (currStep === 4 && role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 4 }; // Final closure (mark as closed)
+      }
+
+      throw new Error("Invalid step-role combo in Compliance workflow");
+    }
+
+    // === Default approval flow ===
+    if (currStep === 4) {
+      if (role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 4, newPrevStep: 1 };
+      } else if (role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 4 };
+      } else {
+        throw new Error("Invalid role for closure step");
+      }
+    }
+
+    return { newCurrStep: currStep + 1, newPrevStep: currStep };
+  }
+
+  // === REJECTION FLOW ===
+  if (isComplianceFlow) {
+    // Rejection in compliance flow always returns to COMPLIANCE_MAKER at currStep 0
+    return { newCurrStep: 0, newPrevStep: currStep };
+  }
+
+  // === Default rejection flow ===
+  switch (currStep) {
+    case 0:
+      return { newCurrStep: 2, newPrevStep: 0 }; // CM Rejects
+    case 1:
+      return { newCurrStep: 0, newPrevStep: 1 }; // CC Rejects
+    case 2:
+      return { newCurrStep: 0, newPrevStep: 2 }; // DM Rejects
+    case 3:
+      return { newCurrStep: 2, newPrevStep: 3 }; // DC Rejects
+    case 4:
+      return { newCurrStep: 3, newPrevStep: 4 }; // Rejection in closure
+    default:
+      throw new Error("Invalid step");
+  }
+};
+
+export type StepRoles =
+  | "COMPLIANCE_MAKER"
+  | "COMPLIANCE_CHECKER"
+  | "DEPARTMENT_MAKER"
+  | "DEPARTMENT_CHECKER";
+
+export const roleStepMap: Record<StepRoles, number> = {
+  COMPLIANCE_MAKER: 0,
+  COMPLIANCE_CHECKER: 1,
+  DEPARTMENT_MAKER: 2,
+  DEPARTMENT_CHECKER: 3,
+};
+
+export const generateWhereFilter = (
+  role: StepRoles,
+  department?: string,
+  tab?: string,
+  userEmail?: string
+) => {
+  const step = roleStepMap[role];
+  // const isCompliance = department === "COMPLIANCE";
+
+  const baseConditions: any[] = [{ isDeleted: false }];
+
+  // Step and rejection logic based on tab
+  if (tab === "latest" || tab === "created") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: false });
+
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
+      });
+    }
+  } else if (tab === "rejected") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: true });
+
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
+      });
+    }
+  } else if (tab === "closure") {
+    baseConditions.push({ currStep: 4 });
+
+    if (role === "COMPLIANCE_MAKER") {
+      baseConditions.push({
+        OR: [{ prevStep: 0 }, { prevStep: 3 }], //Compliance + normal flow
+      });
+    } else if (role === "COMPLIANCE_CHECKER") {
+      baseConditions.push({ prevStep: 1 });
+    }
+  }
+
+  // Normal department filtering
+  if (
+    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
+    department
+  ) {
+    baseConditions.push({ department });
+  }
+  return {
+    AND: baseConditions,
+  };
+};
