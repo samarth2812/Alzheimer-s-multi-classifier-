@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Box, Button, Skeleton, TextField, InputAdornment } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { Search } from "@mui/icons-material";
+import { Add, PlusOne, Search } from "@mui/icons-material";
 import debounce from "lodash.debounce";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
@@ -14,6 +14,9 @@ import { apiRequest } from "../../axios/apiRequest";
 import { iconButtonStyle } from "layouts/resuableComponents/styles";
 import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
 import CommunicationList from "./listComponent";
+import { topBarSearchStyle2 } from "layouts/resuableComponents/styles";
+import { topBarStyle } from "layouts/resuableComponents/styles";
+import { animatedButtonStyle } from "layouts/resuableComponents/styles";
 
 const CommunicationPage = () => {
   const [data, setData] = useState([]);
@@ -79,8 +82,8 @@ const CommunicationPage = () => {
       {selectedComm ? (
         <Box
           sx={{
-            px: 2,
-            py: 2,
+            px: 0,
+            py: 0,
             width: "100%",
             maxWidth: "1000px",
             margin: "0 auto",
@@ -92,6 +95,7 @@ const CommunicationPage = () => {
               variant="text"
               startIcon={<ArrowBackIcon />}
               onClick={() => setSelectedComm(null)}
+              sx={{ color: (theme) => theme.palette.custom.two }}
             >
               Back
             </Button>
@@ -121,12 +125,7 @@ const CommunicationPage = () => {
           {/* Top Bar */}
           <Box
             sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 0,
-              mx: 3,
-              flexWrap: "wrap",
+              ...topBarStyle,
             }}
           >
             {/* Left: Tabs */}
@@ -149,7 +148,7 @@ const CommunicationPage = () => {
                       "&::after": {
                         content: '""',
                         position: "absolute",
-                        bottom: -1,
+                        bottom: 3,
                         left: 0,
                         width: "100%",
                         height: "2px",
@@ -158,7 +157,11 @@ const CommunicationPage = () => {
                         transformOrigin: "left",
                         transition: "transform 0.3s ease-out",
                       },
+                      "&:hover": {
+                        color: (theme) => theme.palette.custom.two,
+                      },
                       "&:hover::after": {
+                        color: (theme) => theme.palette.custom.two,
                         transform: "scaleX(1)",
                       },
                     }}
@@ -171,11 +174,19 @@ const CommunicationPage = () => {
 
             {/* Right: Search and Add */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 1, sm: 0 } }}>
+              <Button
+                size="small"
+                startIcon={<Add />}
+                onClick={handleAddCommClick}
+                sx={{ ...animatedButtonStyle, minWidth: "150px" }}
+              >
+                Add Communication
+              </Button>
               <TextField
                 fullWidth
                 placeholder="Search Communication..."
                 variant="outlined"
-                sx={{ minWidth: 250, minHeight: 20 }}
+                sx={topBarSearchStyle2}
                 onChange={handleSearch}
                 value={searchTerm}
                 InputProps={{
@@ -186,16 +197,16 @@ const CommunicationPage = () => {
                   ),
                 }}
               />
-              <CustomIconButton
-                size="medium"
+              {/* <CustomIconButton
+                size="small"
                 label="Add Communication"
                 onClick={handleAddCommClick}
-              />
+              /> */}
             </Box>
           </Box>
 
           {/* Content */}
-          <Box sx={{ flexGrow: 1, px: 3, py: 2 }}>
+          <Box sx={{ flexGrow: 1, py: 1 }}>
             {loading ? (
               <Box>
                 {[...Array(5)].map((_, idx) => (
