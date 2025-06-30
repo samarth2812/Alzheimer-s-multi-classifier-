@@ -74,7 +74,6 @@ const CreateIndnetPage = () => {
   const [editIndentData, setEditIndentData] = useState(null);
   const [indentToDelete, setIndentToDelete] = useState(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [page, setPage] = useState(0);
   const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
   const [currentDescription, setCurrentDescription] = useState("");
   const [loading, setLoading] = useState(true);
@@ -90,6 +89,7 @@ const CreateIndnetPage = () => {
   const [totalPages, setTotalPages] = useState(1);
 
   const user = useSelector((state) => state.user.user);
+  
   const handleIndentDelete = async () => {
     try {
       const deleteIndentUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${indentToDelete.indentId}`;
@@ -97,6 +97,8 @@ const CreateIndnetPage = () => {
       if (result.status === 200 || result.status === 204) {
         toast.success("Indent Deleted Successfully");
         setData((prev) => prev.filter((indent) => indent.indentId !== indentToDelete.indentId));
+        // Refresh data after deletion
+        fetchData();
       }
     } catch (error) {
       console.error("Error deleting indent:", error);
@@ -117,7 +119,7 @@ const CreateIndnetPage = () => {
       setTotalPages(response.data.pagination.totalPages);
 
       if (indentId) {
-        const updatedIndent = response.data.find((indent) => indent.indentId === indentId);
+        const updatedIndent = response.data.data.find((indent) => indent.indentId === indentId);
         if (updatedIndent) {
           setAttachments(updatedIndent.attachments || []);
         }
@@ -129,9 +131,12 @@ const CreateIndnetPage = () => {
     }
   };
 
+  // Fixed useEffect with correct dependencies
   useEffect(() => {
-    fetchData();
-  }, [totalPages, totalRecords]);
+    if (user?.role) {
+      fetchData();
+    }
+  }, [currentPage, rowsPerPage, user?.role]);
 
   // Debounced filter function
   const debouncedFilter = useMemo(
@@ -188,7 +193,7 @@ const CreateIndnetPage = () => {
     }
 
     return () => debouncedFilter.cancel();
-  }, [searchTerm, data]);
+  }, [searchTerm, data, debouncedFilter]);
 
   const handleAddIndentClick = () => {
     setEditIndentData(null);
@@ -277,6 +282,7 @@ const CreateIndnetPage = () => {
     const sortedData = sortByPriority(data);
     setData(sortedData);
   };
+  
   const handleChange = (e, indentId) => {
     const { name, value } = e.target;
 
@@ -314,7 +320,7 @@ const CreateIndnetPage = () => {
           variant="button"
           sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
         >
-          {page * rowsPerPage + index + 1}
+          {(currentPage - 1) * rowsPerPage + index + 1}
         </MDTypography>
       ),
       department: (
@@ -486,17 +492,6 @@ const CreateIndnetPage = () => {
     return { columns, rows };
   };
 
-  // Get paginated data
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage;
-    if (data) {
-      return data?.slice(startIndex, endIndex);
-    } else {
-      return [];
-    }
-  }, [data, currentPage, rowsPerPage]);
-
   // Handle page change
   const handlePageChange = useCallback((event, newPage) => {
     setCurrentPage(newPage);
@@ -511,7 +506,11 @@ const CreateIndnetPage = () => {
       setCurrentPage(1); // Reset to first page when changing page size
     }
   }, []);
-  const tableData = formatTableData(paginatedData);
+
+  // Use data directly since backend handles pagination
+  const displayData = searchTerm ? filteredData : data;
+  const tableData = formatTableData(displayData);
+
   return (
     <>
       <Box
@@ -606,8 +605,8 @@ const CreateIndnetPage = () => {
           />
         )}
 
-        {/* Pagination Footer */}
-        {tableData && tableData?.rows && tableData?.rows.length > 0 && (
+        {/* Pagination Footer - Only show when not searching and has data */}
+        {!searchTerm && tableData && tableData?.rows && tableData?.rows.length > 0 && (
           <PaginationFooter
             currentPage={currentPage}
             rowsPerPage={rowsPerPage}
@@ -615,7 +614,7 @@ const CreateIndnetPage = () => {
             totalRecords={totalRecords}
             onPageChange={handlePageChange}
             onRowsPerPageChange={handleRowsPerPageChange}
-            loading={false}
+            loading={loading}
           />
         )}
       </Box>
@@ -654,361 +653,3 @@ const CreateIndnetPage = () => {
   );
 };
 export default CreateIndnetPage;
-
-
-import React, { useState, useCallback, useMemo } from "react";
-import {
-  Box,
-  Typography,
-  Pagination,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-} from "@mui/material";
-import PropTypes from "prop-types";
-import toast from "react-hot-toast";
-import { SelectDropdown } from "./selectDropdown";
-import { dialogStyle, dialogCancelButtonStyle, dialogButtonStyle } from "./styles";
-import { CustomTextField } from "./customTextField";
-import theme from "assets/theme";
-import { BorderColor } from "@mui/icons-material";
-
-const PaginationFooter = ({
-  currentPage,
-  rowsPerPage,
-  totalPages,
-  totalRecords,
-  onPageChange,
-  onRowsPerPageChange,
-  loading = false,
-  disabled = false,
-  showFirstButton = true,
-  showLastButton = true,
-  color = "primary",
-  variant = "outlined",
-  customRowsPerPageOptions = null,
-  maxCustomValue = 1000,
-  minCustomValue = 1,
-  position = "absolute",
-  backgroundColor,
-  borderRadius = 2,
-  sx = {},
-  ...otherProps
-}) => {
-  // Custom value dialog state
-  const [customValueDialog, setCustomValueDialog] = useState(false);
-  const [customValue, setCustomValue] = useState("");
-
-  // Default rows per page options
-  const defaultRowsPerPageOptions = useMemo(
-    () => [
-      { label: "5", value: 5 },
-      { label: "10", value: 10 },
-      { label: "25", value: 25 },
-      { label: "50", value: 50 },
-      { label: "100", value: 100 },
-      { label: "Custom", value: "custom" },
-    ],
-    []
-  );
-
-  // Use provided options or default ones
-  const rowsPerPageOptions = customRowsPerPageOptions || defaultRowsPerPageOptions;
-
-  // Handle page change
-  const handlePageChange = useCallback(
-    (event, newPage) => {
-      if (onPageChange) {
-        onPageChange(event, newPage);
-      }
-    },
-    [onPageChange]
-  );
-
-  // Handle rows per page change
-  const handleRowsPerPageChange = useCallback(
-    (event) => {
-      const selectedValue = event.target.value;
-
-      if (selectedValue === "Custom" || selectedValue === "custom") {
-        setCustomValueDialog(true);
-      } else {
-        const numericValue = parseInt(selectedValue, 10);
-        if (onRowsPerPageChange) {
-          onRowsPerPageChange({
-            target: { value: numericValue },
-            numericValue,
-            resetToFirstPage: true,
-          });
-        }
-      }
-    },
-    [onRowsPerPageChange]
-  );
-
-  // Handle custom value submission
-  const handleCustomValueSubmit = useCallback(() => {
-    const numericValue = parseInt(customValue, 10);
-
-    if (!isNaN(numericValue) && numericValue >= minCustomValue && numericValue <= maxCustomValue) {
-      if (onRowsPerPageChange) {
-        onRowsPerPageChange({
-          target: { value: numericValue },
-          numericValue,
-          resetToFirstPage: true,
-          isCustomValue: true,
-        });
-      }
-      setCustomValueDialog(false);
-      setCustomValue("");
-      toast.success(`Rows per page set to ${numericValue}`);
-    } else {
-      toast.error(`Please enter a valid number between ${minCustomValue} and ${maxCustomValue}`);
-    }
-  }, [customValue, minCustomValue, maxCustomValue, onRowsPerPageChange]);
-
-  // Handle custom value dialog close
-  const handleCustomValueCancel = useCallback(() => {
-    setCustomValueDialog(false);
-    setCustomValue("");
-  }, []);
-
-  // Get current rows per page display value
-  const currentRowsPerPageDisplay = useMemo(() => {
-    const standardOption = rowsPerPageOptions.find((option) => option.value === rowsPerPage);
-    return standardOption ? standardOption.label : rowsPerPage.toString();
-  }, [rowsPerPage, rowsPerPageOptions]);
-
-  // Calculate display range
-  const startRecord = Math.min((currentPage - 1) * rowsPerPage + 1, totalRecords);
-  const endRecord = Math.min(currentPage * rowsPerPage, totalRecords);
-
-  // Custom Value Dialog Component
-  const CustomValueDialog = useMemo(
-    () => (
-      <Dialog
-        open={customValueDialog}
-        onClose={handleCustomValueCancel}
-        maxWidth="xs"
-        fullWidth
-        sx={dialogStyle}
-      >
-        <DialogTitle
-          sx={{ color: (theme) => theme.palette.custom.two, fontSize: "0.9rem !important" }}
-        >
-          Enter Custom Rows Per Page
-        </DialogTitle>
-        <DialogContent>
-          <CustomTextField
-            name="customRowsPerPage"
-            type="number"
-            placeholder={`Number of rows (${minCustomValue}-${maxCustomValue})`}
-            value={customValue}
-            onChange={(e) => setCustomValue(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={handleCustomValueCancel} size="small" sx={dialogCancelButtonStyle}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleCustomValueSubmit}
-            sx={dialogButtonStyle}
-            size="small"
-            disabled={!customValue || isNaN(parseInt(customValue, 10))}
-          >
-            Apply
-          </Button>
-        </DialogActions>
-      </Dialog>
-    ),
-    [
-      customValueDialog,
-      customValue,
-      handleCustomValueCancel,
-      handleCustomValueSubmit,
-      minCustomValue,
-      maxCustomValue,
-    ]
-  );
-
-  const paginationStyles = {
-    "& .MuiPaginationItem-root": {
-      color: (theme) => theme.palette.custom.text2,
-      borderColor: (theme) => theme.palette.custom.pagination,
-      fontSize: "0.8rem",
-      "&.Mui-selected": {
-        backgroundColor: (theme) => theme.palette.custom.highlight,
-        borderColor: (theme) => theme.palette.custom.pagination,
-        color: (theme) => theme.palette.custom.dark,
-        "&:hover": {
-          backgroundColor: (theme) => theme.palette.custom.highlight,
-        },
-      },
-    },
-  };
-
-  return (
-    <>
-      <Box
-        sx={{
-          position: position,
-          bottom: 2,
-          left: 0,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          p: 1,
-          width: "100%",
-          ...sx,
-        }}
-        {...otherProps}
-      >
-        <Box
-          sx={{
-            backgroundColor: backgroundColor || ((theme) => theme.palette.custom.background1),
-            borderRadius: borderRadius,
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            p: 0.5,
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Box sx={{ minWidth: 60 }}>
-              <SelectDropdown
-                label="rowsPerPage"
-                placeholder="Rows per page"
-                options={rowsPerPageOptions}
-                value={currentRowsPerPageDisplay}
-                onChange={handleRowsPerPageChange}
-                disabled={disabled || loading}
-              />
-            </Box>
-            <Typography variant="caption" sx={{ color: (theme) => theme.palette.custom.text2 }}>
-              {totalRecords > 0
-                ? `Showing ${startRecord} to ${endRecord} of ${totalRecords} entries`
-                : "No entries to show"}
-            </Typography>
-          </Box>
-
-          <Pagination
-            count={totalPages}
-            page={currentPage}
-            onChange={handlePageChange}
-            color={color}
-            variant={variant}
-            showFirstButton={showFirstButton}
-            showLastButton={showLastButton}
-            disabled={loading || disabled}
-            sx={paginationStyles}
-          />
-        </Box>
-      </Box>
-      {CustomValueDialog}
-    </>
-  );
-};
-
-PaginationFooter.propTypes = {
-  // Required props
-  currentPage: PropTypes.number.isRequired,
-  rowsPerPage: PropTypes.number.isRequired,
-  totalPages: PropTypes.number.isRequired,
-  totalRecords: PropTypes.number.isRequired,
-  onPageChange: PropTypes.func.isRequired,
-  onRowsPerPageChange: PropTypes.func.isRequired,
-
-  // Optional props
-  loading: PropTypes.bool,
-  disabled: PropTypes.bool,
-  showFirstButton: PropTypes.bool,
-  showLastButton: PropTypes.bool,
-  color: PropTypes.oneOf(["primary", "secondary", "standard"]),
-  variant: PropTypes.oneOf(["text", "outlined"]),
-  customRowsPerPageOptions: PropTypes.arrayOf(
-    PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
-    })
-  ),
-  maxCustomValue: PropTypes.number,
-  minCustomValue: PropTypes.number,
-  position: PropTypes.oneOf(["absolute", "relative", "fixed", "static", "sticky"]),
-  backgroundColor: PropTypes.oneOfType([PropTypes.string, PropTypes.func]),
-  borderRadius: PropTypes.number,
-  sx: PropTypes.object,
-};
-
-export default PaginationFooter;
-
-
-{
-    "success": true,
-    "data": [
-        {
-            "indentId": "a9351fb4-1170-4580-9a65-df1bb4ee45b3",
-            "department": "HR",
-            "status": "PENDING",
-            "category": "COMPLIANCE_QUERY",
-            "description": "eijsdfhj",
-            "priority": "LOW",
-            "assignedTo": "dmh@gmail.com",
-            "comments": "None",
-            "dueDate": "2025-06-29T19:48:00.000Z",
-            "createdAt": "2025-06-30T05:48:36.817Z",
-            "updatedAt": "2025-06-30T05:48:36.817Z",
-            "currStep": 0,
-            "prevStep": 0,
-            "lastStepChangeTime": null,
-            "remarkHistory": [],
-            "attachments": []
-        },
-        {
-            "indentId": "c700768a-eace-4e99-8233-371b85f3af9a",
-            "department": "HR",
-            "status": "PENDING",
-            "category": "COMPLIANCE_QUERY",
-            "description": "sfsjh",
-            "priority": "HIGH",
-            "assignedTo": "dmh@gmail.com",
-            "comments": "None",
-            "dueDate": "2025-06-29T20:48:00.000Z",
-            "createdAt": "2025-06-30T05:48:14.910Z",
-            "updatedAt": "2025-06-30T05:48:14.910Z",
-            "currStep": 0,
-            "prevStep": 0,
-            "lastStepChangeTime": null,
-            "remarkHistory": [],
-            "attachments": []
-        },
-        {
-            "indentId": "e760f9f7-d346-4cb2-b543-97a34f3f02e2",
-            "department": "HR",
-            "status": "PENDING",
-            "category": "DATA_REQUEST",
-            "description": "3538497",
-            "priority": "LOW",
-            "assignedTo": "dmh@gmail.com",
-            "comments": "None",
-            "dueDate": "2025-06-29T21:47:00.000Z",
-            "createdAt": "2025-06-30T05:47:50.954Z",
-            "updatedAt": "2025-06-30T05:47:50.954Z",
-            "currStep": 0,
-            "prevStep": 0,
-            "lastStepChangeTime": null,
-            "remarkHistory": [],
-            "attachments": []
-        }
-    ],
-    "pagination": {
-        "total": 3,
-        "page": 1,
-        "pageSize": 5,
-        "totalPages": 1
-    }
-}
