@@ -1,110 +1,45 @@
-export const getIndentRepository = async (
-  userRole: StepRoles,
-  userDepartment: Department,
-  userEmail: string,
-  filters: {
-    status?: "open" | "closed" | "rejected";
-    priority?: IndentPriority;
-    department?: Department;
-    category?: IndentCategory;
-    search?: string;
-    startDate?: string;
-    endDate?: string;
-  },
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const offset = (page - 1) * pageSize;
-
-    const where: any = { AND: [{ isDeleted: false }] };
-
-    if (
-      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
-      userDepartment
-    ) {
-      where.AND.push({ department: userDepartment });
-    }
-
-    // Filter: status
-    if (filters.status === "open") {
-      where.AND.push({ openStatus: true });
-    } else if (filters.status === "closed") {
-      where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
-    } else if (filters.status === "rejected") {
-      where.AND.push({ rejectedStatus: true });
-    }
-
-    // Filter: other fields
-    if (filters.priority) {
-      where.AND.push({ priority: filters.priority });
-    }
-
-    if (filters.department) {
-      where.AND.push({ department: filters.department });
-    }
-
-    if (filters.category) {
-      where.AND.push({ category: filters.category });
-    }
-
-    if (filters.startDate || filters.endDate) {
-      const dateFilter: any = {};
-      if (filters.startDate) dateFilter.gte = new Date(filters.startDate);
-      if (filters.endDate) dateFilter.lte = new Date(filters.endDate);
-      where.AND.push({ createdAt: dateFilter });
-    }
-
-    if (filters.search?.trim()) {
-      const searchTerm = filters.search.trim();
-      where.AND.push({
-        OR: [
-          { description: { contains: searchTerm, mode: "insensitive" } },
-          { comments: { contains: searchTerm, mode: "insensitive" } },
-          { indentId: { contains: searchTerm, mode: "insensitive" } },
-        ],
-      });
-    }
-
-    const [indents, total] = await Promise.all([
-      prisma.indents.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: "desc" },
-        include: {
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: "asc" },
-          },
-          attachments: true,
-        },
-      }),
-      prisma.indents.count({ where }),
-    ]);
-
-    // Add currentStepName to each indent
-    const indentsWithMeta = indents.map((indent) => ({
-      ...indent,
-      currentStepName: getStepName(indent.currStep),
-    }));
-
-    return {
-      success: true,
-      data: indentsWithMeta,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter((k) => filters[k as keyof typeof filters]),
-        search: filters.search || null,
-      },
-    };
-  } catch (error: any) {
-    console.error("Error in getIndentRepository:", error);
-    throw new Error(`Indent repository fetch failed: ${error.message}`);
-  }
-};
+model IncidentReporting {
+  incidentId         String           @id @default(uuid())
+  type               IncidentType
+  department         Department
+  description        String
+  status             IncidentStatus
+  assignedTo         String
+  dueDate            DateTime
+  severity           IncidentSeverity
+  reportedDate       DateTime
+  closedDate         DateTime?
+  comments           String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  lastStepChangeTime DateTime?
+  isDeleted          Boolean          @default(false)
+  currStep           Int              @default(0)
+  prevStep           Int              @default(0)
+  openStatus         Boolean          @default(false)
+  rejectedStatus     Boolean          @default(false)
+  remarkHistory      IncidentRemark[] @relation("IncidentRemark")
+  attachments        Attachment[]     @relation("Attachment_incidentId")
+}
+model ISEObservations {
+  observationId      String              @id @default(uuid())
+  department         Department
+  description        String
+  status             ObservationStatus   @default(PENDING)
+  priority           observationPriority
+  observationTheme   ObservationTheme
+  assignedTo         String
+  dueDate            DateTime
+  closedDate         DateTime?
+  comments           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  lastStepChangeTime DateTime?
+  isDeleted          Boolean             @default(false)
+  currStep           Int                 @default(0)
+  prevStep           Int                 @default(0)
+  openStatus         Boolean             @default(false)
+  rejectedStatus     Boolean             @default(false)
+  remarkHistory      ObservationRemark[] @relation("ObservationRemark")
+  attachments        Attachment[]        @relation("Attachment_observationId")
+}
