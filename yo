@@ -1,45 +1,214 @@
-model IncidentReporting {
-  incidentId         String           @id @default(uuid())
-  type               IncidentType
-  department         Department
-  description        String
-  status             IncidentStatus
-  assignedTo         String
-  dueDate            DateTime
-  severity           IncidentSeverity
-  reportedDate       DateTime
-  closedDate         DateTime?
-  comments           String
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  lastStepChangeTime DateTime?
-  isDeleted          Boolean          @default(false)
-  currStep           Int              @default(0)
-  prevStep           Int              @default(0)
-  openStatus         Boolean          @default(false)
-  rejectedStatus     Boolean          @default(false)
-  remarkHistory      IncidentRemark[] @relation("IncidentRemark")
-  attachments        Attachment[]     @relation("Attachment_incidentId")
-}
-model ISEObservations {
-  observationId      String              @id @default(uuid())
-  department         Department
-  description        String
-  status             ObservationStatus   @default(PENDING)
-  priority           observationPriority
-  observationTheme   ObservationTheme
-  assignedTo         String
-  dueDate            DateTime
-  closedDate         DateTime?
-  comments           String
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  lastStepChangeTime DateTime?
-  isDeleted          Boolean             @default(false)
-  currStep           Int                 @default(0)
-  prevStep           Int                 @default(0)
-  openStatus         Boolean             @default(false)
-  rejectedStatus     Boolean             @default(false)
-  remarkHistory      ObservationRemark[] @relation("ObservationRemark")
-  attachments        Attachment[]        @relation("Attachment_observationId")
-}
+export const getIncidentRepository = async (
+  userRole: StepRoles,
+  userDepartment: Department,
+  userEmail: string,
+  filters: {
+    status?: "open" | "closed" | "rejected";
+    severity?: IncidentSeverity;
+    department?: Department;
+    type?: IncidentType;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const offset = (page - 1) * pageSize;
+    const where: any = { AND: [{ isDeleted: false }] };
+
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
+    }
+
+    if (filters.status === "open") {
+      where.AND.push({ openStatus: true });
+    } else if (filters.status === "closed") {
+      where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    } else if (filters.status === "rejected") {
+      where.AND.push({ rejectedStatus: true });
+    }
+
+    if (filters.severity) {
+      where.AND.push({ severity: filters.severity });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: filters.department });
+    }
+
+    if (filters.type) {
+      where.AND.push({ type: filters.type });
+    }
+
+    if (filters.startDate || filters.endDate) {
+      const dateFilter: any = {};
+      if (filters.startDate) dateFilter.gte = new Date(filters.startDate);
+      if (filters.endDate) dateFilter.lte = new Date(filters.endDate);
+      where.AND.push({ createdAt: dateFilter });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { incidentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const [incidents, total] = await Promise.all([
+      prisma.incidentReporting.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: true,
+        },
+      }),
+      prisma.incidentReporting.count({ where }),
+    ]);
+
+    const incidentsWithMeta = incidents.map((incident) => ({
+      ...incident,
+      currentStepName: getStepName(incident.currStep),
+    }));
+
+    return {
+      success: true,
+      data: incidentsWithMeta,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter((k) => filters[k as keyof typeof filters]),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getIncidentRepository:", error);
+    throw new Error(`Incident repository fetch failed: ${error.message}`);
+  }
+};
+
+
+export const getObservationRepository = async (
+  userRole: StepRoles,
+  userDepartment: Department,
+  userEmail: string,
+  filters: {
+    status?: "open" | "closed" | "rejected";
+    priority?: observationPriority;
+    department?: Department;
+    theme?: ObservationTheme;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const offset = (page - 1) * pageSize;
+    const where: any = { AND: [{ isDeleted: false }] };
+
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
+    }
+
+    if (filters.status === "open") {
+      where.AND.push({ openStatus: true });
+    } else if (filters.status === "closed") {
+      where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    } else if (filters.status === "rejected") {
+      where.AND.push({ rejectedStatus: true });
+    }
+
+    if (filters.priority) {
+      where.AND.push({ priority: filters.priority });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: filters.department });
+    }
+
+    if (filters.theme) {
+      where.AND.push({ observationTheme: filters.theme });
+    }
+
+    if (filters.startDate || filters.endDate) {
+      const dateFilter: any = {};
+      if (filters.startDate) dateFilter.gte = new Date(filters.startDate);
+      if (filters.endDate) dateFilter.lte = new Date(filters.endDate);
+      where.AND.push({ createdAt: dateFilter });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { observationId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const [observations, total] = await Promise.all([
+      prisma.iSEObservations.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: true,
+        },
+      }),
+      prisma.iSEObservations.count({ where }),
+    ]);
+
+    const observationsWithMeta = observations.map((observation) => ({
+      ...observation,
+      currentStepName: getStepName(observation.currStep),
+    }));
+
+    return {
+      success: true,
+      data: observationsWithMeta,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter((k) => filters[k as keyof typeof filters]),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getObservationRepository:", error);
+    throw new Error(`Observation repository fetch failed: ${error.message}`);
+  }
+};
