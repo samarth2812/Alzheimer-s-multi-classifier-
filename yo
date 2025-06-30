@@ -1,108 +1,51 @@
-export const getIndentRepository = async (
-  userRole: StepRoles,
-  userDepartment: Department,
-  userEmail: string,
-  tab: 'latest' | 'rejected' | 'created' | 'closure',
-  filters: {
-    status?: 'open' | 'closed' | 'rejected';
-    priority?: IndentPriority;
-    department?: Department;
-    category?: IndentCategory;
-    assignedTo?: string;
-    search?: string;
-    startDate?: string;
-    endDate?: string;
-  },
-  page: number = 1,
-  pageSize: number = 10
+export const generateWhereFilter = (
+  role: StepRoles,
+  department?: string,
+  tab?: string,
+  userEmail?: string
 ) => {
-  try {
-    const offset = (page - 1) * pageSize;
+  const step = roleStepMap[role];
+  // const isCompliance = department === "COMPLIANCE";
 
-    // Base filter using tab/role/step logic
-    const baseWhere = generateWhereFilter(userRole, userDepartment, tab, userEmail);
+  const baseConditions: any[] = [{ isDeleted: false }];
 
-    // Extra filters
-    if (filters.status === 'open') {
-      baseWhere.AND.push({ openStatus: true });
-    } else if (filters.status === 'closed') {
-      baseWhere.AND.push({ currStep: 4, rejectedStatus: false });
-    } else if (filters.status === 'rejected') {
-      baseWhere.AND.push({ rejectedStatus: true });
-    }
+  // Step and rejection logic based on tab
+  if (tab === "latest" || tab === "created") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: false });
 
-    if (filters.priority) {
-      baseWhere.AND.push({ priority: filters.priority });
-    }
-
-    if (filters.department) {
-      baseWhere.AND.push({ department: filters.department });
-    }
-
-    if (filters.category) {
-      baseWhere.AND.push({ category: filters.category });
-    }
-
-    if (filters.assignedTo) {
-      baseWhere.AND.push({ assignedTo: filters.assignedTo });
-    }
-
-    if (filters.startDate || filters.endDate) {
-      const dateFilter: any = {};
-      if (filters.startDate) {
-        dateFilter.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        dateFilter.lte = new Date(filters.endDate);
-      }
-      baseWhere.AND.push({ createdAt: dateFilter });
-    }
-
-    if (filters.search?.trim()) {
-      const searchTerm = filters.search.trim();
-      baseWhere.AND.push({
-        OR: [
-          { description: { contains: searchTerm, mode: 'insensitive' } },
-          { comments: { contains: searchTerm, mode: 'insensitive' } },
-          { indentId: { contains: searchTerm, mode: 'insensitive' } },
-        ]
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
       });
     }
+  } else if (tab === "rejected") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: true });
 
-    const [indents, total] = await Promise.all([
-      prisma.indents.findMany({
-        where: baseWhere,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: 'asc' },
-          },
-          attachments: true,
-        },
-      }),
-      prisma.indents.count({ where: baseWhere })
-    ]);
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
+      });
+    }
+  } else if (tab === "closure") {
+    baseConditions.push({ currStep: 4 });
 
-    return {
-      success: true,
-      data: indents,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter(k => filters[k as keyof typeof filters]),
-        search: filters.search || null
-      }
-    };
-
-  } catch (error: any) {
-    console.error("Error in getIndentRepository:", error);
-    throw new Error(`Indent repository fetch failed: ${error.message}`);
+    if (role === "COMPLIANCE_MAKER") {
+      baseConditions.push({
+        OR: [{ prevStep: 0 }, { prevStep: 3 }], //Compliance + normal flow
+      });
+    } else if (role === "COMPLIANCE_CHECKER") {
+      baseConditions.push({ prevStep: 1 });
+    }
   }
+
+  // Normal department filtering
+  if (
+    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
+    department
+  ) {
+    baseConditions.push({ department });
+  }
+  return {
+    AND: baseConditions,
+  };
 };
