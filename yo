@@ -49,3 +49,168 @@ export const generateWhereFilter = (
     AND: baseConditions,
   };
 };
+
+export const getObligationRepository = async (
+  userRole: Position,
+  userDepartment: Department,
+  filters: {
+    regulator?: string;
+    status?: string; // 'closed' or 'open'
+    department?: Department;
+    year?: string;
+    compliance?: string;
+    search?: string; // NEW: search functionality
+    startDate?: any; // ISO date string
+    endDate?: any; // ISO date string
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const whereFilter: any = {
+      AND: [],
+    };
+
+    // Base filter - don't show temp saved obligations
+    whereFilter.AND.push({ isTempSaved: false });
+
+    // DEPARTMENT-BASED PRE-FILTERING
+    if (userDepartment !== Department.COMPLIANCE) {
+      // Non-compliance users can only see their department's obligations
+      whereFilter.AND.push({ department: userDepartment });
+    }
+
+    // Apply status filter (finalStatus logic)
+    if (filters.status === "closed") {
+      whereFilter.AND.push({ currStep: 6 });
+    } else if (filters.status === "open") {
+      whereFilter.AND.push({ currStep: { not: 6 } });
+    }
+
+    // Apply other filters
+    if (filters.regulator) {
+      whereFilter.AND.push({
+        regulator: {
+          contains: filters.regulator,
+          mode: "insensitive",
+        },
+      });
+    }
+
+    if (filters.department) {
+      whereFilter.AND.push({ department: filters.department });
+    }
+
+    if (filters.year) {
+      whereFilter.AND.push({ year: filters.year });
+    }
+
+    if (filters.compliance) {
+      whereFilter.AND.push({
+        compliance: convertToComplianceStatus(filters.compliance),
+      });
+    }
+
+    // Date range filter
+    if (filters.startDate || filters.endDate) {
+      const dateFilter: any = {};
+      if (filters.startDate) {
+        dateFilter.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        dateFilter.lte = new Date(filters.endDate);
+      }
+      whereFilter.AND.push({ createdAt: dateFilter });
+    }
+
+    // NEW: Search functionality
+    if (filters.search && filters.search.trim()) {
+      const searchTerm = filters.search.trim();
+      whereFilter.AND.push({
+        OR: [
+          { title: { contains: searchTerm, mode: "insensitive" } },
+          { circularReference: { contains: searchTerm, mode: "insensitive" } },
+          { id: { contains: searchTerm, mode: "insensitive" } },
+          { regulator: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    const [obligations, total] = await Promise.all([
+      prisma.obligation.findMany({
+        where: whereFilter,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          // remarkHistory: {
+          //   orderBy: { createdAt: "asc" }, //Chronological
+          //   select: {
+          //     id: true,
+          //     content: true,
+          //     createdAt: true,
+          //     updatedAt: true,
+          //     isEdited: true,
+          //     role: true,
+          //     step: true,
+          //   },
+          // },
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: {
+            where: {
+              isDeleted: false,
+            },
+            orderBy: { uploadedAt: "asc" }, //Chronological
+            select: {
+              id: true,
+              fileName: true,
+              uploadedBy: true,
+              uploadedByRole: true,
+              indentId: true,
+              uploadedAt: true,
+            },
+          },
+        },
+      }),
+      prisma.obligation.count({ where: whereFilter }),
+    ]);
+
+    // Add finalStatus and metadata to obligations
+    const obligationsWithMetadata = obligations.map((obligation) => ({
+      ...addFinalStatusToObligation(obligation),
+      currentStepName: workflowHelper.getStepName(obligation.currStep),
+      isReadOnly:
+        obligation.currStep === 6 && userDepartment !== Department.COMPLIANCE,
+    }));
+
+    return {
+      success: true,
+      data: obligationsWithMetadata,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter(
+          (key) => filters[key as keyof typeof filters]
+        ),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getObligationRepository:", error);
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw ApiError.internal(
+      `Error retrieving obligation repository: ${error.message}`
+    );
+  }
+};
