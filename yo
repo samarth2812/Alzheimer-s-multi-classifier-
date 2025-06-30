@@ -1,77 +1,136 @@
-export const stepBasedUpdateFilter = (
-  currStep: number,
-  rejectedStatus: boolean,
-  role?: string,
-  department?: string
-): { newCurrStep: number; newPrevStep: number } => {
-  const isComplianceFlow = department === "COMPLIANCE";
+export const getIndentRepository = async (
+  userRole: StepRoles,
+  userDepartment: Department,
+  userEmail: string,
+  filters: {
+    status?: "open" | "closed" | "rejected";
+    priority?: IndentPriority;
+    department?: Department;
+    category?: IndentCategory;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const offset = (page - 1) * pageSize;
 
-  // === APPROVAL FLOW ===
-  if (!rejectedStatus) {
-    // Compliance-only closure handling
-    if (isComplianceFlow) {
-      if (currStep === 0 && role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 1, newPrevStep: 0 }; // CM → CC
-      }
-      if (currStep === 1 && role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 0 }; // CC → Closure for CM
-      }
-      if (currStep === 4 && role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 4, newPrevStep: 1 }; // Closure CM → Closure CC
-      }
-      if (currStep === 4 && role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 4 }; // Final closure (mark as closed)
-      }
+    const where: any = { AND: [{ isDeleted: false }] };
 
-      throw new Error("Invalid step-role combo in Compliance workflow");
+    // Role-based filtering
+    const step = roleStepMap[userRole];
+    where.AND.push({ currStep: step });
+
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
     }
 
-    // === Default approval flow ===
-    if (currStep === 4) {
-      if (role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 4, newPrevStep: 1 };
-      } else if (role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 4 };
-      } else {
-        throw new Error("Invalid role for closure step");
-      }
+    if (userRole === "DEPARTMENT_MAKER" && userEmail) {
+      where.AND.push({ assignedTo: userEmail });
     }
 
-    return { newCurrStep: currStep + 1, newPrevStep: currStep };
-  }
+    // Filter: status
+    if (filters.status === "open") {
+      where.AND.push({ openStatus: true });
+    } else if (filters.status === "closed") {
+      where.AND.push({ currStep: 4, rejectedStatus: false });
+    } else if (filters.status === "rejected") {
+      where.AND.push({ rejectedStatus: true });
+    }
 
-  // === REJECTION FLOW ===
-  if (isComplianceFlow) {
-    // Rejection in compliance flow always returns to COMPLIANCE_MAKER at currStep 0
-    return { newCurrStep: 0, newPrevStep: currStep };
-  }
+    // Filter: other fields
+    if (filters.priority) {
+      where.AND.push({ priority: filters.priority });
+    }
 
-  // === Default rejection flow ===
-  switch (currStep) {
-    case 0:
-      return { newCurrStep: 2, newPrevStep: 0 }; // CM Rejects
-    case 1:
-      return { newCurrStep: 0, newPrevStep: 1 }; // CC Rejects
-    case 2:
-      return { newCurrStep: 0, newPrevStep: 2 }; // DM Rejects
-    case 3:
-      return { newCurrStep: 2, newPrevStep: 3 }; // DC Rejects
-    case 4:
-      return { newCurrStep: 3, newPrevStep: 4 }; // Rejection in closure
-    default:
-      throw new Error("Invalid step");
+    if (filters.department) {
+      where.AND.push({ department: filters.department });
+    }
+
+    if (filters.category) {
+      where.AND.push({ category: filters.category });
+    }
+
+    if (filters.startDate || filters.endDate) {
+      const dateFilter: any = {};
+      if (filters.startDate) dateFilter.gte = new Date(filters.startDate);
+      if (filters.endDate) dateFilter.lte = new Date(filters.endDate);
+      where.AND.push({ createdAt: dateFilter });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { indentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const [indents, total] = await Promise.all([
+      prisma.indents.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: true,
+        },
+      }),
+      prisma.indents.count({ where }),
+    ]);
+
+    // Add currentStepName to each indent
+    const indentsWithMeta = indents.map((indent) => ({
+      ...indent,
+      currentStepName: getStepName(indent.currStep),
+    }));
+
+    return {
+      success: true,
+      data: indentsWithMeta,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter((k) => filters[k as keyof typeof filters]),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getIndentRepository:", error);
+    throw new Error(`Indent repository fetch failed: ${error.message}`);
   }
 };
 
-export type StepRoles =
-  | "COMPLIANCE_MAKER"
-  | "COMPLIANCE_CHECKER"
-  | "DEPARTMENT_MAKER"
-  | "DEPARTMENT_CHECKER";
-
-export const roleStepMap: Record<StepRoles, number> = {
-  COMPLIANCE_MAKER: 0,
-  COMPLIANCE_CHECKER: 1,
-  DEPARTMENT_MAKER: 2,
-  DEPARTMENT_CHECKER: 3,
+// Helper to map step number to name
+export const getStepName = (step: number): string => {
+  switch (step) {
+    case 0:
+      return "Compliance Maker";
+    case 1:
+      return "Compliance Checker";
+    case 2:
+      return "Department Maker";
+    case 3:
+      return "Department Checker";
+    case 4:
+      return "Closure";
+    default:
+      return "Unknown";
+  }
 };
