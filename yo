@@ -1,216 +1,77 @@
-export const generateWhereFilter = (
-  role: StepRoles,
-  department?: string,
-  tab?: string,
-  userEmail?: string
-) => {
-  const step = roleStepMap[role];
-  // const isCompliance = department === "COMPLIANCE";
+export const stepBasedUpdateFilter = (
+  currStep: number,
+  rejectedStatus: boolean,
+  role?: string,
+  department?: string
+): { newCurrStep: number; newPrevStep: number } => {
+  const isComplianceFlow = department === "COMPLIANCE";
 
-  const baseConditions: any[] = [{ isDeleted: false }];
+  // === APPROVAL FLOW ===
+  if (!rejectedStatus) {
+    // Compliance-only closure handling
+    if (isComplianceFlow) {
+      if (currStep === 0 && role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 1, newPrevStep: 0 }; // CM → CC
+      }
+      if (currStep === 1 && role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 0 }; // CC → Closure for CM
+      }
+      if (currStep === 4 && role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 4, newPrevStep: 1 }; // Closure CM → Closure CC
+      }
+      if (currStep === 4 && role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 4 }; // Final closure (mark as closed)
+      }
 
-  // Step and rejection logic based on tab
-  if (tab === "latest" || tab === "created") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: false });
-
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
+      throw new Error("Invalid step-role combo in Compliance workflow");
     }
-  } else if (tab === "rejected") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: true });
 
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
+    // === Default approval flow ===
+    if (currStep === 4) {
+      if (role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 4, newPrevStep: 1 };
+      } else if (role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 4 };
+      } else {
+        throw new Error("Invalid role for closure step");
+      }
     }
-  } else if (tab === "closure") {
-    baseConditions.push({ currStep: 4 });
 
-    if (role === "COMPLIANCE_MAKER") {
-      baseConditions.push({
-        OR: [{ prevStep: 0 }, { prevStep: 3 }], //Compliance + normal flow
-      });
-    } else if (role === "COMPLIANCE_CHECKER") {
-      baseConditions.push({ prevStep: 1 });
-    }
+    return { newCurrStep: currStep + 1, newPrevStep: currStep };
   }
 
-  // Normal department filtering
-  if (
-    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
-    department
-  ) {
-    baseConditions.push({ department });
+  // === REJECTION FLOW ===
+  if (isComplianceFlow) {
+    // Rejection in compliance flow always returns to COMPLIANCE_MAKER at currStep 0
+    return { newCurrStep: 0, newPrevStep: currStep };
   }
-  return {
-    AND: baseConditions,
-  };
+
+  // === Default rejection flow ===
+  switch (currStep) {
+    case 0:
+      return { newCurrStep: 2, newPrevStep: 0 }; // CM Rejects
+    case 1:
+      return { newCurrStep: 0, newPrevStep: 1 }; // CC Rejects
+    case 2:
+      return { newCurrStep: 0, newPrevStep: 2 }; // DM Rejects
+    case 3:
+      return { newCurrStep: 2, newPrevStep: 3 }; // DC Rejects
+    case 4:
+      return { newCurrStep: 3, newPrevStep: 4 }; // Rejection in closure
+    default:
+      throw new Error("Invalid step");
+  }
 };
 
-export const getObligationRepository = async (
-  userRole: Position,
-  userDepartment: Department,
-  filters: {
-    regulator?: string;
-    status?: string; // 'closed' or 'open'
-    department?: Department;
-    year?: string;
-    compliance?: string;
-    search?: string; // NEW: search functionality
-    startDate?: any; // ISO date string
-    endDate?: any; // ISO date string
-  },
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const whereFilter: any = {
-      AND: [],
-    };
+export type StepRoles =
+  | "COMPLIANCE_MAKER"
+  | "COMPLIANCE_CHECKER"
+  | "DEPARTMENT_MAKER"
+  | "DEPARTMENT_CHECKER";
 
-    // Base filter - don't show temp saved obligations
-    whereFilter.AND.push({ isTempSaved: false });
-
-    // DEPARTMENT-BASED PRE-FILTERING
-    if (userDepartment !== Department.COMPLIANCE) {
-      // Non-compliance users can only see their department's obligations
-      whereFilter.AND.push({ department: userDepartment });
-    }
-
-    // Apply status filter (finalStatus logic)
-    if (filters.status === "closed") {
-      whereFilter.AND.push({ currStep: 6 });
-    } else if (filters.status === "open") {
-      whereFilter.AND.push({ currStep: { not: 6 } });
-    }
-
-    // Apply other filters
-    if (filters.regulator) {
-      whereFilter.AND.push({
-        regulator: {
-          contains: filters.regulator,
-          mode: "insensitive",
-        },
-      });
-    }
-
-    if (filters.department) {
-      whereFilter.AND.push({ department: filters.department });
-    }
-
-    if (filters.year) {
-      whereFilter.AND.push({ year: filters.year });
-    }
-
-    if (filters.compliance) {
-      whereFilter.AND.push({
-        compliance: convertToComplianceStatus(filters.compliance),
-      });
-    }
-
-    // Date range filter
-    if (filters.startDate || filters.endDate) {
-      const dateFilter: any = {};
-      if (filters.startDate) {
-        dateFilter.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        dateFilter.lte = new Date(filters.endDate);
-      }
-      whereFilter.AND.push({ createdAt: dateFilter });
-    }
-
-    // NEW: Search functionality
-    if (filters.search && filters.search.trim()) {
-      const searchTerm = filters.search.trim();
-      whereFilter.AND.push({
-        OR: [
-          { title: { contains: searchTerm, mode: "insensitive" } },
-          { circularReference: { contains: searchTerm, mode: "insensitive" } },
-          { id: { contains: searchTerm, mode: "insensitive" } },
-          { regulator: { contains: searchTerm, mode: "insensitive" } },
-        ],
-      });
-    }
-
-    const offset = (page - 1) * pageSize;
-
-    const [obligations, total] = await Promise.all([
-      prisma.obligation.findMany({
-        where: whereFilter,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: "desc" },
-        include: {
-          // remarkHistory: {
-          //   orderBy: { createdAt: "asc" }, //Chronological
-          //   select: {
-          //     id: true,
-          //     content: true,
-          //     createdAt: true,
-          //     updatedAt: true,
-          //     isEdited: true,
-          //     role: true,
-          //     step: true,
-          //   },
-          // },
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: "asc" },
-          },
-          attachments: {
-            where: {
-              isDeleted: false,
-            },
-            orderBy: { uploadedAt: "asc" }, //Chronological
-            select: {
-              id: true,
-              fileName: true,
-              uploadedBy: true,
-              uploadedByRole: true,
-              indentId: true,
-              uploadedAt: true,
-            },
-          },
-        },
-      }),
-      prisma.obligation.count({ where: whereFilter }),
-    ]);
-
-    // Add finalStatus and metadata to obligations
-    const obligationsWithMetadata = obligations.map((obligation) => ({
-      ...addFinalStatusToObligation(obligation),
-      currentStepName: workflowHelper.getStepName(obligation.currStep),
-      isReadOnly:
-        obligation.currStep === 6 && userDepartment !== Department.COMPLIANCE,
-    }));
-
-    return {
-      success: true,
-      data: obligationsWithMetadata,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter(
-          (key) => filters[key as keyof typeof filters]
-        ),
-        search: filters.search || null,
-      },
-    };
-  } catch (error: any) {
-    console.error("Error in getObligationRepository:", error);
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw ApiError.internal(
-      `Error retrieving obligation repository: ${error.message}`
-    );
-  }
+export const roleStepMap: Record<StepRoles, number> = {
+  COMPLIANCE_MAKER: 0,
+  COMPLIANCE_CHECKER: 1,
+  DEPARTMENT_MAKER: 2,
+  DEPARTMENT_CHECKER: 3,
 };
