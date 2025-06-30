@@ -1,25 +1,110 @@
-export const getStepName = (
-  currStep: number,
-  role?: StepRoles,
-  prevStep?: number
-): string => {
-  if (currStep === 4) {
-    if (role === "COMPLIANCE_MAKER" && prevStep === 3) {
-      return "Closure CM";
+export const getIndentRepository = async (
+  userRole: StepRoles,
+  userDepartment: Department,
+  userEmail: string,
+  filters: {
+    status?: "open" | "closed" | "rejected";
+    priority?: IndentPriority;
+    department?: Department;
+    category?: IndentCategory;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const offset = (page - 1) * pageSize;
+
+    const where: any = { AND: [{ isDeleted: false }] };
+
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
     }
-    if (role === "COMPLIANCE_CHECKER" && prevStep === 4) {
-      return "Closure CC";
+
+    // Filter: status
+    if (filters.status === "open") {
+      where.AND.push({ openStatus: true });
+    } else if (filters.status === "closed") {
+      where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    } else if (filters.status === "rejected") {
+      where.AND.push({ rejectedStatus: true });
     }
-    return "Closed"; // fallback for final state
+
+    // Filter: other fields
+    if (filters.priority) {
+      where.AND.push({ priority: filters.priority });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: filters.department });
+    }
+
+    if (filters.category) {
+      where.AND.push({ category: filters.category });
+    }
+
+    if (filters.startDate || filters.endDate) {
+      const dateFilter: any = {};
+      if (filters.startDate) dateFilter.gte = new Date(filters.startDate);
+      if (filters.endDate) dateFilter.lte = new Date(filters.endDate);
+      where.AND.push({ createdAt: dateFilter });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { indentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const [indents, total] = await Promise.all([
+      prisma.indents.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: true,
+        },
+      }),
+      prisma.indents.count({ where }),
+    ]);
+
+    // Add currentStepName to each indent
+    const indentsWithMeta = indents.map((indent) => ({
+      ...indent,
+      currentStepName: getStepName(indent.currStep),
+    }));
+
+    return {
+      success: true,
+      data: indentsWithMeta,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter((k) => filters[k as keyof typeof filters]),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getIndentRepository:", error);
+    throw new Error(`Indent repository fetch failed: ${error.message}`);
   }
-
-  const stepNameMap: Record<number, string> = {
-    0: "Compliance Maker",
-    1: "Compliance Checker",
-    2: "Department Maker",
-    3: "Department Checker",
-  };
-
-  return stepNameMap[currStep] || "Unknown Step";
 };
-
