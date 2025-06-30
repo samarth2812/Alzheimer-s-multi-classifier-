@@ -134,3 +134,29 @@ export const getStepName = (step: number): string => {
       return "Unknown";
   }
 };
+
+export const getStepName = (
+  currStep: number,
+  role?: StepRoles,
+  prevStep?: number
+): string => {
+  if (currStep === 4) {
+    if (role === "COMPLIANCE_MAKER" && prevStep === 3) {
+      return "Closure CM";
+    }
+    if (role === "COMPLIANCE_CHECKER" && prevStep === 4) {
+      return "Closure CC";
+    }
+    return "Closed"; // fallback for final state
+  }
+
+  const stepNameMap: Record<number, string> = {
+    0: "Compliance Maker",
+    1: "Compliance Checker",
+    2: "Department Maker",
+    3: "Department Checker",
+  };
+
+  return stepNameMap[currStep] || "Unknown Step";
+};
+
