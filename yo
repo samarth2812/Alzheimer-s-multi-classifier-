@@ -1,32 +1,74 @@
-import { PrismaClient } from "@prisma/client";
-import { ApiError } from "../../utils/ApiError";
-import { buildFetchFilter } from "../../helpers/communicationHelper";
-
-const prisma = new PrismaClient();
-
-export const getCommunicationNotificationService = async (
-  userEmail: string
-): Promise<{ success: boolean; data: { inboxCount: number; sentCount: number } }> => {
+export const fetchNotificationsFromAPI = async () => {
   try {
-    const inboxFilter = buildFetchFilter("inbox", userEmail);
-    const sentFilter = buildFetchFilter("sent", userEmail);
+    const baseUrl = process.env.REACT_APP_BACKEND_URL;
 
-    const [inboxCount, sentCount] = await Promise.all([
-      prisma.communication.count({ where: inboxFilter }),
-      prisma.communication.count({ where: sentFilter }),
+    // Fire all notification API requests in parallel
+    const [obligationRes, indentRes, incidentRes, iseRes] = await Promise.all([
+      apiRequest("GET", `${baseUrl}/api/v1/obligations/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/indents/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/incidents/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/rbi-ise/notifications`),
     ]);
 
-    return {
-      success: true,
-      data: {
-        inboxCount,
-        sentCount,
-      },
-    };
-  } catch (error: any) {
-    console.error("Error fetching communication notifications:", error);
-    throw ApiError.internal("Unable to fetch communication notification counts");
+    const notifications = [];
+
+    const responses = [
+      { key: "obligation", label: "Obligation", icon: "assignment", res: obligationRes },
+      { key: "indent", label: "Indent", icon: "description", res: indentRes },
+      { key: "incident", label: "Incident", icon: "report_problem", res: incidentRes },
+      { key: "ise", label: "ISE Observation", icon: "visibility", res: iseRes },
+    ];
+
+    const types = [
+      { key: "Latest", suffix: "Latest", label: "Latest", color: "#4CAF50" },
+      { key: "Rejected", suffix: "Rejected", label: "Rejected", color: "#FF5722" },
+      { key: "Closure", suffix: "Closure", label: "Closure", color: "#2196F3" },
+    ];
+
+    for (const { key, label, icon, res } of responses) {
+      if (res.status === 200 && res.data && res.data.data) {
+        const data = res.data.data;
+
+        for (const type of types) {
+          const dataKey = `${key}${type.suffix}`; // e.g. indentLatest
+
+          const count = data[dataKey];
+          if (count > 0) {
+            notifications.push({
+              id: `${key}-${type.label.toLowerCase()}`,
+              icon,
+              title: `${count} ${type.label} ${label}${count > 1 ? "s" : ""}`,
+              description: `Click here to view ${type.label.toLowerCase()} ${label.toLowerCase()}s`,
+              timestamp: "Just now",
+              unread: true,
+              iconColor: type.color,
+              type: `${key}-${type.label.toLowerCase()}`,
+            });
+          }
+        }
+      }
+    }
+
+    return notifications;
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    return [];
   }
 };
 
+// Helper function to get navigation path for notification type
+export const getNotificationPath = (type) => {
+  const [module, tab] = type.split("-");
 
+  const basePaths = {
+    obligation: "/obligations",
+    indent: "/indentManagement",
+    incident: "/incidentRepository",
+    ise: "/iseobservation",
+  };
+
+  if (basePaths[module]) {
+    return `${basePaths[module]}/${tab}`;
+  }
+  return "/";
+};
