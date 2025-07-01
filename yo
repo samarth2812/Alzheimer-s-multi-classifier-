@@ -1,61 +1,19 @@
-model IndentRemark {
-  id        String    @id @default(uuid())
-  indentId  String
-  step      Int
-  role      StepRoles
-  content   String    @db.Text
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  isEdited  Boolean   @default(false)
-  isDeleted Boolean   @default(false)
-  indent    Indents   @relation("IndentRemarks", fields: [indentId], references: [indentId])
+model IndentAuditTrail {
+  id          String      @id @default(uuid())
+  indentId    String
+  field       String      // e.g., "status", "priority", "assignedTo", "attachments", "remarks"
+  oldValue    String?     // optional for create actions
+  newValue    String?
+  action      AuditAction // "CREATE" | "UPDATE" | "DELETE"
+  step        Int
+  role        StepRoles
+  performedBy String      // user email
+  timestamp   DateTime    @default(now())
+  indent      Indents     @relation(fields: [indentId], references: [indentId])
 }
 
-model Indents {
-  indentId           String         @id @default(uuid())
-  department         Department
-  description        String
-  status             IndentStatus   @default(PENDING)
-  priority           IndentPriority
-  assignedTo         String
-  dueDate            DateTime
-  closedDate         DateTime?
-  assignedDate       DateTime?
-  category           IndentCategory
-  comments           String
-  file               String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-  isDeleted          Boolean        @default(false)
-  currStep           Int            @default(0)
-  prevStep           Int            @default(0)
-  lastStepChangeTime DateTime?
-  openStatus         Boolean        @default(false)
-  rejectedStatus     Boolean        @default(false)
-  remarkHistory      IndentRemark[] @relation("IndentRemarks")
-  attachments        Attachment[]   @relation("Attachment_indentId")
-}
-model Attachment {
-  id             String   @id @default(uuid())
-  fileName       String
-  uploadedBy     String // User email
-  uploadedByRole String
-  uploadedAt     DateTime @default(now())
-  s3Key          String
-  moduleType     Module
-  isDeleted      Boolean  @default(false)
-
-  indentId          String?
-  indent            Indents?           @relation("Attachment_indentId", fields: [indentId], references: [indentId])
-  observationId     String?
-  ISEObservations   ISEObservations?   @relation("Attachment_observationId", fields: [observationId], references: [observationId])
-  incidentId        String?
-  IncidentReporting IncidentReporting? @relation("Attachment_incidentId", fields: [incidentId], references: [incidentId])
-  Obligation        Obligation?        @relation("Attachment_obligationId", fields: [obligationId], references: [id])
-  obligationId      String?
-
-  @@index([indentId])
-  @@index([observationId])
-  @@index([incidentId])
-  @@index([obligationId])
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
 }
