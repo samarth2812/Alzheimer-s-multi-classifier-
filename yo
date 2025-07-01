@@ -57,3 +57,19 @@ export const fetchNotificationsFromAPI = async () => {
     return [];
   }
 };
+export const getNotificationPath = (type) => {
+  const [module, tab] = type.split("-");
+
+  const basePaths = {
+    obligation: "/obligations",
+    indent: "/indents",
+    incident: "/incident-reporting",
+    ise: "/ise-observation",
+  };
+
+  if (basePaths[module]) {
+    return `${basePaths[module]}/${tab}`;
+  }
+
+  return "/"; // fallback
+};
