@@ -1,28 +1,28 @@
-import { PrismaClient, Department, Position } from "@prisma/client";
-import { generateWhereFilter } from "../../helpers/workflowHelper"; // adjust path as needed
+import { PrismaClient, Department, Position, StepRoles } from "@prisma/client";
 import { ApiError } from "../../utils/ApiError";
+import { generateWhereFilter } from "../../helpers/IBAHelpers";
 
 const prisma = new PrismaClient();
 
 interface NotificationCounts {
-  latest: number;
-  rejected: number;
-  closure: number;
+  indentLatest: number;
+  indentRejected: number;
+  indentClosure: number;
 }
 
 /**
  * Get notification counts for indent based on user role and department
  */
 export const getNotificationIndentService = async (
-  userRole: Position,
+  userRole: StepRoles,
   userDepartment: Department,
   userEmail: string
 ): Promise<{ success: boolean; data: NotificationCounts }> => {
   try {
     const result: NotificationCounts = {
-      latest: 0,
-      rejected: 0,
-      closure: 0,
+      indentLatest: 0,
+      indentRejected: 0,
+      indentClosure: 0,
     };
 
     await calculateLatestIndentNotifications(result, userRole, userDepartment, userEmail);
@@ -39,21 +39,20 @@ export const getNotificationIndentService = async (
 
 const calculateLatestIndentNotifications = async (
   result: NotificationCounts,
-  role: Position,
+  role: StepRoles,
   department: Department,
   userEmail: string
 ): Promise<void> => {
   try {
     const workflowFilter = generateWhereFilter(role, department, "latest", userEmail);
 
-    const count = await prisma.indent.count({
+    const count = await prisma.indents.count({
       where: {
         ...workflowFilter,
-        AND: [...workflowFilter.AND, { isTempSaved: false }],
       },
     });
 
-    result.latest = count;
+    result.indentLatest = count;
   } catch (error: any) {
     console.error("Error calculating latest indent notifications:", error);
     throw error;
@@ -61,7 +60,7 @@ const calculateLatestIndentNotifications = async (
 };
 const calculateRejectedIndentNotifications = async (
   result: NotificationCounts,
-  role: Position,
+  role: StepRoles,
   department: Department,
   userEmail: string
 ): Promise<void> => {
@@ -69,23 +68,21 @@ const calculateRejectedIndentNotifications = async (
     // Skip for roles that don't handle rework
     if (
       role === Position.COMPLIANCE_CHECKER ||
-      role === Position.DEPARTMENT_CHECKER ||
-      role === Position.HOD
+      role === Position.DEPARTMENT_CHECKER
     ) {
-      result.rejected = 0;
+      result.indentRejected = 0;
       return;
     }
 
     const rejectedFilter = generateWhereFilter(role, department, "rejected", userEmail);
 
-    const count = await prisma.indent.count({
+    const count = await prisma.indents.count({
       where: {
         ...rejectedFilter,
-        AND: [...rejectedFilter.AND, { isTempSaved: false }],
       },
     });
 
-    result.rejected = count;
+    result.indentRejected = count;
   } catch (error: any) {
     console.error("Error calculating rejected indent notifications:", error);
     throw error;
@@ -98,7 +95,7 @@ const calculateClosureIndentNotifications = async (
 ): Promise<void> => {
   try {
     if (department !== Department.COMPLIANCE) {
-      result.closure = 0;
+      result.indentClosure = 0;
       return;
     }
 
@@ -106,21 +103,20 @@ const calculateClosureIndentNotifications = async (
     if (role === Position.COMPLIANCE_MAKER) closureStep = 4;
     else if (role === Position.COMPLIANCE_CHECKER) closureStep = 5;
     else {
-      result.closure = 0;
+      result.indentClosure = 0;
       return;
     }
 
-    const count = await prisma.indent.count({
+    const count = await prisma.indents.count({
       where: {
         AND: [
           { currStep: closureStep },
           { rejectedStatus: false },
-          { isTempSaved: false },
         ],
       },
     });
 
-    result.closure = count;
+    result.indentClosure = count;
   } catch (error: any) {
     console.error("Error calculating closure indent notifications:", error);
     throw error;
