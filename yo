@@ -1,6 +1,85 @@
-export const roleStepMap: Record<Position, number> = {
+export const roleStepMap = {
   COMPLIANCE_MAKER: 0,
   COMPLIANCE_CHECKER: 1,
   DEPARTMENT_MAKER: 2,
   DEPARTMENT_CHECKER: 3,
+} as const;
+export type WorkFlowRole = keyof typeof roleStepMap;
+
+// Helper to map step number to name
+export const getStepName = (
+  currStep: number,
+  role?: StepRoles,
+  prevStep?: number
+): string => {
+  if (currStep === 4) {
+    if (role === "COMPLIANCE_MAKER" && prevStep === 3) {
+      return "Closure CM";
+    }
+    if (role === "COMPLIANCE_CHECKER" && prevStep === 4) {
+      return "Closure CC";
+    }
+    return "Closed"; // fallback for final state
+  }
+
+  const stepNameMap: Record<number, string> = {
+    0: "Compliance Maker",
+    1: "Compliance Checker",
+    2: "Department Maker",
+    3: "Department Checker",
+  };
+
+  return stepNameMap[currStep] || "Unknown Step";
+};
+
+export const generateWhereFilter = (
+  role: Position,
+  department?: string,
+  tab?: string,
+  userEmail?: string
+) => {
+  const step = roleStepMap[role];
+  // const isCompliance = department === "COMPLIANCE";
+
+  const baseConditions: any[] = [{ isDeleted: false }];
+
+  // Step and rejection logic based on tab
+  if (tab === "latest" || tab === "created") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: false });
+
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
+      });
+    }
+  } else if (tab === "rejected") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: true });
+
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
+      });
+    }
+  } else if (tab === "closure") {
+    baseConditions.push({ currStep: 4 });
+
+    if (role === "COMPLIANCE_MAKER") {
+      baseConditions.push({
+        OR: [{ prevStep: 0 }, { prevStep: 3 }], //Compliance + normal flow
+      });
+    } else if (role === "COMPLIANCE_CHECKER") {
+      baseConditions.push({ prevStep: 1 });
+    }
+  }
+
+  // Normal department filtering
+  if (
+    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
+    department
+  ) {
+    baseConditions.push({ department });
+  }
+  return {
+    AND: baseConditions,
+  };
 };
