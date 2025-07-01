@@ -1,39 +1,283 @@
-export const fetchCommunications = async (
-  type: "inbox" | "sent" | "thread",
-  userEmail: string,
-  threadId?: string,
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const where = buildFetchFilter(type, userEmail, threadId);
-    const offset = (page - 1) * pageSize;
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { Box, Button, Skeleton, TextField, InputAdornment } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import { Add, PlusOne, Search } from "@mui/icons-material";
+import debounce from "lodash.debounce";
+import { useSelector } from "react-redux";
+import toast from "react-hot-toast";
 
-    const [communications, total] = await Promise.all([
-      prisma.communication.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { createdAt: "desc" },
-        include: {
-          replies: true,
-        },
-      }),
-      prisma.communication.count({ where }),
-    ]);
+import CommunicationFormDialog from "pages/RegulatoryCommunication/communicationFormDialog";
+import MailTrailAccordion from "./MailTrailAccordion";
+import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
+import { BsTable } from "react-icons/bs";
+import { apiRequest } from "../../axios/apiRequest";
+import { iconButtonStyle } from "layouts/resuableComponents/styles";
+import CommunicationList from "./listComponent";
+import { topBarSearchStyle2 } from "layouts/resuableComponents/styles";
+import { topBarStyle } from "layouts/resuableComponents/styles";
+import { animatedButtonStyle } from "layouts/resuableComponents/styles";
+import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
 
-    return {
-      success: true,
-      data: communications,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  } catch (error) {
-    console.error("Error fetching communications:", error);
-    throw new Error("Failed to fetch communications");
-  }
+const CommunicationPage = () => {
+  const [data, setData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filteredData, setFilteredData] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editCommData, setEditCommData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("inbox");
+  const [selectedComm, setSelectedComm] = useState(null);
+  const user = useSelector((state) => state.user.user);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [totalRecords, setTotalRecords] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const fetchData = async (tabType = "inbox") => {
+    setLoading(true);
+    const typeParam = tabType;
+    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
+    try {
+      const response = await apiRequest("GET", fetchUrl);
+      setData(response.data.data);
+      setFilteredData(response.data.data);
+      setTotalRecords(response.data.pagination.total);
+      setTotalPages(response.data.pagination.totalPages);
+    } catch {
+      toast.error("Failed to fetch communications");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData(tab);
+    setSelectedComm(null);
+  }, [tab]);
+
+  const debouncedFilter = useMemo(
+    () =>
+      debounce((term, list) => {
+        if (!term) {
+          setFilteredData(list);
+          return;
+        }
+        const lower = term.toLowerCase();
+        const filtered = list.filter((item) =>
+          Object.values(item).some((val) => val?.toString().toLowerCase().includes(lower))
+        );
+        setFilteredData(filtered);
+      }, 300),
+    []
+  );
+
+  useEffect(() => {
+    debouncedFilter(searchTerm, data);
+    return () => debouncedFilter.cancel();
+  }, [searchTerm, data]);
+
+  const handleSearch = (event) => {
+    setSearchTerm(event.target.value);
+  };
+  const handleAddCommClick = () => {
+    setEditCommData(null);
+    setIsModalOpen(true);
+  };
+
+  const handlePageChange = useCallback((event, newPage) => {
+    setCurrentPage(newPage);
+  }, []);
+
+  const handleRowsPerPageChange = useCallback((event) => {
+    const { numericValue, resetToFirstPage } = event;
+
+    setRowsPerPage(numericValue);
+    if (resetToFirstPage) {
+      setCurrentPage(1);
+    }
+  }, []);
+
+  return (
+    <>
+      {selectedComm ? (
+        <Box
+          sx={{
+            px: 0,
+            py: 0,
+            width: "100%",
+            maxWidth: "1000px",
+            margin: "0 auto",
+            minHeight: "calc(100vh - 120px)",
+          }}
+        >
+          <Box sx={{ mb: 0 }}>
+            <Button
+              variant="text"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setSelectedComm(null)}
+              sx={{ color: (theme) => theme.palette.custom.two }}
+            >
+              Back
+            </Button>
+          </Box>
+
+          <MailTrailAccordion
+            mailTrail={[...(selectedComm.replies || []), selectedComm]}
+            onReply={(comm) => {
+              setEditCommData({
+                refNo: comm.refNo,
+                category: comm.category,
+                sentTo: [comm.sentBy],
+                subject: `Re: ${comm.subject}`,
+                cc: comm.cc,
+                category: comm.category,
+                commType: comm.commType,
+                responseDueBy: comm.responseDueBy,
+                parentCommId: comm.commId,
+                priorityLevel: comm.priorityLevel,
+              });
+              setIsModalOpen(true);
+            }}
+          />
+        </Box>
+      ) : (
+        <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
+          {/* Top Bar */}
+          <Box
+            sx={{
+              ...topBarStyle,
+            }}
+          >
+            {/* Left: Tabs */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              {["Inbox", "Sent Items"].map((label) => {
+                const value = label === "Inbox" ? "inbox" : "sent";
+                const isActive = tab === value;
+                return (
+                  <Button
+                    key={value}
+                    onClick={() => setTab(value)}
+                    sx={{
+                      fontSize: "0.7rem",
+                      fontWeight: isActive ? 600 : 400,
+                      color: (theme) =>
+                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
+                      position: "relative",
+                      borderRadius: 0,
+                      textTransform: "none",
+                      "&::after": {
+                        content: '""',
+                        position: "absolute",
+                        bottom: 3,
+                        left: 0,
+                        width: "100%",
+                        height: "2px",
+                        backgroundColor: (theme) => theme.palette.custom.two,
+                        transform: isActive ? "scaleX(1)" : "scaleX(0)",
+                        transformOrigin: "left",
+                        transition: "transform 0.3s ease-out",
+                      },
+                      "&:hover": {
+                        color: (theme) => theme.palette.custom.two,
+                      },
+                      "&:hover::after": {
+                        color: (theme) => theme.palette.custom.two,
+                        transform: "scaleX(1)",
+                      },
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </Box>
+
+            {/* Right: Search and Add */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 1, sm: 0 } }}>
+              <Button
+                size="small"
+                startIcon={<Add />}
+                onClick={handleAddCommClick}
+                sx={{ ...animatedButtonStyle, minWidth: "150px" }}
+              >
+                Add Communication
+              </Button>
+              <TextField
+                fullWidth
+                placeholder="Search Communication..."
+                variant="outlined"
+                sx={topBarSearchStyle2}
+                onChange={handleSearch}
+                value={searchTerm}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search fontSize="medium" sx={iconButtonStyle} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+          </Box>
+
+          {/* Content */}
+          <Box
+            sx={{
+              flexGrow: 1,
+              py: 1,
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              position: "relative",
+            }}
+          >
+            {loading ? (
+              <Box>
+                {[...Array(5)].map((_, idx) => (
+                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
+                ))}
+              </Box>
+            ) : filteredData.length > 0 ? (
+              <CommunicationList
+                communications={filteredData}
+                selectedId={selectedComm?.commId}
+                onSelect={(comm) => setSelectedComm(comm)}
+              />
+            ) : (
+              <EmptyStateBox
+                icon={BsTable}
+                title="No Communications Found"
+                description="Try changing your filters or adding a new communication."
+              />
+            )}
+            {!searchTerm && filteredData.length > 0 && (
+              <PaginationFooter
+                currentPage={currentPage}
+                rowsPerPage={rowsPerPage}
+                totalPages={totalPages}
+                totalRecords={totalRecords}
+                onPageChange={handlePageChange}
+                onRowsPerPageChange={handleRowsPerPageChange}
+                loading={loading}
+              />
+            )}
+          </Box>
+        </Box>
+      )}
+
+      <CommunicationFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editCommData}
+        user={user}
+        onSubmit={() => fetchData(tab)}
+      />
+    </>
+  );
 };
+
+export default CommunicationPage;
