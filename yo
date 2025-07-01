@@ -1,5 +1,5 @@
 import { PrismaClient, Department, Position } from "@prisma/client";
-import * as workflowHelper from "../../helpers/workflowHelper";
+import { generateWhereFilter } from "../../helpers/workflowHelper"; // adjust path as needed
 import { ApiError } from "../../utils/ApiError";
 
 const prisma = new PrismaClient();
@@ -11,11 +11,12 @@ interface NotificationCounts {
 }
 
 /**
- * Get notification counts for obligations based on user role and department
+ * Get notification counts for indent based on user role and department
  */
-export const getNotificationObligationService = async (
+export const getNotificationIndentService = async (
   userRole: Position,
-  userDepartment: Department
+  userDepartment: Department,
+  userEmail: string
 ): Promise<{ success: boolean; data: NotificationCounts }> => {
   try {
     const result: NotificationCounts = {
@@ -24,266 +25,104 @@ export const getNotificationObligationService = async (
       closure: 0,
     };
 
-    // LATEST NOTIFICATIONS
-    await calculateLatestNotifications(result, userRole, userDepartment);
+    await calculateLatestIndentNotifications(result, userRole, userDepartment, userEmail);
+    await calculateRejectedIndentNotifications(result, userRole, userDepartment, userEmail);
+    await calculateClosureIndentNotifications(result, userRole, userDepartment);
 
-    // REJECTED NOTIFICATIONS
-    await calculateRejectedNotifications(result, userRole, userDepartment);
-
-    // CLOSURE NOTIFICATIONS (only for compliance team)
-    await calculateClosureNotifications(result, userRole, userDepartment);
     return { success: true, data: result };
   } catch (error: any) {
-    console.error("Error in getNotificationObligationService:", error);
-    throw ApiError.internal(
-      `Error retrieving notification counts: ${error.message}`
-    );
+    console.error("Error in getNotificationIndentService:", error);
+    throw ApiError.internal(`Error retrieving indent notifications: ${error.message}`);
   }
 };
 
-/**
- * Calculate latest notifications count
- * Latest = obligations in user's workflow steps + completed obligations for their department
- */
-const calculateLatestNotifications = async (
+
+const calculateLatestIndentNotifications = async (
   result: NotificationCounts,
-  userRole: Position,
-  userDepartment: Department
+  role: Position,
+  department: Department,
+  userEmail: string
 ): Promise<void> => {
   try {
-    // Get base filter for user's workflow obligations
-    const { filter: workflowFilter } = workflowHelper.getObligationsForUser(
-      userRole,
-      userDepartment
-    );
+    const workflowFilter = generateWhereFilter(role, department, "latest", userEmail);
 
-    // Count workflow obligations (active obligations assigned to user)
-    const workflowCount = await prisma.obligation.count({
+    const count = await prisma.indent.count({
       where: {
         ...workflowFilter,
-        AND: [
-          ...workflowFilter.AND,
-          { isTempSaved: false }, // Don't count temp obligations
-        ],
+        AND: [...workflowFilter.AND, { isTempSaved: false }],
       },
     });
 
-    let completedCount = 0;
-
-    // Add completed obligations for department users (not compliance)
-    if (userDepartment !== Department.COMPLIANCE) {
-      completedCount = await prisma.obligation.count({
-        where: {
-          AND: [
-            { currStep: 6 }, // Completed obligations
-            { department: userDepartment }, // User's department only
-            { isTempSaved: false },
-            { rejectedStatus: false },
-          ],
-        },
-      });
-    }
-
-    result.latest = workflowCount + completedCount;
+    result.latest = count;
   } catch (error: any) {
-    console.error("Error calculating latest notifications:", error);
+    console.error("Error calculating latest indent notifications:", error);
     throw error;
   }
 };
-
-/**
- * Calculate rejected notifications count
- * Only for users who can rework obligations (not checkers)
- */
-const calculateRejectedNotifications = async (
+const calculateRejectedIndentNotifications = async (
   result: NotificationCounts,
-  userRole: Position,
-  userDepartment: Department
+  role: Position,
+  department: Department,
+  userEmail: string
 ): Promise<void> => {
   try {
-    // Skip rejected count for checkers and HOD (they don't rework)
+    // Skip for roles that don't handle rework
     if (
-      userRole === Position.COMPLIANCE_CHECKER ||
-      userRole === Position.DEPARTMENT_CHECKER ||
-      userRole === Position.HOD
+      role === Position.COMPLIANCE_CHECKER ||
+      role === Position.DEPARTMENT_CHECKER ||
+      role === Position.HOD
     ) {
       result.rejected = 0;
       return;
     }
 
-    // Get rejected filter for user
-    const { filter: rejectedFilter } =
-      workflowHelper.getRejectedObligationsForUser(userRole, userDepartment);
+    const rejectedFilter = generateWhereFilter(role, department, "rejected", userEmail);
 
-    const rejectedCount = await prisma.obligation.count({
+    const count = await prisma.indent.count({
       where: {
         ...rejectedFilter,
         AND: [...rejectedFilter.AND, { isTempSaved: false }],
       },
     });
 
-    result.rejected = rejectedCount;
+    result.rejected = count;
   } catch (error: any) {
-    console.error("Error calculating rejected notifications:", error);
+    console.error("Error calculating rejected indent notifications:", error);
     throw error;
   }
 };
-
-/**
- * Calculate closure notifications count
- * Only for compliance team members
- */
-const calculateClosureNotifications = async (
+const calculateClosureIndentNotifications = async (
   result: NotificationCounts,
-  userRole: Position,
-  userDepartment: Department
+  role: Position,
+  department: Department
 ): Promise<void> => {
   try {
-    // Only compliance team gets closure notifications
-    if (userDepartment !== Department.COMPLIANCE) {
+    if (department !== Department.COMPLIANCE) {
       result.closure = 0;
       return;
     }
 
-    let closureFilter: any = {};
-
-    // Determine closure step based on role
-    if (userRole === Position.COMPLIANCE_MAKER) {
-      closureFilter = { currStep: 4 }; // Compliance Maker - Closure step
-    } else if (userRole === Position.COMPLIANCE_CHECKER) {
-      closureFilter = { currStep: 5 }; // Compliance Checker - Closure step
-    } else {
+    let closureStep = -1;
+    if (role === Position.COMPLIANCE_MAKER) closureStep = 4;
+    else if (role === Position.COMPLIANCE_CHECKER) closureStep = 5;
+    else {
       result.closure = 0;
       return;
     }
 
-    const closureCount = await prisma.obligation.count({
+    const count = await prisma.indent.count({
       where: {
-        AND: [closureFilter, { rejectedStatus: false }, { isTempSaved: false }],
+        AND: [
+          { currStep: closureStep },
+          { rejectedStatus: false },
+          { isTempSaved: false },
+        ],
       },
     });
 
-    result.closure = closureCount;
+    result.closure = count;
   } catch (error: any) {
-    console.error("Error calculating closure notifications:", error);
+    console.error("Error calculating closure indent notifications:", error);
     throw error;
   }
 };
-
-export const generateWhereFilter = (
-  role: StepRoles,
-  department?: string,
-  tab?: string,
-  userEmail?: string
-) => {
-  const step = roleStepMap[role];
-  // const isCompliance = department === "COMPLIANCE";
-
-  const baseConditions: any[] = [{ isDeleted: false }];
-
-  // Step and rejection logic based on tab
-  if (tab === "latest" || tab === "created") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: false });
-
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
-    }
-  } else if (tab === "rejected") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: true });
-
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
-    }
-  } else if (tab === "closure") {
-    baseConditions.push({ currStep: 4 });
-
-    if (role === "COMPLIANCE_MAKER") {
-      baseConditions.push({
-        OR: [{ prevStep: 0 }, { prevStep: 3 }], //Compliance + normal flow
-      });
-    } else if (role === "COMPLIANCE_CHECKER") {
-      baseConditions.push({ prevStep: 1 });
-    }
-  }
-
-  // Normal department filtering
-  if (
-    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
-    department
-  ) {
-    baseConditions.push({ department });
-  }
-  return {
-    AND: baseConditions,
-  };
-};
-
-export const stepBasedUpdateFilter = (
-  currStep: number,
-  rejectedStatus: boolean,
-  role?: string,
-  department?: string
-): { newCurrStep: number; newPrevStep: number } => {
-  const isComplianceFlow = department === "COMPLIANCE";
-
-  // === APPROVAL FLOW ===
-  if (!rejectedStatus) {
-    // Compliance-only closure handling
-    if (isComplianceFlow) {
-      if (currStep === 0 && role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 1, newPrevStep: 0 }; // CM → CC
-      }
-      if (currStep === 1 && role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 0 }; // CC → Closure for CM
-      }
-      if (currStep === 4 && role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 4, newPrevStep: 1 }; // Closure CM → Closure CC
-      }
-      if (currStep === 4 && role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 4 }; // Final closure (mark as closed)
-      }
-
-      throw new Error("Invalid step-role combo in Compliance workflow");
-    }
-
-    // === Default approval flow ===
-    if (currStep === 4) {
-      if (role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 4, newPrevStep: 1 };
-      } else if (role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 4 };
-      } else {
-        throw new Error("Invalid role for closure step");
-      }
-    }
-
-    return { newCurrStep: currStep + 1, newPrevStep: currStep };
-  }
-
-  // === REJECTION FLOW ===
-  if (isComplianceFlow) {
-    // Rejection in compliance flow always returns to COMPLIANCE_MAKER at currStep 0
-    return { newCurrStep: 0, newPrevStep: currStep };
-  }
-
-  // === Default rejection flow ===
-  switch (currStep) {
-    case 0:
-      return { newCurrStep: 2, newPrevStep: 0 }; // CM Rejects
-    case 1:
-      return { newCurrStep: 0, newPrevStep: 1 }; // CC Rejects
-    case 2:
-      return { newCurrStep: 0, newPrevStep: 2 }; // DM Rejects
-    case 3:
-      return { newCurrStep: 2, newPrevStep: 3 }; // DC Rejects
-    case 4:
-      return { newCurrStep: 3, newPrevStep: 4 }; // Rejection in closure
-    default:
-      throw new Error("Invalid step");
-  }
-};
-
