@@ -1,31 +1,32 @@
-export const buildFetchFilter = (
-  type: "inbox" | "sent" | "thread",
-  userEmail: string,
-  threadId?: string
-) => {
+import { PrismaClient } from "@prisma/client";
+import { ApiError } from "../../utils/ApiError";
+import { buildFetchFilter } from "../../helpers/communicationHelper";
 
-  if (type === "inbox") {
+const prisma = new PrismaClient();
+
+export const getCommunicationNotificationService = async (
+  userEmail: string
+): Promise<{ success: boolean; data: { inboxCount: number; sentCount: number } }> => {
+  try {
+    const inboxFilter = buildFetchFilter("inbox", userEmail);
+    const sentFilter = buildFetchFilter("sent", userEmail);
+
+    const [inboxCount, sentCount] = await Promise.all([
+      prisma.communication.count({ where: inboxFilter }),
+      prisma.communication.count({ where: sentFilter }),
+    ]);
+
     return {
-      status: COMMUNICATION_STATUS_MAPPING["Sent"] as any,
-      isDeleted: false,
-      OR: [{ sentTo: { has: userEmail } }, { cc: { has: userEmail } }],
+      success: true,
+      data: {
+        inboxCount,
+        sentCount,
+      },
     };
+  } catch (error: any) {
+    console.error("Error fetching communication notifications:", error);
+    throw ApiError.internal("Unable to fetch communication notification counts");
   }
-  if (type === "sent") {
-    return {
-      sentBy: userEmail,
-      status: COMMUNICATION_STATUS_MAPPING["Sent"] as any,
-      isDeleted: false,
-    };
-  }
-  if (type === "thread" && threadId) {
-    return {
-      OR: [
-        { commId: threadId },
-        { parentCommId: threadId },
-        { parentCommunication: { commId: threadId } },
-      ],
-    };
-  }
-  return {};
 };
+
+
