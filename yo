@@ -1,3 +1,31 @@
-ERROR in ./src/features/notificationSlice.js 4:0-78
-Module not found: Error: You attempted to import ../../services/fetchNotifications which falls outside of the project src/ directory. Relative imports outside of src/ are not supported.
-You can either move it inside src/, or add a symlink to it from project's node_modules/.
+export const buildFetchFilter = (
+  type: "inbox" | "sent" | "thread",
+  userEmail: string,
+  threadId?: string
+) => {
+
+  if (type === "inbox") {
+    return {
+      status: COMMUNICATION_STATUS_MAPPING["Sent"] as any,
+      isDeleted: false,
+      OR: [{ sentTo: { has: userEmail } }, { cc: { has: userEmail } }],
+    };
+  }
+  if (type === "sent") {
+    return {
+      sentBy: userEmail,
+      status: COMMUNICATION_STATUS_MAPPING["Sent"] as any,
+      isDeleted: false,
+    };
+  }
+  if (type === "thread" && threadId) {
+    return {
+      OR: [
+        { commId: threadId },
+        { parentCommId: threadId },
+        { parentCommunication: { commId: threadId } },
+      ],
+    };
+  }
+  return {};
+};
