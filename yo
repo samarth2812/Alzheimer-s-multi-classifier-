@@ -5,39 +5,35 @@ import { generateWhereFilter } from "../../helpers/IBAHelpers";
 const prisma = new PrismaClient();
 
 interface NotificationCounts {
-  indentLatest: number;
-  indentRejected: number;
-  indentClosure: number;
+  iseLatest: number;
+  iseRejected: number;
+  iseClosure: number;
 }
 
-/**
- * Get notification counts for indent based on user role and department
- */
-export const getNotificationIndentService = async (
+export const getNotificationISEObservationService = async (
   userRole: StepRoles,
   userDepartment: Department,
   userEmail: string
 ): Promise<{ success: boolean; data: NotificationCounts }> => {
   try {
     const result: NotificationCounts = {
-      indentLatest: 0,
-      indentRejected: 0,
-      indentClosure: 0,
+      iseLatest: 0,
+      iseRejected: 0,
+      iseClosure: 0,
     };
 
-    await calculateLatestIndentNotifications(result, userRole, userDepartment, userEmail);
-    await calculateRejectedIndentNotifications(result, userRole, userDepartment, userEmail);
-    await calculateClosureIndentNotifications(result, userRole, userDepartment);
+    await calculateLatestISENotifications(result, userRole, userDepartment, userEmail);
+    await calculateRejectedISENotifications(result, userRole, userDepartment, userEmail);
+    await calculateClosureISENotifications(result, userRole, userDepartment);
 
     return { success: true, data: result };
   } catch (error: any) {
-    console.error("Error in getNotificationIndentService:", error);
-    throw ApiError.internal(`Error retrieving indent notifications: ${error.message}`);
+    console.error("Error in getNotificationISEObservationService:", error);
+    throw ApiError.internal(`Error retrieving ISE observation notifications: ${error.message}`);
   }
 };
 
-
-const calculateLatestIndentNotifications = async (
+const calculateLatestISENotifications = async (
   result: NotificationCounts,
   role: StepRoles,
   department: Department,
@@ -46,56 +42,57 @@ const calculateLatestIndentNotifications = async (
   try {
     const workflowFilter = generateWhereFilter(role, department, "latest", userEmail);
 
-    const count = await prisma.indents.count({
+    const count = await prisma.iSEObservation.count({
       where: {
         ...workflowFilter,
       },
     });
 
-    result.indentLatest = count;
+    result.iseLatest = count;
   } catch (error: any) {
-    console.error("Error calculating latest indent notifications:", error);
+    console.error("Error calculating latest ISE notifications:", error);
     throw error;
   }
 };
-const calculateRejectedIndentNotifications = async (
+
+const calculateRejectedISENotifications = async (
   result: NotificationCounts,
   role: StepRoles,
   department: Department,
   userEmail: string
 ): Promise<void> => {
   try {
-    // Skip for roles that don't handle rework
     if (
       role === Position.COMPLIANCE_CHECKER ||
       role === Position.DEPARTMENT_CHECKER
     ) {
-      result.indentRejected = 0;
+      result.iseRejected = 0;
       return;
     }
 
     const rejectedFilter = generateWhereFilter(role, department, "rejected", userEmail);
 
-    const count = await prisma.indents.count({
+    const count = await prisma.iSEObservation.count({
       where: {
         ...rejectedFilter,
       },
     });
 
-    result.indentRejected = count;
+    result.iseRejected = count;
   } catch (error: any) {
-    console.error("Error calculating rejected indent notifications:", error);
+    console.error("Error calculating rejected ISE notifications:", error);
     throw error;
   }
 };
-const calculateClosureIndentNotifications = async (
+
+const calculateClosureISENotifications = async (
   result: NotificationCounts,
   role: Position,
   department: Department
 ): Promise<void> => {
   try {
     if (department !== Department.COMPLIANCE) {
-      result.indentClosure = 0;
+      result.iseClosure = 0;
       return;
     }
 
@@ -103,22 +100,139 @@ const calculateClosureIndentNotifications = async (
     if (role === Position.COMPLIANCE_MAKER) closureStep = 4;
     else if (role === Position.COMPLIANCE_CHECKER) closureStep = 5;
     else {
-      result.indentClosure = 0;
+      result.iseClosure = 0;
       return;
     }
 
-    const count = await prisma.indents.count({
+    const count = await prisma.iSEObservation.count({
       where: {
-        AND: [
-          { currStep: closureStep },
-          { rejectedStatus: false },
-        ],
+        AND: [{ currStep: closureStep }, { rejectedStatus: false }],
       },
     });
 
-    result.indentClosure = count;
+    result.iseClosure = count;
   } catch (error: any) {
-    console.error("Error calculating closure indent notifications:", error);
+    console.error("Error calculating closure ISE notifications:", error);
+    throw error;
+  }
+};
+
+
+import { PrismaClient, Department, Position, StepRoles } from "@prisma/client";
+import { ApiError } from "../../utils/ApiError";
+import { generateWhereFilter } from "../../helpers/IBAHelpers";
+
+const prisma = new PrismaClient();
+
+interface NotificationCounts {
+  incidentLatest: number;
+  incidentRejected: number;
+  incidentClosure: number;
+}
+
+export const getNotificationIncidentReportingService = async (
+  userRole: StepRoles,
+  userDepartment: Department,
+  userEmail: string
+): Promise<{ success: boolean; data: NotificationCounts }> => {
+  try {
+    const result: NotificationCounts = {
+      incidentLatest: 0,
+      incidentRejected: 0,
+      incidentClosure: 0,
+    };
+
+    await calculateLatestIncidentNotifications(result, userRole, userDepartment, userEmail);
+    await calculateRejectedIncidentNotifications(result, userRole, userDepartment, userEmail);
+    await calculateClosureIncidentNotifications(result, userRole, userDepartment);
+
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Error in getNotificationIncidentReportingService:", error);
+    throw ApiError.internal(`Error retrieving incident notifications: ${error.message}`);
+  }
+};
+
+const calculateLatestIncidentNotifications = async (
+  result: NotificationCounts,
+  role: StepRoles,
+  department: Department,
+  userEmail: string
+): Promise<void> => {
+  try {
+    const workflowFilter = generateWhereFilter(role, department, "latest", userEmail);
+
+    const count = await prisma.incidentReporting.count({
+      where: {
+        ...workflowFilter,
+      },
+    });
+
+    result.incidentLatest = count;
+  } catch (error: any) {
+    console.error("Error calculating latest incident notifications:", error);
+    throw error;
+  }
+};
+
+const calculateRejectedIncidentNotifications = async (
+  result: NotificationCounts,
+  role: StepRoles,
+  department: Department,
+  userEmail: string
+): Promise<void> => {
+  try {
+    if (
+      role === Position.COMPLIANCE_CHECKER ||
+      role === Position.DEPARTMENT_CHECKER
+    ) {
+      result.incidentRejected = 0;
+      return;
+    }
+
+    const rejectedFilter = generateWhereFilter(role, department, "rejected", userEmail);
+
+    const count = await prisma.incidentReporting.count({
+      where: {
+        ...rejectedFilter,
+      },
+    });
+
+    result.incidentRejected = count;
+  } catch (error: any) {
+    console.error("Error calculating rejected incident notifications:", error);
+    throw error;
+  }
+};
+
+const calculateClosureIncidentNotifications = async (
+  result: NotificationCounts,
+  role: Position,
+  department: Department
+): Promise<void> => {
+  try {
+    if (department !== Department.COMPLIANCE) {
+      result.incidentClosure = 0;
+      return;
+    }
+
+    let closureStep = -1;
+    if (role === Position.COMPLIANCE_MAKER) closureStep = 4;
+    else if (role === Position.COMPLIANCE_CHECKER) closureStep = 5;
+    else {
+      result.incidentClosure = 0;
+      return;
+    }
+
+    const count = await prisma.incidentReporting.count({
+      where: {
+        AND: [{ currStep: closureStep }, { rejectedStatus: false }],
+      },
+    });
+
+    result.incidentClosure = count;
+  } catch (error: any) {
+    console.error("Error calculating closure incident notifications:", error);
     throw error;
   }
 };
