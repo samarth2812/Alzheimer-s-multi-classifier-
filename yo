@@ -1,58 +1,86 @@
-const isWorkflowRole = (role: Position): role is WorkflowRole => {
-  return role in roleStepMap;
+import { apiRequest } from "../axios/apiRequest";
+
+export const fetchNotificationsFromAPI = async () => {
+  try {
+    const response = await apiRequest("GET", `${process.env.REACT_APP_BACKEND_URL}/api/v1/obligations/notifications`);
+
+    if (response.status === 200 && response.data && response.data.data) {
+      const { latest, rejected, closure } = response.data.data;
+      const notifications = [];
+
+      // Create notification for latest obligations if count > 0
+      if (latest > 0) {
+        notifications.push({
+          id: "latest-obligations",
+          icon: "assignment",
+          title: `${latest} Latest Obligation${latest > 1 ? "s" : ""}`,
+          description: "Click here to view latest obligations",
+          timestamp: "Just now",
+          unread: true,
+          iconColor: "#4CAF50", // Green color for latest obligations
+          type: "latest",
+        });
+      }
+
+      // Create notification for rejected obligations if count > 0
+      if (rejected > 0) {
+        notifications.push({
+          id: "rejected-obligations",
+          icon: "cancel",
+          title: `${rejected} Rejected Obligation${rejected > 1 ? "s" : ""}`,
+          description: "Click here to view rejected obligations",
+          timestamp: "Recently",
+          unread: true,
+          iconColor: "#4CAF50",
+          type: "rejected",
+        });
+      }
+
+      // Create notification for closure obligations if count > 0
+      if (closure > 0) {
+        notifications.push({
+          id: "closure-obligations",
+          icon: "check_circle",
+          title: `${closure} Closure Obligation${closure > 1 ? "s" : ""}`,
+          description: "Click here to view closure obligations",
+          timestamp: "Recently",
+          unread: true,
+          iconColor: "#4CAF50",
+          type: "closure",
+        });
+      }
+
+      return notifications;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    return [];
+  }
 };
 
-
-export const generateWhereFilter = (
-  role: Position,
-  department?: string,
-  tab?: string,
-  userEmail?: string
-) => {
-  if (!isWorkflowRole(role)) {
-    throw new Error(`Invalid workflow role: ${role}`);
+// Helper function to get navigation path for notification type
+export const getNotificationPath = (type) => {
+  switch (type) {
+    case "latest":
+      return "/obligations/latest";
+    case "rejected":
+      return "/obligations/rejected";
+    case "closure":
+      return "/obligations/closure";
+    default:
+      return "/obligations/latest";
   }
+};
 
-  const step = roleStepMap[role]; // ✅ No error now
-
-  const baseConditions: any[] = [{ isDeleted: false }];
-
-  if (tab === "latest" || tab === "created") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: false });
-
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
+// Helper function to handle notification refresh
+export const handleNotificationRefresh = async (onRefresh) => {
+  try {
+    if (onRefresh && typeof onRefresh === "function") {
+      await onRefresh();
     }
-  } else if (tab === "rejected") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: true });
-
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
-    }
-  } else if (tab === "closure") {
-    baseConditions.push({ currStep: 4 });
-
-    if (role === "COMPLIANCE_MAKER") {
-      baseConditions.push({
-        OR: [{ prevStep: 0 }, { prevStep: 3 }],
-      });
-    } else if (role === "COMPLIANCE_CHECKER") {
-      baseConditions.push({ prevStep: 1 });
-    }
+  } catch (error) {
+    console.error("Error refreshing notifications:", error);
   }
-
-  if (
-    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
-    department
-  ) {
-    baseConditions.push({ department });
-  }
-
-  return {
-    AND: baseConditions,
-  };
 };
