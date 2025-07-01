@@ -1,37 +1,10 @@
-<Box sx={{ mt: 2 }}>
-  <Button
-    component="label"
-    sx={{
-      border: "2px dashed",
-      borderColor: (theme) => theme.palette.custom.text3,
-      minHeight: 120,
-      borderRadius: 2,
-      p: 4,
-      textAlign: "center",
-      width: "100%",
-      cursor: "pointer",
-    }}
-  >
-    <Typography variant="body2" color="text.secondary">
-      {selectedFile ? selectedFile.name : "Click to select a file to upload"}
-    </Typography>
-    <input
-      type="file"
-      hidden
-      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-    />
-  </Button>
+ Why .eml and .msg don't work in browser preview:
+.eml (RFC822) files are raw email files. They include headers, MIME parts, and potentially embedded attachments.
 
-  <Typography
-    variant="caption"
-    sx={{
-      mt: 1,
-      color: (theme) => theme.palette.custom.text3,
-      fontSize: "0.7rem",
-      textAlign: "center",
-      display: "block",
-    }}
-  >
-    Allowed file types: .pdf, .xls, .xlsx, .jpg, .jpeg, .png, .eml, .msg — Max size: 30MB
-  </Typography>
-</Box>
+.msg (Outlook) files are a proprietary Microsoft binary format.
+
+Browsers:
+
+Don’t have native renderers for these file types.
+
+Will always download them because there's no MIME type handler.
