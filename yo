@@ -1,17 +1,21 @@
+import { apiRequest } from "../axios/apiRequest";
+
 export const fetchNotificationsFromAPI = async () => {
   try {
     const baseUrl = process.env.REACT_APP_BACKEND_URL;
 
     // Fire all notification API requests in parallel
-    const [obligationRes, indentRes, incidentRes, iseRes] = await Promise.all([
+    const [obligationRes, indentRes, incidentRes, iseRes, communicationRes] = await Promise.all([
       apiRequest("GET", `${baseUrl}/api/v1/obligations/notifications`),
       apiRequest("GET", `${baseUrl}/api/v1/indents/notifications`),
       apiRequest("GET", `${baseUrl}/api/v1/incidents/notifications`),
       apiRequest("GET", `${baseUrl}/api/v1/rbi-ise/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/communications/notifications`), // ✅ Communication API
     ]);
 
     const notifications = [];
 
+    // General modules: obligation, indent, incident, ise
     const responses = [
       { key: "obligation", label: "Obligation", icon: "assignment", res: obligationRes },
       { key: "indent", label: "Indent", icon: "description", res: indentRes },
@@ -26,11 +30,11 @@ export const fetchNotificationsFromAPI = async () => {
     ];
 
     for (const { key, label, icon, res } of responses) {
-      if (res.status === 200 && res.data && res.data.data) {
+      if (res.status === 200 && res.data?.data) {
         const data = res.data.data;
 
         for (const type of types) {
-          const dataKey = `${key}${type.suffix}`; // e.g. indentLatest
+          const dataKey = `${key}${type.suffix}`;
 
           const count = data[dataKey];
           if (count > 0) {
@@ -49,26 +53,40 @@ export const fetchNotificationsFromAPI = async () => {
       }
     }
 
+    // ✅ Add communication notifications (inbox & sent)
+    if (communicationRes.status === 200 && communicationRes.data?.data) {
+      const { inboxCount, sentCount } = communicationRes.data.data;
+
+      if (inboxCount > 0) {
+        notifications.push({
+          id: "communication-inbox",
+          icon: "mail",
+          title: `${inboxCount} Communication Inbox Item${inboxCount > 1 ? "s" : ""}`,
+          description: "Click here to view your inbox",
+          timestamp: "Just now",
+          unread: true,
+          iconColor: "#3F51B5",
+          type: "communication-inbox",
+        });
+      }
+
+      if (sentCount > 0) {
+        notifications.push({
+          id: "communication-sent",
+          icon: "send",
+          title: `${sentCount} Communication Sent Item${sentCount > 1 ? "s" : ""}`,
+          description: "Click here to view your sent items",
+          timestamp: "Just now",
+          unread: true,
+          iconColor: "#009688",
+          type: "communication-sent",
+        });
+      }
+    }
+
     return notifications;
   } catch (error) {
     console.error("Error fetching notifications:", error);
     return [];
   }
-};
-
-// Helper function to get navigation path for notification type
-export const getNotificationPath = (type) => {
-  const [module, tab] = type.split("-");
-
-  const basePaths = {
-    obligation: "/obligations",
-    indent: "/indentManagement",
-    incident: "/incidentRepository",
-    ise: "/iseobservation",
-  };
-
-  if (basePaths[module]) {
-    return `${basePaths[module]}/${tab}`;
-  }
-  return "/";
 };
