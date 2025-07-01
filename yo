@@ -1,4 +1,20 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { fetchNotificationsFromAPI } from "../../services/fetchNotifications";
+
+// Thunk to fetch and update notifications
+export const fetchNotifications = createAsyncThunk(
+  "notifications/fetch",
+  async (_, thunkAPI) => {
+    try {
+      const notifications = await fetchNotificationsFromAPI();
+      thunkAPI.dispatch(setNotifications(notifications));
+      return notifications;
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+      return thunkAPI.rejectWithValue(error);
+    }
+  }
+);
 
 const initialState = {
   notifications: [],
@@ -6,12 +22,14 @@ const initialState = {
 };
 
 const notificationSlice = createSlice({
-  name: 'notifications',
+  name: "notifications",
   initialState,
   reducers: {
     setNotifications: (state, action) => {
       state.notifications = action.payload;
-      state.unreadCount = action.payload.filter(notification => notification.unread).length;
+      state.unreadCount = action.payload.filter(
+        (notification) => notification.unread
+      ).length;
     },
   },
 });
@@ -23,3 +41,4 @@ export const selectNotifications = (state) => state.notifications.notifications;
 export const selectUnreadCount = (state) => state.notifications.unreadCount;
 
 export default notificationSlice.reducer;
+const dispatch = useDispatch();
