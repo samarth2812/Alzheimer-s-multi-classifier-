@@ -2,85 +2,58 @@ import { apiRequest } from "../axios/apiRequest";
 
 export const fetchNotificationsFromAPI = async () => {
   try {
-    const response = await apiRequest("GET", `${process.env.REACT_APP_BACKEND_URL}/api/v1/obligations/notifications`);
+    const baseUrl = process.env.REACT_APP_BACKEND_URL;
 
-    if (response.status === 200 && response.data && response.data.data) {
-      const { latest, rejected, closure } = response.data.data;
-      const notifications = [];
+    // Fire all notification API requests in parallel
+    const [obligationRes, indentRes, incidentRes, iseRes] = await Promise.all([
+      apiRequest("GET", `${baseUrl}/api/v1/obligations/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/indents/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/incident-reporting/notifications`),
+      apiRequest("GET", `${baseUrl}/api/v1/ise-observation/notifications`),
+    ]);
 
-      // Create notification for latest obligations if count > 0
-      if (latest > 0) {
-        notifications.push({
-          id: "latest-obligations",
-          icon: "assignment",
-          title: `${latest} Latest Obligation${latest > 1 ? "s" : ""}`,
-          description: "Click here to view latest obligations",
-          timestamp: "Just now",
-          unread: true,
-          iconColor: "#4CAF50", // Green color for latest obligations
-          type: "latest",
-        });
+    const notifications = [];
+
+    const responses = [
+      { key: "obligation", label: "Obligation", icon: "assignment", res: obligationRes },
+      { key: "indent", label: "Indent", icon: "description", res: indentRes },
+      { key: "incident", label: "Incident", icon: "report_problem", res: incidentRes },
+      { key: "ise", label: "ISE Observation", icon: "visibility", res: iseRes },
+    ];
+
+    const types = [
+      { key: "Latest", suffix: "Latest", label: "Latest", color: "#4CAF50" },
+      { key: "Rejected", suffix: "Rejected", label: "Rejected", color: "#FF5722" },
+      { key: "Closure", suffix: "Closure", label: "Closure", color: "#2196F3" },
+    ];
+
+    for (const { key, label, icon, res } of responses) {
+      if (res.status === 200 && res.data && res.data.data) {
+        const data = res.data.data;
+
+        for (const type of types) {
+          const dataKey = `${key}${type.suffix}`; // e.g. indentLatest
+
+          const count = data[dataKey];
+          if (count > 0) {
+            notifications.push({
+              id: `${key}-${type.label.toLowerCase()}`,
+              icon,
+              title: `${count} ${type.label} ${label}${count > 1 ? "s" : ""}`,
+              description: `Click here to view ${type.label.toLowerCase()} ${label.toLowerCase()}s`,
+              timestamp: "Just now",
+              unread: true,
+              iconColor: type.color,
+              type: `${key}-${type.label.toLowerCase()}`, // e.g. indent-latest
+            });
+          }
+        }
       }
-
-      // Create notification for rejected obligations if count > 0
-      if (rejected > 0) {
-        notifications.push({
-          id: "rejected-obligations",
-          icon: "cancel",
-          title: `${rejected} Rejected Obligation${rejected > 1 ? "s" : ""}`,
-          description: "Click here to view rejected obligations",
-          timestamp: "Recently",
-          unread: true,
-          iconColor: "#4CAF50",
-          type: "rejected",
-        });
-      }
-
-      // Create notification for closure obligations if count > 0
-      if (closure > 0) {
-        notifications.push({
-          id: "closure-obligations",
-          icon: "check_circle",
-          title: `${closure} Closure Obligation${closure > 1 ? "s" : ""}`,
-          description: "Click here to view closure obligations",
-          timestamp: "Recently",
-          unread: true,
-          iconColor: "#4CAF50",
-          type: "closure",
-        });
-      }
-
-      return notifications;
     }
 
-    return [];
+    return notifications;
   } catch (error) {
     console.error("Error fetching notifications:", error);
     return [];
-  }
-};
-
-// Helper function to get navigation path for notification type
-export const getNotificationPath = (type) => {
-  switch (type) {
-    case "latest":
-      return "/obligations/latest";
-    case "rejected":
-      return "/obligations/rejected";
-    case "closure":
-      return "/obligations/closure";
-    default:
-      return "/obligations/latest";
-  }
-};
-
-// Helper function to handle notification refresh
-export const handleNotificationRefresh = async (onRefresh) => {
-  try {
-    if (onRefresh && typeof onRefresh === "function") {
-      await onRefresh();
-    }
-  } catch (error) {
-    console.error("Error refreshing notifications:", error);
   }
 };
