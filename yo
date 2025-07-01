@@ -1,92 +1,21 @@
-import { apiRequest } from "../axios/apiRequest";
-
-export const fetchNotificationsFromAPI = async () => {
+export const getCommunicationNotificationService = async (
+  userEmail: string
+): Promise<{ success: boolean; data: { inboxCount: number } }> => {
   try {
-    const baseUrl = process.env.REACT_APP_BACKEND_URL;
+    const inboxFilter = buildFetchFilter("inbox", userEmail);
 
-    // Fire all notification API requests in parallel
-    const [obligationRes, indentRes, incidentRes, iseRes, communicationRes] = await Promise.all([
-      apiRequest("GET", `${baseUrl}/api/v1/obligations/notifications`),
-      apiRequest("GET", `${baseUrl}/api/v1/indents/notifications`),
-      apiRequest("GET", `${baseUrl}/api/v1/incidents/notifications`),
-      apiRequest("GET", `${baseUrl}/api/v1/rbi-ise/notifications`),
-      apiRequest("GET", `${baseUrl}/api/v1/communications/notifications`), // ✅ Communication API
-    ]);
+    const inboxCount = await prisma.communication.count({ where: inboxFilter });
 
-    const notifications = [];
-
-    // General modules: obligation, indent, incident, ise
-    const responses = [
-      { key: "obligation", label: "Obligation", icon: "assignment", res: obligationRes },
-      { key: "indent", label: "Indent", icon: "description", res: indentRes },
-      { key: "incident", label: "Incident", icon: "report_problem", res: incidentRes },
-      { key: "ise", label: "ISE Observation", icon: "visibility", res: iseRes },
-    ];
-
-    const types = [
-      { key: "Latest", suffix: "Latest", label: "Latest", color: "#4CAF50" },
-      { key: "Rejected", suffix: "Rejected", label: "Rejected", color: "#FF5722" },
-      { key: "Closure", suffix: "Closure", label: "Closure", color: "#2196F3" },
-    ];
-
-    for (const { key, label, icon, res } of responses) {
-      if (res.status === 200 && res.data?.data) {
-        const data = res.data.data;
-
-        for (const type of types) {
-          const dataKey = `${key}${type.suffix}`;
-
-          const count = data[dataKey];
-          if (count > 0) {
-            notifications.push({
-              id: `${key}-${type.label.toLowerCase()}`,
-              icon,
-              title: `${count} ${type.label} ${label}${count > 1 ? "s" : ""}`,
-              description: `Click here to view ${type.label.toLowerCase()} ${label.toLowerCase()}s`,
-              timestamp: "Just now",
-              unread: true,
-              iconColor: type.color,
-              type: `${key}-${type.label.toLowerCase()}`,
-            });
-          }
-        }
-      }
-    }
-
-    // ✅ Add communication notifications (inbox & sent)
-    if (communicationRes.status === 200 && communicationRes.data?.data) {
-      const { inboxCount, sentCount } = communicationRes.data.data;
-
-      if (inboxCount > 0) {
-        notifications.push({
-          id: "communication-inbox",
-          icon: "mail",
-          title: `${inboxCount} Communication Inbox Item${inboxCount > 1 ? "s" : ""}`,
-          description: "Click here to view your inbox",
-          timestamp: "Just now",
-          unread: true,
-          iconColor: "#3F51B5",
-          type: "communication-inbox",
-        });
-      }
-
-      if (sentCount > 0) {
-        notifications.push({
-          id: "communication-sent",
-          icon: "send",
-          title: `${sentCount} Communication Sent Item${sentCount > 1 ? "s" : ""}`,
-          description: "Click here to view your sent items",
-          timestamp: "Just now",
-          unread: true,
-          iconColor: "#009688",
-          type: "communication-sent",
-        });
-      }
-    }
-
-    return notifications;
-  } catch (error) {
-    console.error("Error fetching notifications:", error);
-    return [];
+    return {
+      success: true,
+      data: {
+        inboxCount,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error fetching communication notifications:", error);
+    throw ApiError.internal(
+      "Unable to fetch communication notification counts"
+    );
   }
 };
