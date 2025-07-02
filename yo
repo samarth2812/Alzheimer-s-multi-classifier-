@@ -1,14 +1,22 @@
-    // ✅ Create audit trail if it's for Indent
     if (moduleName === "INDENT") {
       await createIndentAuditTrail({
         indentId: entityId,
         actionType: "CREATE",
-        step,
-        role: uploadedByRole,
-        performedByName: uploadedByName,
+        step: roleStepMap[uploadedByRole],
+        role: uploadedByRole as StepRoles,
+        performedByName: userName,
         performedByEmail: uploadedBy,
         attachmentChanges: {
           added: [cleanFileName],
         },
       });
     }
+export const roleStepMap = {
+  COMPLIANCE_MAKER: 0,
+  COMPLIANCE_CHECKER: 1,
+  DEPARTMENT_MAKER: 2,
+  DEPARTMENT_CHECKER: 3,
+} as const;
+
+Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ readonly COMPLIANCE_MAKER: 0; readonly COMPLIANCE_CHECKER: 1; readonly DEPARTMENT_MAKER: 2; readonly DEPARTMENT_CHECKER: 3; }'.
+  No index signature with a parameter of type 'string' was found on type '{ readonly COMPLIANCE_MAKER: 0; readonly COMPLIANCE_CHECKER: 1; readonly DEPARTMENT_MAKER: 2; readonly DEPARTMENT_CHECKER: 3; }'.
