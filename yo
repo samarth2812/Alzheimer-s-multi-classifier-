@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Box, Button, Skeleton, TextField, InputAdornment } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { Add, PlusOne, Search } from "@mui/icons-material";
+import { Add, Search } from "@mui/icons-material";
 import debounce from "lodash.debounce";
 import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
@@ -11,11 +11,8 @@ import MailTrailAccordion from "./MailTrailAccordion";
 import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
 import { BsTable } from "react-icons/bs";
 import { apiRequest } from "../../axios/apiRequest";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
+import { iconButtonStyle, topBarSearchStyle2, topBarStyle, animatedButtonStyle } from "layouts/resuableComponents/styles";
 import CommunicationList from "./listComponent";
-import { topBarSearchStyle2 } from "layouts/resuableComponents/styles";
-import { topBarStyle } from "layouts/resuableComponents/styles";
-import { animatedButtonStyle } from "layouts/resuableComponents/styles";
 import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
 
 const CommunicationPage = () => {
@@ -29,16 +26,14 @@ const CommunicationPage = () => {
   const [selectedComm, setSelectedComm] = useState(null);
   const user = useSelector((state) => state.user.user);
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [totalRecords, setTotalRecords] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchData = async (tabType = "inbox") => {
+  const fetchData = async (tabType = "inbox", page = 1, pageSize = 5) => {
     setLoading(true);
-    const typeParam = tabType;
-    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${typeParam}&userEmail=${user.email}`;
+    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${tabType}&userEmail=${user.email}&page=${page}&pageSize=${pageSize}`;
     try {
       const response = await apiRequest("GET", fetchUrl);
       setData(response.data.data);
@@ -53,9 +48,9 @@ const CommunicationPage = () => {
   };
 
   useEffect(() => {
-    fetchData(tab);
+    fetchData(tab, currentPage, rowsPerPage);
     setSelectedComm(null);
-  }, [tab]);
+  }, [tab, currentPage, rowsPerPage]);
 
   const debouncedFilter = useMemo(
     () =>
@@ -81,6 +76,7 @@ const CommunicationPage = () => {
   const handleSearch = (event) => {
     setSearchTerm(event.target.value);
   };
+
   const handleAddCommClick = () => {
     setEditCommData(null);
     setIsModalOpen(true);
@@ -92,37 +88,26 @@ const CommunicationPage = () => {
 
   const handleRowsPerPageChange = useCallback((event) => {
     const { numericValue, resetToFirstPage } = event;
-
     setRowsPerPage(numericValue);
     if (resetToFirstPage) {
       setCurrentPage(1);
     }
   }, []);
 
+  const handleTabChange = (value) => {
+    setTab(value);
+    setCurrentPage(1);
+  };
+
   return (
     <>
       {selectedComm ? (
-        <Box
-          sx={{
-            px: 0,
-            py: 0,
-            width: "100%",
-            maxWidth: "1000px",
-            margin: "0 auto",
-            minHeight: "calc(100vh - 120px)",
-          }}
-        >
+        <Box sx={{ px: 0, py: 0, width: "100%", maxWidth: "1000px", margin: "0 auto", minHeight: "calc(100vh - 120px)" }}>
           <Box sx={{ mb: 0 }}>
-            <Button
-              variant="text"
-              startIcon={<ArrowBackIcon />}
-              onClick={() => setSelectedComm(null)}
-              sx={{ color: (theme) => theme.palette.custom.two }}
-            >
+            <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => setSelectedComm(null)} sx={{ color: (theme) => theme.palette.custom.two }}>
               Back
             </Button>
           </Box>
-
           <MailTrailAccordion
             mailTrail={[...(selectedComm.replies || []), selectedComm]}
             onReply={(comm) => {
@@ -132,7 +117,6 @@ const CommunicationPage = () => {
                 sentTo: [comm.sentBy],
                 subject: `Re: ${comm.subject}`,
                 cc: comm.cc,
-                category: comm.category,
                 commType: comm.commType,
                 responseDueBy: comm.responseDueBy,
                 parentCommId: comm.commId,
@@ -144,13 +128,7 @@ const CommunicationPage = () => {
         </Box>
       ) : (
         <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-          {/* Top Bar */}
-          <Box
-            sx={{
-              ...topBarStyle,
-            }}
-          >
-            {/* Left: Tabs */}
+          <Box sx={{ ...topBarStyle, position: "sticky", top: 0, zIndex: 10, backgroundColor: (theme) => theme.palette.background.default, pb: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {["Inbox", "Sent Items"].map((label) => {
                 const value = label === "Inbox" ? "inbox" : "sent";
@@ -158,12 +136,11 @@ const CommunicationPage = () => {
                 return (
                   <Button
                     key={value}
-                    onClick={() => setTab(value)}
+                    onClick={() => handleTabChange(value)}
                     sx={{
                       fontSize: "0.7rem",
                       fontWeight: isActive ? 600 : 400,
-                      color: (theme) =>
-                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
+                      color: (theme) => (isActive ? theme.palette.custom.two : theme.palette.custom.text2),
                       position: "relative",
                       borderRadius: 0,
                       textTransform: "none",
@@ -183,7 +160,6 @@ const CommunicationPage = () => {
                         color: (theme) => theme.palette.custom.two,
                       },
                       "&:hover::after": {
-                        color: (theme) => theme.palette.custom.two,
                         transform: "scaleX(1)",
                       },
                     }}
@@ -194,14 +170,8 @@ const CommunicationPage = () => {
               })}
             </Box>
 
-            {/* Right: Search and Add */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 1, sm: 0 } }}>
-              <Button
-                size="small"
-                startIcon={<Add />}
-                onClick={handleAddCommClick}
-                sx={{ ...animatedButtonStyle, minWidth: "150px" }}
-              >
+              <Button size="small" startIcon={<Add />} onClick={handleAddCommClick} sx={{ ...animatedButtonStyle, minWidth: "150px" }}>
                 Add Communication
               </Button>
               <TextField
@@ -222,19 +192,7 @@ const CommunicationPage = () => {
             </Box>
           </Box>
 
-          {/* Content */}
-          <Box
-            sx={{
-              flexGrow: 1,
-              py: 1,
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              position: "relative",
-            }}
-          >
+          <Box sx={{ flexGrow: 1, py: 1, width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: "8px", position: "relative" }}>
             {loading ? (
               <Box>
                 {[...Array(5)].map((_, idx) => (
@@ -242,17 +200,9 @@ const CommunicationPage = () => {
                 ))}
               </Box>
             ) : filteredData.length > 0 ? (
-              <CommunicationList
-                communications={filteredData}
-                selectedId={selectedComm?.commId}
-                onSelect={(comm) => setSelectedComm(comm)}
-              />
+              <CommunicationList communications={filteredData} selectedId={selectedComm?.commId} onSelect={(comm) => setSelectedComm(comm)} />
             ) : (
-              <EmptyStateBox
-                icon={BsTable}
-                title="No Communications Found"
-                description="Try changing your filters or adding a new communication."
-              />
+              <EmptyStateBox icon={BsTable} title="No Communications Found" description="Try changing your filters or adding a new communication." />
             )}
             {!searchTerm && filteredData.length > 0 && (
               <PaginationFooter
@@ -274,7 +224,7 @@ const CommunicationPage = () => {
         onClose={() => setIsModalOpen(false)}
         initialData={editCommData}
         user={user}
-        onSubmit={() => fetchData(tab)}
+        onSubmit={() => fetchData(tab, currentPage, rowsPerPage)}
       />
     </>
   );
