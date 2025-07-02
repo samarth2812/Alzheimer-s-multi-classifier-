@@ -1,33 +1,3 @@
-export const getIndentAuditTrailController = async (
-  req: customRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const user = req.user!;
-    const { indentId, page = "1", limit = "10" } = req.query;
-
-    const pageNumber = parseInt(page as string, 10);
-    const limitNumber = parseInt(limit as string, 10);
-
-    if (
-      isNaN(pageNumber) ||
-      isNaN(limitNumber) ||
-      pageNumber < 1 ||
-      limitNumber < 1
-    ) {
-      throw ApiError.badRequest("Invalid pagination parameters");
-    }
-
-    const result = await getIndentAuditTrail(
-      user,
-      indentId as string | undefined,
-      pageNumber,
-      limitNumber
-    );
-
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
+        include: {
+          replies: true,
+        },
