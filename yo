@@ -11,6 +11,10 @@
       performedByEmail: performedBy.email,
     });
 
+    if (role != "COMPLIANCE_MAKER" || role != "COMPLIANCE_CHECKER") {
+      result.incidentClosure = 0;
+    }
+
 export const updateIndentById = async (
   indentId: string,
   role: StepRoles,
