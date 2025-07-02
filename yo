@@ -1,21 +1,11 @@
-export const deleteAttachmentById = async (attachmentId: string) => {
-  try {
-    if (!attachmentId) {
-    }
-    const existingIndent = await prisma.attachment.findUnique({
-      where: { id: attachmentId },
-    });
-
-    if (!existingIndent) {
-      throw new Error("attachment not found");
-    }
-
-    return await prisma.attachment.update({
-      where: { id: attachmentId },
-      data: { isDeleted: true },
-    });
-  } catch (error) {
-    console.error("Error deleting attachment:", error);
-    throw new Error("Failed to delete attachment");
-  }
-};
+      await createIndentAuditTrail({
+        indentId: existingAttachment.indentId,
+        actionType: "DELETE",
+        step: roleStepMap[user.role],
+        role: user.role,
+        performedByName: user.name,
+        performedByEmail: user.email,
+        attachmentChanges: {
+          deleted: [existingAttachment.fileName],
+        },
+      });
