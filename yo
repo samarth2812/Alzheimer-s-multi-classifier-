@@ -1,12 +1,5 @@
-Hi
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import {
-  Box,
-  Button,
-  Skeleton,
-  TextField,
-  InputAdornment,
-} from "@mui/material";
+import { Box, Button, Skeleton, TextField, InputAdornment } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { Add, Search } from "@mui/icons-material";
 import debounce from "lodash.debounce";
@@ -73,9 +66,7 @@ const CommunicationPage = () => {
         }
         const lower = term.toLowerCase();
         const filtered = list.filter((item) =>
-          Object.values(item).some((val) =>
-            val?.toString().toLowerCase().includes(lower)
-          )
+          Object.values(item).some((val) => val?.toString().toLowerCase().includes(lower))
         );
         setFilteredData(filtered);
       }, 300),
@@ -157,7 +148,7 @@ const CommunicationPage = () => {
       ) : (
         <Box
           sx={{
-            height: "calc(100vh - 70px)",
+            height: "calc(100vh - 40px)",
             display: "flex",
             flexDirection: "column",
           }}
@@ -185,9 +176,7 @@ const CommunicationPage = () => {
                       fontSize: "0.7rem",
                       fontWeight: isActive ? 600 : 400,
                       color: (theme) =>
-                        isActive
-                          ? theme.palette.custom.two
-                          : theme.palette.custom.text2,
+                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
                       position: "relative",
                       borderRadius: 0,
                       textTransform: "none",
@@ -245,7 +234,7 @@ const CommunicationPage = () => {
           </Box>
 
           <Box
-            sx={{ flexGrow: 1, overflowY: "auto", px: 1, py: 1 }}
+            sx={{ flexGrow: 1, overflowY: "auto", px: 1, py: 1, maxHeight: "calc(100vh - 100px)" , pb: "64px"}}
           >
             {loading ? (
               [...Array(5)].map((_, idx) => (
@@ -271,9 +260,8 @@ const CommunicationPage = () => {
               sx={{
                 position: "sticky",
                 bottom: 0,
+                pt:"60px",
                 zIndex: 10,
-                backgroundColor: (theme) => theme.palette.background.default,
-                boxShadow: "0 -2px 6px rgba(0,0,0,0.05)",
                 px: 2,
                 py: 1,
               }}
