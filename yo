@@ -1,19 +1,17 @@
-    // === Create Audit Trail Entry ===
-    await createIndentAuditTrail({
-      indentId: newIndent.indentId,
-      field: "indent",
-      oldValue: undefined,
-      newValue: "Indent created",
-      action: "CREATE",
-      step: 0,
-      role: "COMPLIANCE_MAKER",
-      performedByName: performedBy.name,
-      performedByEmail: performedBy.email,
-    });
-
-    if (role != "COMPLIANCE_MAKER" || role != "COMPLIANCE_CHECKER") {
-      result.incidentClosure = 0;
-    }
+model IndentAuditTrail {
+  id               String      @id @default(uuid())
+  indentId         String
+  field            String   // e.g., "status", "priority", "assignedTo", "attachments", "remarks"
+  oldValue         String? // optional for create actions
+  newValue         String?
+  action           AuditAction // "CREATE" | "UPDATE" | "DELETE"
+  step             Int
+  role             StepRoles
+  performedByName  String
+  performedByEmail String
+  timestamp        DateTime    @default(now())
+  indent           Indents     @relation("IndentAuditRelation", fields: [indentId], references: [indentId])
+}
 
 export const updateIndentById = async (
   indentId: string,
