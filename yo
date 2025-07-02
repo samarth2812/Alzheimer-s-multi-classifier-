@@ -1,31 +1,16 @@
 model IndentAuditTrail {
   id               String      @id @default(uuid())
   indentId         String
-  field            String   // e.g., "status", "priority", "assignedTo", "attachments", "remarks"
-  oldValue         String? // optional for create actions
-  newValue         String?
-  action           AuditAction // "CREATE" | "UPDATE" | "DELETE"
+  actionType       AuditAction      // "CREATE" | "UPDATE" | "DELETE"
   step             Int
   role             StepRoles
   performedByName  String
   performedByEmail String
-  timestamp        DateTime    @default(now())
-  indent           Indents     @relation("IndentAuditRelation", fields: [indentId], references: [indentId])
+  timestamp        DateTime   @default(now())
+  changes          Json?      // holds flexible field/attachment/approval info
+  indent           Indents    @relation("IndentAuditRelation", fields: [indentId], references: [indentId])
 }
 
-{
-"fields": {
-dept: {
-from: bla bla,
-to: xyz
-},
-{
-name:{
-from: xyz,
-to:abc
-}
-}
-}
 
 
 export const updateIndentById = async (
