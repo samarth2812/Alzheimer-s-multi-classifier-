@@ -1,5 +1,3 @@
-// POST /api/audit-trail/indent
-
 export const createIndentAuditTrail = async ({
   indentId,
   field,
@@ -8,7 +6,8 @@ export const createIndentAuditTrail = async ({
   action,
   step,
   role,
-  performedBy,
+  performedByName,
+  performedByEmail,
 }: {
   indentId: string;
   field: string;
@@ -17,7 +16,8 @@ export const createIndentAuditTrail = async ({
   action: AuditAction;
   step: number;
   role: StepRoles;
-  performedBy: string;
+  performedByName: string;
+  performedByEmail: string;
 }) => {
   try {
     await prisma.indentAuditTrail.create({
@@ -29,10 +29,267 @@ export const createIndentAuditTrail = async ({
         action,
         step,
         role,
-        performedBy,
+        performedByName,
+        performedByEmail,
       },
     });
   } catch (error) {
     console.error("Failed to create audit entry", error);
   }
 };
+
+export const createIndent = async (
+  indentData: {
+    department: Department;
+    description: string;
+    status: IndentStatus;
+    priority: IndentPriority;
+    assignedTo: string;
+    comments: string;
+    dueDate: string;
+    file?: string;
+    category: IndentCategory;
+  },
+  role: string
+) => {
+  try {
+    const {
+      department,
+      description,
+      status,
+      priority,
+      assignedTo,
+      comments,
+      dueDate,
+      file,
+      category,
+    } = indentData;
+
+    if (role !== "COMPLIANCE_MAKER") {
+      throw new Error("Unauthorized: Only Compliance Maker can create indents");
+    }
+    const omitData = ["updatedAt", "refreshToken"];
+
+    const mappedStatus = STATUS_MAPPING["Pending"];
+    const newIndent = await prisma.indents.create({
+      data: {
+        department: DEPARTMENT_MAPPING[department] as any,
+        description,
+        status: mappedStatus as any,
+        priority: INDENT_PRIORITY_MAPPING[priority] as any,
+        comments,
+        assignedTo,
+        ...(assignedTo ? { assignedDate: new Date() } : {}),
+        dueDate: new Date(dueDate),
+        ...(file ? { file } : {}),
+        currStep: 0,
+        prevStep: 0,
+        openStatus: true,
+        category: INDENT_CATEGORY_MAPPING[category] as any,
+      },
+    });
+
+    const userDataTobeSent = omit(newIndent, omitData);
+    return userDataTobeSent;
+  } catch (error) {
+    console.error("Error creating indent:", error);
+    throw new Error("Failed to create indent");
+  }
+};
+
+export const updateIndentById = async (
+  indentId: string,
+  role: StepRoles,
+  department: string | undefined,
+  user: User,
+  updatedFields: {
+    type: "FIELD_UPDATE" | "WORKFLOW_UPDATE";
+    department?: Department;
+    description?: string;
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    dueDate?: string;
+    comments?: string;
+    openStatus?: boolean;
+    rejectedStatus?: boolean;
+  }
+) => {
+  try {
+    if (!indentId || !role) {
+      throw new Error("indentId & role are required");
+    }
+
+    if (role !== user.role) {
+      throw new Error("You are not authorized to update indents for this role");
+    }
+
+    if (
+      (role === "DEPARTMENT_CHECKER" || role === "DEPARTMENT_MAKER") &&
+      department !== user.department
+    ) {
+      ("You are not authorized to update indents for this department");
+    }
+
+    const existingIndent = await prisma.indents.findUnique({
+      where: { indentId },
+    });
+
+    if (!existingIndent) {
+      throw new Error("Indent not found");
+    }
+
+    const { type, ...fieldsWithoutType } = updatedFields;
+    const updateData: Record<string, any> = {};
+
+    if (updatedFields.type === "WORKFLOW_UPDATE") {
+      const rejectedStatus = updatedFields?.rejectedStatus ?? false;
+
+      // Step update
+      const { newCurrStep, newPrevStep } = stepBasedUpdateFilter(
+        existingIndent.currStep,
+        rejectedStatus,
+        user.role,
+        department
+      );
+
+      updateData.currStep = newCurrStep;
+      updateData.prevStep = newPrevStep;
+      updateData.rejectedStatus = rejectedStatus;
+
+      // Determine status based on newCurrStep
+      switch (newCurrStep) {
+        case 0: // Compliance Maker
+        case 1: // Compliance Checker
+          updateData.status = "PENDING";
+          break;
+        case 2: // Department Maker
+        case 3: // Department Checker
+          updateData.status = "IN_PROGRESS";
+          break;
+      }
+
+      // If final approval by Compliance Checker
+      if (
+        existingIndent.currStep === 4 &&
+        user.role === "COMPLIANCE_CHECKER" &&
+        !rejectedStatus
+      ) {
+        updateData.closedDate = new Date();
+        updateData.status = "COMPLETED";
+        updateData.openStatus = false;
+      }
+      updateData.lastStepChangeTime = new Date();
+    }
+
+    //  Process other user-updated fields
+    for (const [key, value] of Object.entries(fieldsWithoutType)) {
+      if (key === "department" && typeof value === "string") {
+        updateData.department = DEPARTMENT_MAPPING[value] || value;
+      } else if (key === "status" && typeof value === "string") {
+        updateData.status = STATUS_MAPPING[value] || value;
+      } else if (key === "priority" && typeof value === "string") {
+        updateData.priority = INDENT_PRIORITY_MAPPING[value] || value;
+      } else if (key === "category" && typeof value === "string") {
+        updateData.priority = INDENT_CATEGORY_MAPPING[value] || value;
+      } else if (key === "dueDate" && typeof value === "string") {
+        updateData.dueDate = new Date(value);
+      } else {
+        updateData[key] = value;
+      }
+    }
+    const updatedIndent = await prisma.indents.update({
+      where: { indentId },
+      data: updateData,
+    });
+
+    return updatedIndent;
+  } catch (error) {
+    console.error("Error updating indent:", error);
+    throw new Error("Failed to update indent");
+  }
+};
+
+export const deleteIndentById = async (indentId: string, user: User) => {
+  try {
+    if (user.role !== "COMPLIANCE_MAKER") {
+      throw new Error("Unauthorized: Only Compliance Maker can delete indents");
+    }
+    const existingIndent = await prisma.indents.findUnique({
+      where: { indentId },
+    });
+
+    if (!existingIndent) {
+      throw new Error("indent not found");
+    }
+
+    await prisma.indents.update({
+      where: { indentId },
+      data: { isDeleted: true },
+    });
+  } catch (error) {
+    console.error("Error deleting indent:", error);
+    throw new Error("Failed to delete indent");
+  }
+};
+export const createIndentRemark = async (
+  indentId: string,
+  remarkData: {
+    author: string;
+    userId: string;
+    content: string;
+    timestamp: string;
+  }
+) => {
+  try {
+    const existingIndent = await prisma.indents.findUnique({
+      where: { indentId },
+    });
+
+    if (!existingIndent) {
+      throw new Error("indent not found");
+    }
+
+    const mappedRole = ROLE_MAPPING[remarkData.author] as StepRoles;
+    const userStep = roleStepMap[mappedRole] as any;
+
+    await prisma.indentRemark.create({
+      data: {
+        indentId,
+        role: mappedRole,
+        step: userStep,
+        content: remarkData.content,
+        createdAt: new Date(remarkData.timestamp),
+      },
+    });
+  } catch (error) {
+    console.error("Error creating a indent remark:", error);
+    throw new Error("Failed to create Indent Remark");
+  }
+};
+
+export const editRemark = async (remarkId: string, remarkContent: string) => {
+  try {
+    if (!remarkId || !remarkContent) {
+      throw new Error("remarkId & content are required");
+    }
+    const existingIndentRemark = await prisma.indentRemark.findUnique({
+      where: { id: remarkId },
+    });
+
+    if (!existingIndentRemark) {
+      throw new Error("Indent Remark not found");
+    }
+
+    return await prisma.indentRemark.update({
+      where: { id: remarkId },
+      data: { content: remarkContent, isEdited: true },
+    });
+  } catch (error) {
+    console.error("Error updating indent remark:", error);
+    throw new Error("Failed to update Indent Remark");
+  }
+};
+
+
+
