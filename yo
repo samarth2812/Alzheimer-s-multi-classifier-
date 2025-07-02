@@ -1,9 +1,52 @@
-await createIndentAuditTrail({
-  indentId,
-  actionType: "DELETE",
-  step: existingIndent.currStep,
-  role: user.role,
-  performedByName: user.name,
-  performedByEmail: user.email,
-  fieldChanges,
-});
+export const uploadToS3 = async (
+  file: Express.Multer.File,
+  options: UploadParams
+): Promise<{ fileUrl: string; attachmentId: string }> => {
+  try {
+    const { moduleName, entityId, uploadedBy, uploadedByRole } = options;
+    const timestamp = Date.now();
+    const cleanFileName = file.originalname.replace(/\s+/g, "_");
+
+    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET!,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    };
+
+    let attachmentData: any = {
+      fileName: cleanFileName,
+      uploadedBy,
+      uploadedByRole,
+      s3Key: key,
+      moduleType: moduleName,
+    };
+
+    if (moduleName === "INDENT") {
+      attachmentData.indentId = entityId;
+    } else if (moduleName === "ISE_OBSERVATION") {
+      attachmentData.observationId = entityId;
+    } else if (moduleName === "INCIDENT") {
+      attachmentData.incidentId = entityId;
+    } else if (moduleName === "OBLIGATION") {
+      attachmentData.obligationId = entityId;
+    } else {
+      throw new Error("Invalid module name provided");
+    }
+    // Uploading to S3
+    await s3.putObject(params).promise();
+    // Creating attachment Record
+    const attachment = await prisma.attachment.create({
+      data: attachmentData
+    });
+
+    return {
+      fileUrl: key,
+      attachmentId: attachment.id,
+    };
+  } catch (error) {
+    console.error("Error during S3 upload or DB insert:", error);
+    throw new Error("Upload failed. Please try again later.");
+  }
+};
