@@ -1,61 +1,26 @@
-export const createIndent = async (
-  indentData: {
-    department: Department;
-    description: string;
-    status: IndentStatus;
-    priority: IndentPriority;
-    assignedTo: string;
-    comments: string;
-    dueDate: string;
-    file?: string;
-    category: IndentCategory;
-  },
-  role: string
-) => {
-  try {
-    const {
-      department,
-      description,
-      status,
-      priority,
-      assignedTo,
-      comments,
-      dueDate,
-      file,
-      category,
-    } = indentData;
+   const fieldChanges = {
+      department: { value: department },
+      description: { value: description },
+      status: { value: mappedStatus },
+      priority: { value: priority },
+      assignedTo: { value: assignedTo },
+      comments: { value: comments },
+      dueDate: { value: dueDate },
+      ...(file && { file: { value: file } }),
+      category: { value: category },
+    };
 
-    if (role !== "COMPLIANCE_MAKER") {
-      throw new Error("Unauthorized: Only Compliance Maker can create indents");
-    }
-    const omitData = ["updatedAt", "refreshToken"];
-
-    const mappedStatus = STATUS_MAPPING["Pending"];
-    const newIndent = await prisma.indents.create({
-      data: {
-        department: DEPARTMENT_MAPPING[department] as any,
-        description,
-        status: mappedStatus as any,
-        priority: INDENT_PRIORITY_MAPPING[priority] as any,
-        comments,
-        assignedTo,
-        ...(assignedTo ? { assignedDate: new Date() } : {}),
-        dueDate: new Date(dueDate),
-        ...(file ? { file } : {}),
-        currStep: 0,
-        prevStep: 0,
-        openStatus: true,
-        category: INDENT_CATEGORY_MAPPING[category] as any,
-      },
+    // ✅ Create audit trail entry
+    await createIndentAuditTrail({
+      indentId: newIndent.indentId,
+      actionType: "CREATE",
+      step: 0,
+      role: user.role,
+      performedByName: user.name,
+      performedByEmail: user.email,
+      fieldChanges,
     });
 
-    const userDataTobeSent = omit(newIndent, omitData);
-    return userDataTobeSent;
-  } catch (error) {
-    console.error("Error creating indent:", error);
-    throw new Error("Failed to create indent");
-  }
-};
 
 export const updateIndentById = async (
   indentId: string,
