@@ -1,83 +1,57 @@
-
-
-export const fetchIndentsList = async (
-  role: StepRoles,
-  department: string | undefined,
-  tab: string,
+export const getIndentAuditTrail = async (
   user: User,
+  indentId?: string,
   page: number = 1,
   pageSize: number = 10
 ) => {
   try {
-    if (!role || !tab) {
-      throw new Error("role & tab is required");
+    const where: any = {};
+
+    // Filter by specific indent if provided
+    if (indentId) {
+      where.indentId = indentId;
     }
 
-    if (role !== user.role) {
-      throw new Error("You are not authorized to view indents for this role");
+    // Role-based filtering
+    if (
+      user.role === "DEPARTMENT_MAKER" ||
+      user.role === "DEPARTMENT_CHECKER"
+    ) {
+      where.indent = {
+        department: user.department,
+      };
+    } else if (
+      user.role !== "COMPLIANCE_MAKER" &&
+      user.role !== "COMPLIANCE_CHECKER"
+    ) {
+      throw new Error("Unauthorized role to view audit trail");
     }
 
-    const where = generateWhereFilter(role, department, tab, user.email);
     const offset = (page - 1) * pageSize;
 
-    const [indents, total] = await Promise.all([
-      prisma.indents.findMany({
+    const [auditEntries, total] = await Promise.all([
+      prisma.indentAuditTrail.findMany({
         where,
         skip: offset,
         take: pageSize,
-        orderBy: {
-          createdAt: "desc",
-        },
-        select: {
-          indentId: true,
-          department: true,
-          status: true,
-          category: true,
-          description: true,
-          priority: true,
-          assignedTo: true,
-          comments: true,
-          dueDate: true,
-          createdAt: true,
-          updatedAt: true,
-          currStep: true,
-          prevStep: true,
-          lastStepChangeTime: true,
-          remarkHistory: {
-            orderBy: { createdAt: "asc" },
+        orderBy: { timestamp: "desc" },
+        include: {
+          indent: {
             select: {
-              id: true,
-              content: true,
-              createdAt: true,
-              updatedAt: true,
-              isEdited: true,
-              role: true,
-              step: true,
-            },
-          },
-          attachments: {
-            where: {
-              isDeleted: false,
-            },
-            orderBy: { uploadedAt: "asc" },
-            select: {
-              id: true,
-              fileName: true,
-              uploadedBy: true,
-              uploadedByRole: true,
+              department: true,
+              description: true,
               indentId: true,
-              uploadedAt: true,
             },
           },
         },
       }),
 
-      prisma.indents.count({ where }),
+      prisma.indentAuditTrail.count({ where }),
     ]);
 
     return {
       success: true,
-      data: indents,
+      data: auditEntries,
       pagination: {
         total,
         page,
@@ -86,7 +60,7 @@ export const fetchIndentsList = async (
       },
     };
   } catch (error) {
-    console.error("Error fetching indents:", error);
-    throw new Error("Failed to fetch indents");
+    console.error("Failed to fetch audit trail", error);
+    throw new Error("Unable to fetch audit trail");
   }
 };
