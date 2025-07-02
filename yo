@@ -1,5 +1,11 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { Box, Button, Skeleton, TextField, InputAdornment } from "@mui/material";
+import {
+  Box,
+  Button,
+  Skeleton,
+  TextField,
+  InputAdornment,
+} from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { Add, Search } from "@mui/icons-material";
 import debounce from "lodash.debounce";
@@ -66,7 +72,9 @@ const CommunicationPage = () => {
         }
         const lower = term.toLowerCase();
         const filtered = list.filter((item) =>
-          Object.values(item).some((val) => val?.toString().toLowerCase().includes(lower))
+          Object.values(item).some((val) =>
+            val?.toString().toLowerCase().includes(lower)
+          )
         );
         setFilteredData(filtered);
       }, 300),
@@ -148,7 +156,6 @@ const CommunicationPage = () => {
       ) : (
         <Box
           sx={{
-            width: "100%",
             height: "calc(100vh - 70px)",
             display: "flex",
             flexDirection: "column",
@@ -177,7 +184,9 @@ const CommunicationPage = () => {
                       fontSize: "0.7rem",
                       fontWeight: isActive ? 600 : 400,
                       color: (theme) =>
-                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
+                        isActive
+                          ? theme.palette.custom.two
+                          : theme.palette.custom.text2,
                       position: "relative",
                       borderRadius: 0,
                       textTransform: "none",
@@ -235,33 +244,18 @@ const CommunicationPage = () => {
           </Box>
 
           <Box
-            sx={{
-              flexGrow: 1,
-              py: 1,
-              width: "100%",
-              height: "calc(100vh -170px)",
-              overflowY: "auto",
-              px: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              position: "relative",
-            }}
+            sx={{ flexGrow: 1, overflowY: "auto", px: 1, py: 1 }}
           >
             {loading ? (
-              <Box>
-                {[...Array(5)].map((_, idx) => (
-                  <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
-                ))}
-              </Box>
+              [...Array(5)].map((_, idx) => (
+                <Skeleton key={idx} variant="rectangular" height={40} sx={{ mb: 2 }} />
+              ))
             ) : filteredData.length > 0 ? (
-              <Box sx={{ minHeight: "300px" }}>
-                <CommunicationList
-                  communications={filteredData}
-                  selectedId={selectedComm?.commId}
-                  onSelect={(comm) => setSelectedComm(comm)}
-                />
-              </Box>
+              <CommunicationList
+                communications={filteredData}
+                selectedId={selectedComm?.commId}
+                onSelect={(comm) => setSelectedComm(comm)}
+              />
             ) : (
               <EmptyStateBox
                 icon={BsTable}
@@ -269,20 +263,31 @@ const CommunicationPage = () => {
                 description="Try changing your filters or adding a new communication."
               />
             )}
-            {!searchTerm && filteredData.length > 0 && (
-              <Box sx={{ position: "sticky", bottom: 0, zIndex: 10, pt: 1, pb: 1 }}>
-                <PaginationFooter
-                  currentPage={currentPage}
-                  rowsPerPage={rowsPerPage}
-                  totalPages={totalPages}
-                  totalRecords={totalRecords}
-                  onPageChange={handlePageChange}
-                  onRowsPerPageChange={handleRowsPerPageChange}
-                  loading={loading}
-                />
-              </Box>
-            )}
           </Box>
+
+          {!searchTerm && filteredData.length > 0 && (
+            <Box
+              sx={{
+                position: "sticky",
+                bottom: 0,
+                zIndex: 10,
+                backgroundColor: (theme) => theme.palette.background.default,
+                boxShadow: "0 -2px 6px rgba(0,0,0,0.05)",
+                px: 2,
+                py: 1,
+              }}
+            >
+              <PaginationFooter
+                currentPage={currentPage}
+                rowsPerPage={rowsPerPage}
+                totalPages={totalPages}
+                totalRecords={totalRecords}
+                onPageChange={handlePageChange}
+                onRowsPerPageChange={handleRowsPerPageChange}
+                loading={loading}
+              />
+            </Box>
+          )}
         </Box>
       )}
 
