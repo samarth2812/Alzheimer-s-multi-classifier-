@@ -11,7 +11,12 @@ import MailTrailAccordion from "./MailTrailAccordion";
 import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
 import { BsTable } from "react-icons/bs";
 import { apiRequest } from "../../axios/apiRequest";
-import { iconButtonStyle, topBarSearchStyle2, topBarStyle, animatedButtonStyle } from "layouts/resuableComponents/styles";
+import {
+  iconButtonStyle,
+  topBarSearchStyle2,
+  topBarStyle,
+  animatedButtonStyle,
+} from "layouts/resuableComponents/styles";
 import CommunicationList from "./listComponent";
 import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
 
@@ -33,7 +38,7 @@ const CommunicationPage = () => {
 
   const fetchData = async (tabType = "inbox", page = 1, pageSize = 5) => {
     setLoading(true);
-    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${tabType}&userEmail=${user.email}&page=${page}&pageSize=${pageSize}`;
+    const fetchUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/communication?type=${tabType}&userEmail=${user.email}&page=${page}&limit=${pageSize}`;
     try {
       const response = await apiRequest("GET", fetchUrl);
       setData(response.data.data);
@@ -102,9 +107,23 @@ const CommunicationPage = () => {
   return (
     <>
       {selectedComm ? (
-        <Box sx={{ px: 0, py: 0, width: "100%", maxWidth: "1000px", margin: "0 auto", minHeight: "calc(100vh - 120px)" }}>
+        <Box
+          sx={{
+            px: 0,
+            py: 0,
+            width: "100%",
+            maxWidth: "1000px",
+            margin: "0 auto",
+            minHeight: "calc(100vh - 120px)",
+          }}
+        >
           <Box sx={{ mb: 0 }}>
-            <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => setSelectedComm(null)} sx={{ color: (theme) => theme.palette.custom.two }}>
+            <Button
+              variant="text"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => setSelectedComm(null)}
+              sx={{ color: (theme) => theme.palette.custom.two }}
+            >
               Back
             </Button>
           </Box>
@@ -127,8 +146,25 @@ const CommunicationPage = () => {
           />
         </Box>
       ) : (
-        <Box sx={{ width: "100%", height: "100%", display: "flex", flexDirection: "column" }}>
-          <Box sx={{ ...topBarStyle, position: "sticky", top: 0, zIndex: 10, backgroundColor: (theme) => theme.palette.background.default, pb: 1 }}>
+        <Box
+          sx={{
+            width: "100%",
+            height: "calc(100vh - 70px)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Box
+            sx={{
+              ...topBarStyle,
+              position: "sticky",
+              top: 0,
+              zIndex: 10,
+              backgroundColor: (theme) => theme.palette.background.default,
+              pb: 1,
+              pt: 1,
+            }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               {["Inbox", "Sent Items"].map((label) => {
                 const value = label === "Inbox" ? "inbox" : "sent";
@@ -140,7 +176,8 @@ const CommunicationPage = () => {
                     sx={{
                       fontSize: "0.7rem",
                       fontWeight: isActive ? 600 : 400,
-                      color: (theme) => (isActive ? theme.palette.custom.two : theme.palette.custom.text2),
+                      color: (theme) =>
+                        isActive ? theme.palette.custom.two : theme.palette.custom.text2,
                       position: "relative",
                       borderRadius: 0,
                       textTransform: "none",
@@ -171,7 +208,12 @@ const CommunicationPage = () => {
             </Box>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 2, mt: { xs: 1, sm: 0 } }}>
-              <Button size="small" startIcon={<Add />} onClick={handleAddCommClick} sx={{ ...animatedButtonStyle, minWidth: "150px" }}>
+              <Button
+                size="small"
+                startIcon={<Add />}
+                onClick={handleAddCommClick}
+                sx={{ ...animatedButtonStyle, minWidth: "150px" }}
+              >
                 Add Communication
               </Button>
               <TextField
@@ -192,7 +234,20 @@ const CommunicationPage = () => {
             </Box>
           </Box>
 
-          <Box sx={{ flexGrow: 1, py: 1, width: "100%", height: "100%", display: "flex", flexDirection: "column", gap: "8px", position: "relative" }}>
+          <Box
+            sx={{
+              flexGrow: 1,
+              py: 1,
+              width: "100%",
+              height: "calc(100vh -170px)",
+              overflowY: "auto",
+              px: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              position: "relative",
+            }}
+          >
             {loading ? (
               <Box>
                 {[...Array(5)].map((_, idx) => (
@@ -200,20 +255,32 @@ const CommunicationPage = () => {
                 ))}
               </Box>
             ) : filteredData.length > 0 ? (
-              <CommunicationList communications={filteredData} selectedId={selectedComm?.commId} onSelect={(comm) => setSelectedComm(comm)} />
+              <Box sx={{ minHeight: "300px" }}>
+                <CommunicationList
+                  communications={filteredData}
+                  selectedId={selectedComm?.commId}
+                  onSelect={(comm) => setSelectedComm(comm)}
+                />
+              </Box>
             ) : (
-              <EmptyStateBox icon={BsTable} title="No Communications Found" description="Try changing your filters or adding a new communication." />
+              <EmptyStateBox
+                icon={BsTable}
+                title="No Communications Found"
+                description="Try changing your filters or adding a new communication."
+              />
             )}
             {!searchTerm && filteredData.length > 0 && (
-              <PaginationFooter
-                currentPage={currentPage}
-                rowsPerPage={rowsPerPage}
-                totalPages={totalPages}
-                totalRecords={totalRecords}
-                onPageChange={handlePageChange}
-                onRowsPerPageChange={handleRowsPerPageChange}
-                loading={loading}
-              />
+              <Box sx={{ position: "sticky", bottom: 0, zIndex: 10, pt: 1, pb: 1 }}>
+                <PaginationFooter
+                  currentPage={currentPage}
+                  rowsPerPage={rowsPerPage}
+                  totalPages={totalPages}
+                  totalRecords={totalRecords}
+                  onPageChange={handlePageChange}
+                  onRowsPerPageChange={handleRowsPerPageChange}
+                  loading={loading}
+                />
+              </Box>
             )}
           </Box>
         </Box>
