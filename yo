@@ -2,6 +2,24 @@ import { createIndentAuditTrail } from "@/services/indentAuditTrailService"; // 
 import { Prisma } from "@prisma/client";
 import omit from "lodash.omit";
 
+    for (const [key, value] of Object.entries(fieldsWithoutType)) {
+      const oldVal = (existingIndent as any)[key];
+      
+      if (key === "department" && typeof value === "string") {
+        updateData.department = DEPARTMENT_MAPPING[value] || value;
+      } else if (key === "status" && typeof value === "string") {
+        updateData.status = STATUS_MAPPING[value] || value;
+      } else if (key === "priority" && typeof value === "string") {
+        updateData.priority = INDENT_PRIORITY_MAPPING[value] || value;
+      } else if (key === "category" && typeof value === "string") {
+        updateData.priority = INDENT_CATEGORY_MAPPING[value] || value;
+      } else if (key === "dueDate" && typeof value === "string") {
+        updateData.dueDate = new Date(value);
+      } else {
+        updateData[key] = value;
+      }
+    }
+
 export const updateIndentById = async (
   indentId: string,
   role: StepRoles,
