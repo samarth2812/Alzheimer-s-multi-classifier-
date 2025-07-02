@@ -1,66 +1,52 @@
-export const getIndentAuditTrail = async (
-  user: User,
-  indentId?: string,
-  page: number = 1,
-  pageSize: number = 10
-) => {
+export const getIndentRepo = async (
+  req: customRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const where: any = {};
+    const user = req.user!;
+    const {
+      status,
+      priority,
+      department,
+      category,
+      startDate,
+      endDate,
+      search,
+      page = "1",
+      limit = "10",
+    } = req.query;
 
-    // Filter by specific indent if provided
-    if (indentId) {
-      where.indentId = indentId;
-    }
+    const pageNumber = parseInt(page as string, 10);
+    const limitNumber = parseInt(limit as string, 10);
 
-    // Role-based filtering
     if (
-      user.role === "DEPARTMENT_MAKER" ||
-      user.role === "DEPARTMENT_CHECKER"
+      isNaN(pageNumber) ||
+      isNaN(limitNumber) ||
+      pageNumber < 1 ||
+      limitNumber < 1
     ) {
-      where.indent = {
-        department: user.department,
-      };
-    } else if (
-      user.role !== "COMPLIANCE_MAKER" &&
-      user.role !== "COMPLIANCE_CHECKER"
-    ) {
-      throw new Error("Unauthorized role to view audit trail");
+      throw ApiError.badRequest("Invalid pagination parameters");
     }
 
-    const offset = (page - 1) * pageSize;
-
-    const [auditEntries, total] = await Promise.all([
-      prisma.indentAuditTrail.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { timestamp: "desc" },
-        include: {
-          indent: {
-            select: {
-              department: true,
-              description: true,
-              indentId: true,
-            },
-          },
-        },
-      }),
-
-      prisma.indentAuditTrail.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: auditEntries,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
+    const filters = {
+      status: status as any,
+      department: department as Department,
+      priorityLevel: priority as IndentPriority,
+      category: category as IndentCategory,
+      startDate: startDate as string,
+      endDate: endDate as string,
+      search: search as string,
     };
+    const result = await getIndentRepository(
+      user.role,
+      user.department,
+      filters,
+      pageNumber,
+      limitNumber
+    );
+    res.status(200).json(result);
   } catch (error) {
-    console.error("Failed to fetch audit trail", error);
-    throw new Error("Unable to fetch audit trail");
+    next(error);
   }
 };
