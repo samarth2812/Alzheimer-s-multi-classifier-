@@ -1,21 +1,11 @@
-export const getIndentRepo = async (
+export const getIndentAuditTrailController = async (
   req: customRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
     const user = req.user!;
-    const {
-      status,
-      priority,
-      department,
-      category,
-      startDate,
-      endDate,
-      search,
-      page = "1",
-      limit = "10",
-    } = req.query;
+    const { indentId, page = "1", limit = "10" } = req.query;
 
     const pageNumber = parseInt(page as string, 10);
     const limitNumber = parseInt(limit as string, 10);
@@ -29,22 +19,13 @@ export const getIndentRepo = async (
       throw ApiError.badRequest("Invalid pagination parameters");
     }
 
-    const filters = {
-      status: status as any,
-      department: department as Department,
-      priorityLevel: priority as IndentPriority,
-      category: category as IndentCategory,
-      startDate: startDate as string,
-      endDate: endDate as string,
-      search: search as string,
-    };
-    const result = await getIndentRepository(
-      user.role,
-      user.department,
-      filters,
+    const result = await getIndentAuditTrail(
+      user,
+      indentId as string | undefined,
       pageNumber,
       limitNumber
     );
+
     res.status(200).json(result);
   } catch (error) {
     next(error);
