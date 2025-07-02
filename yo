@@ -13,6 +13,21 @@ model IndentAuditTrail {
   indent           Indents     @relation("IndentAuditRelation", fields: [indentId], references: [indentId])
 }
 
+{
+"fields": {
+dept: {
+from: bla bla,
+to: xyz
+},
+{
+name:{
+from: xyz,
+to:abc
+}
+}
+}
+
+
 export const updateIndentById = async (
   indentId: string,
   role: StepRoles,
