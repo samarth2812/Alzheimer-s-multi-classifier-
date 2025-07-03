@@ -1,225 +1,35 @@
-  // Render obligation specific fields
-  const renderObligationFields = () => {
-    return (
-      <Grid container spacing={2}>
-        {/* Basic Information */}
-        <Grid item xs={12}>
-          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
-            Basic Information
-          </Typography>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          {renderField("ID", item.id)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Product", item.product)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Circular Reference", item.circularReference)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Title", item.title)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Year", item.year)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Regulator", item.regulator)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Section Reference", item.sectionReference)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Applicability", item.applicability?.replace(/_/g, " "))}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Regulatory Timeline", item.regulatoryTimeline, "date")}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Current Step Name", item.currentStepName)}
-        </Grid>
-
-        <Grid item xs={12}>
-          {renderField("Regulatory Extract", item.regulatoryExtract, "multiline")}
-        </Grid>
-
-        {/* Process Information */}
-        <Grid item xs={12}>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
-            Process Information
-          </Typography>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          {renderField("Process", item.process)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Sub Process", item.subProcess)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Internal Circular Ref Number", item.internalCircularRefNumber, "number")}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Policy SOP Reference", item.policySopReference)}
-        </Grid>
-
-        <Grid item xs={12}>
-          {renderField("Policy SOP Extract", item.policySopExtract, "multiline")}
-        </Grid>
-
-        {/* Control Information */}
-        <Grid item xs={12}>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
-            Control Information
-          </Typography>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          {renderField("Level of Documentation", item.levelOfDocumentation?.replace(/_/g, " "))}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Periodicity", item.periodicity?.replace(/_/g, " "))}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Types of Control", item.typesOfControl?.replace(/_/g, " "))}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Documentation of Control", item.documentationOfControl, "number")}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Level of Automation of Control", item.levelOfAutomationOfControl, "number")}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Total Score", item.totalScore, "number")}
-        </Grid>
-
-        <Grid item xs={12}>
-          {renderField(
-            "Established Controls Description",
-            item.establishedControlsDesc,
-            "multiline"
-          )}
-        </Grid>
-
-        {/* Compliance Information */}
-        <Grid item xs={12}>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
-            Compliance Information
-          </Typography>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          {renderField("Department", item.department?.replace(/_/g, " "))}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Responsible Owner", item.responsibleOwner)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField(
-            "Internal Timeline for Compliance",
-            item.internalTimelineForCompliance,
-            "number"
-          )}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Compliance", item.compliance?.replace(/_/g, " "))}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Compliance Score", item.complianceScore, "number")}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Final Risk Score", item.finalRiskScore, "number")}
-        </Grid>
-
-        {/* Testing Information */}
-        <Grid item xs={12}>
-          <Divider sx={{ my: 2 }} />
-          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
-            Testing Information
-          </Typography>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          {renderField("Test Step", item.testStep)}
-        </Grid>
-        <Grid item xs={12} md={6}>
-          {renderField("Test Evidence", item.testEvidence)}
-        </Grid>
+const renderIndentFields = () => {
+  return (
+    <Grid container spacing={2}>
+      {/* Basic Information */}
+      <Grid item xs={12}>
+        <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
+          Indent Information
+        </Typography>
       </Grid>
-    );
-  };
 
+      <Grid item xs={12} md={6}>
+        {renderField("Department", item.department)}
+      </Grid>
+      <Grid item xs={12} md={6}>
+        {renderField("Category", item.category)}
+      </Grid>
+      <Grid item xs={12} md={6}>
+        {renderField("Priority", item.priority)}
+      </Grid>
+      <Grid item xs={12} md={6}>
+        {renderField("Assigned To", item.assignedTo)}
+      </Grid>
+      <Grid item xs={12} md={6}>
+        {renderField("Due Date", item.dueDate, "date")}
+      </Grid>
+      <Grid item xs={12} md={6}>
+        {renderField("Comments", item.comments, "multiline")}
+      </Grid>
 
-  // Render field based on type and value
-  const renderField = (label, value, type = "text") => {
-    if (type === "date") {
-      return (
-        <Box>
-          <Typography sx={labelStyle}>{label}</Typography>
-          <InputField
-            value={formatDateForDisplay(value)}
-            disabled
-            type="text"
-            endAdornment={
-              <InputAdornment position="end">
-                <CalendarToday sx={{ color: "action.disabled", fontSize: "1.2rem" }} />
-              </InputAdornment>
-            }
-          />
-        </Box>
-      );
-    }
-
-    if (type === "number") {
-      return (
-        <Box>
-          <Typography sx={labelStyle}>{label}</Typography>
-          <InputField value={value || "N/A"} disabled type="text" />
-        </Box>
-      );
-    }
-
-    if (type === "multiline") {
-      return (
-        <Box>
-          <Typography sx={labelStyle}>{label}</Typography>
-          <InputField value={value || "N/A"} disabled multiline rows={3} type="text" />
-        </Box>
-      );
-    }
-
-    if (type === "status") {
-      return (
-        <Box>
-          <Typography sx={labelStyle}>{label}</Typography>
-          <Box sx={{ mt: 1 }}>{formatStatusDisplay(value)}</Box>
-        </Box>
-      );
-    }
-
-    return (
-      <Box>
-        <Typography sx={labelStyle}>{label}</Typography>
-        <InputField value={value || "N/A"} disabled type="text" />
-      </Box>
-    );
-  };
-
-Department,
-          <CustomSmartPasteField
-            value={formData.description}
-            label="Description"
-            placeholder="enter description"
-            disabled={!isComplianceMaker}
-            onChange={handleDescriptionChange}
-            error={errors.description}
-          />
-Category
-Priority
-assignedTo
-dueDate
-comments
+      <Grid item xs={12}>
+        {renderField("Description", item.description, "multiline")}
+      </Grid>
+    </Grid>
+  );
+};
