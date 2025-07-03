@@ -1,3 +1,7 @@
+import { createIndentAuditTrail } from "path/to/indentAudit";
+import { createObservationAuditTrail } from "path/to/observationAudit";
+import { createIncidentAuditTrail } from "path/to/incidentAudit";
+
 export const uploadToS3 = async (
   file: Express.Multer.File,
   options: UploadParams,
@@ -35,27 +39,43 @@ export const uploadToS3 = async (
     } else {
       throw new Error("Invalid module name provided");
     }
-    // Uploading to S3
+
+    // Upload to S3
     await s3.putObject(params).promise();
-    // Creating attachment Record
+
+    // Create attachment record in DB
     const attachment = await prisma.attachment.create({
       data: attachmentData,
     });
 
-    // Create audit trail
+    const baseAuditPayload = {
+      actionType: "CREATE",
+      step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
+      role: uploadedByRole as StepRoles,
+      performedByName: userName,
+      performedByEmail: uploadedBy,
+      modifications: {
+        attachments: {
+          added: [{ fileName: cleanFileName, uploadedBy }],
+        },
+      },
+    };
+
+    // Audit Trail Logic
     if (moduleName === "INDENT") {
       await createIndentAuditTrail({
         indentId: entityId,
-        actionType: "CREATE",
-        step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
-        role: uploadedByRole as StepRoles,
-        performedByName: userName,
-        performedByEmail: uploadedBy,
-        modifications: {
-          attachments: {
-            added: { fileName: cleanFileName },
-          },
-        },
+        ...baseAuditPayload,
+      });
+    } else if (moduleName === "ISE_OBSERVATION") {
+      await createObservationAuditTrail({
+        observationId: entityId,
+        ...baseAuditPayload,
+      });
+    } else if (moduleName === "INCIDENT") {
+      await createIncidentAuditTrail({
+        incidentId: entityId,
+        ...baseAuditPayload,
       });
     }
 
