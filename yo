@@ -1,21 +1,22 @@
-export const formatObligationTableData = (rawData, actions = {}) => {
+export const formatIndentTableData = (rawData, actions = {}) => {
   if (!Array.isArray(rawData)) {
     return { columns: [], rows: [] };
   }
 
   const columns = [
-    { Header: "ID", accessor: "id", width: "5%", align: "left" },
+    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "left" },
     { Header: "Current Step", accessor: "currentStepName", width: "20%", align: "left" },
     { Header: "Pending With", accessor: "pendingWith", width: "30%", align: "left" },
-    { Header: "Circular Reference", accessor: "circularReference", width: "20%", align: "left" },
+    { Header: "Department", accessor: "department", width: "20%", align: "left" },
     { Header: "Actions", accessor: "actions", width: "15%", align: "center" },
   ];
 
-  const rows = rawData.map((item) => ({
-    id: formatText(item.id, 15),
-    currentStepName: formatCurrentStep(item.currentStepName),
+  const rows = rawData.map((item, index) => ({
+    serialNumber: index + 1,
+    currentStepName: formatText(item.currentStepName, 30),
     pendingWith: formatText(item.responsibleOwner, 40),
-    circularReference: formatText(item.circularReference, 35),
+    department:
+      departmentLabels.find((d) => d.value === item.department)?.name || item.department || "-",
     actions: (
       <Box sx={{ display: "flex", justifyContent: "center" }}>
         <CustomIconButton
