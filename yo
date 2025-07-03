@@ -1,19 +1,73 @@
-export const deleteAttachmentById = async (attachmentId: string) => {
+export const deleteAttachmentById = async (
+  attachmentId: string,
+  user: { name: string; email: string; role: StepRoles }
+) => {
   try {
     if (!attachmentId) {
+      throw new Error("Attachment ID is required");
     }
-    const existingIndent = await prisma.attachment.findUnique({
+
+    const existingAttachment = await prisma.attachment.findUnique({
       where: { id: attachmentId },
     });
 
-    if (!existingIndent) {
-      throw new Error("attachment not found");
+    if (!existingAttachment) {
+      throw new Error("Attachment not found");
     }
 
-    return await prisma.attachment.update({
+    // Mark as deleted
+    const deletedAttachment = await prisma.attachment.update({
       where: { id: attachmentId },
       data: { isDeleted: true },
     });
+
+    // Prepare audit data
+    const auditPayload = {
+      actionType: "DELETE",
+      step: roleStepMap[user.role],
+      role: user.role,
+      performedByName: user.name,
+      performedByEmail: user.email,
+      modifications: {
+        attachments: {
+          removed: { fileName: deletedAttachment.fileName, removedBy: user.email },
+        },
+      },
+    };
+
+    // Route audit trail to the correct module
+    const { moduleType } = deletedAttachment;
+
+    switch (moduleType) {
+      case "INDENT":
+        if (deletedAttachment.indentId) {
+          await createIndentAuditTrail({
+            ...auditPayload,
+            indentId: deletedAttachment.indentId,
+          });
+        }
+        break;
+      case "ISE_OBSERVATION":
+        if (deletedAttachment.observationId) {
+          await createObservationAuditTrail({
+            ...auditPayload,
+            observationId: deletedAttachment.observationId,
+          });
+        }
+        break;
+      case "INCIDENT":
+        if (deletedAttachment.incidentId) {
+          await createIncidentAuditTrail({
+            ...auditPayload,
+            incidentId: deletedAttachment.incidentId,
+          });
+        }
+        break;
+      default:
+        throw new Error("Unsupported module type for audit trail");
+    }
+
+    return deletedAttachment;
   } catch (error) {
     console.error("Error deleting attachment:", error);
     throw new Error("Failed to delete attachment");
