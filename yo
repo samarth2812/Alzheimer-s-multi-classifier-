@@ -1,5 +1,5 @@
-            {item.finalStatus && (
-              <Box sx={{ display: "flex", alignItems: "center" }}>
-                {formatStatusDisplay(item.finalStatus)}
-              </Box>
-            )}
+{(moduleId === "indents" ? item.status : item.finalStatus) && (
+  <Box sx={{ display: "flex", alignItems: "center" }}>
+    {formatStatusDisplay(moduleId === "indents" ? item.status : item.finalStatus)}
+  </Box>
+)}
