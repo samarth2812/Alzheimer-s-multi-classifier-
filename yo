@@ -1,4 +1,3 @@
-
 export const updateIndentById = async (
   indentId: string,
   role: StepRoles,
@@ -18,37 +17,27 @@ export const updateIndentById = async (
   }
 ) => {
   try {
-    if (!indentId || !role) {
-      throw new Error("indentId & role are required");
-    }
-
-    if (role !== user.role) {
-      throw new Error("You are not authorized to update indents for this role");
-    }
+    if (!indentId || !role) throw new Error("indentId & role are required");
+    if (role !== user.role) throw new Error("You are not authorized to update indents for this role");
 
     if (
       (role === "DEPARTMENT_CHECKER" || role === "DEPARTMENT_MAKER") &&
       department !== user.department
     ) {
-      ("You are not authorized to update indents for this department");
+      throw new Error("You are not authorized to update indents for this department");
     }
 
-    const existingIndent = await prisma.indents.findUnique({
-      where: { indentId },
-    });
-
-    if (!existingIndent) {
-      throw new Error("Indent not found");
-    }
+    const existingIndent = await prisma.indents.findUnique({ where: { indentId } });
+    if (!existingIndent) throw new Error("Indent not found");
 
     const { type, ...fieldsWithoutType } = updatedFields;
     const updateData: Record<string, any> = {};
-    let modificationChanges: Modifications;
+    const fieldChanges: Record<string, { from: any; to: any }> = {};
+    let workflowChanges: { fromStep: string; toStep: string } | undefined = undefined;
 
     if (updatedFields.type === "WORKFLOW_UPDATE") {
       const rejectedStatus = updatedFields?.rejectedStatus ?? false;
 
-      // Step update
       const { newCurrStep, newPrevStep } = stepBasedUpdateFilter(
         existingIndent.currStep,
         rejectedStatus,
@@ -60,26 +49,22 @@ export const updateIndentById = async (
       updateData.prevStep = newPrevStep;
       updateData.rejectedStatus = rejectedStatus;
 
-      modificationChanges = {
-        workflow: {
-          fromStep: stepNameMap[existingIndent.currStep],
-          toStep: stepNameMap[newCurrStep],
-        },
+      workflowChanges = {
+        fromStep: stepNameMap[existingIndent.currStep],
+        toStep: stepNameMap[newCurrStep],
       };
 
-      // Determine status based on newCurrStep
       switch (newCurrStep) {
-        case 0: // Compliance Maker
-        case 1: // Compliance Checker
+        case 0:
+        case 1:
           updateData.status = "PENDING";
           break;
-        case 2: // Department Maker
-        case 3: // Department Checker
+        case 2:
+        case 3:
           updateData.status = "IN_PROGRESS";
           break;
       }
 
-      // If final approval by Compliance Checker
       if (
         existingIndent.currStep === 4 &&
         user.role === "COMPLIANCE_CHECKER" &&
@@ -89,46 +74,34 @@ export const updateIndentById = async (
         updateData.status = "COMPLETED";
         updateData.openStatus = false;
       }
+
       updateData.lastStepChangeTime = new Date();
     }
 
-    //  Process other user-updated fields
+    // Process other updated fields
     for (const [key, value] of Object.entries(fieldsWithoutType)) {
       const oldVal = (existingIndent as any)[key];
-      let mappedNewVal: any;
-      mappedNewVal = value;
+      let mappedNewVal = value;
 
       if (key === "department" && typeof value === "string") {
         mappedNewVal = DEPARTMENT_MAPPING[value] || value;
-        updateData.department = mappedNewVal;
       } else if (key === "status" && typeof value === "string") {
         mappedNewVal = STATUS_MAPPING[value] || value;
-        updateData.status = mappedNewVal;
       } else if (key === "priority" && typeof value === "string") {
         mappedNewVal = INDENT_PRIORITY_MAPPING[value] || value;
-        updateData.priority = mappedNewVal;
       } else if (key === "category" && typeof value === "string") {
         mappedNewVal = INDENT_CATEGORY_MAPPING[value] || value;
-        updateData.priority = mappedNewVal;
       } else if (key === "dueDate" && typeof value === "string") {
         mappedNewVal = new Date(value);
-        updateData.dueDate = mappedNewVal;
-      } else {
-        mappedNewVal = value;
-        updateData[key] = mappedNewVal;
       }
 
+      updateData[key] = mappedNewVal;
+
       if (oldVal !== mappedNewVal) {
-        modificationChanges = {
-          fields: {
-            key: {
-              from: oldVal,
-              to: mappedNewVal,
-            },
-          },
-        };
+        fieldChanges[key] = { from: oldVal, to: mappedNewVal };
       }
     }
+
     const updatedIndent = await prisma.indents.update({
       where: { indentId },
       data: updateData,
@@ -147,7 +120,10 @@ export const updateIndentById = async (
       role: user.role,
       performedByName: user.name,
       performedByEmail: user.email,
-      modifications: modificationChanges,
+      modifications: {
+        ...(Object.keys(fieldChanges).length > 0 && { fields: fieldChanges }),
+        ...(workflowChanges && { workflow: workflowChanges }),
+      },
     });
 
     return updatedIndent;
