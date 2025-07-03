@@ -1,13 +1,74 @@
-> athena-guard@1.0.0 build
-> npm run build-ts && npm run lint
+export const createCommunication = async (data: CommunicationInput) => {
+  try {
+    const payload = buildCreatePayload(data);
+    return await prisma.communication.create({ data: payload });
+  } catch (error) {
+    console.error("Error creating communication:", error);
+    throw new Error("Failed to create communication");
+  }
+};
 
+export const fetchCommunications = async (
+  type: "inbox" | "sent" | "thread",
+  userEmail: string,
+  threadId?: string,
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const where = buildFetchFilter(type, userEmail, threadId);
+    const offset = (page - 1) * pageSize;
 
-> athena-guard@1.0.0 build-ts
-> tsc
+    const [communications, total] = await Promise.all([
+      prisma.communication.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { createdAt: "desc" },
+        include: {
+          replies: {
+            orderBy: {
+              createdAt: "desc", // latest first
+            },
+          },
+        },
+      }),
+      prisma.communication.count({ where }),
+    ]);
 
+    return {
+      success: true,
+      data: communications,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching communications:", error);
+    throw new Error("Failed to fetch communications");
+  }
+};
 
-> athena-guard@1.0.0 lint
-> tsc --noEmit && eslint "src/**/*.{js,ts}" --quiet --fix
-
-'eslint' is not recognized as an internal or external command,
-operable program or batch file.
+model Communication {
+  commId              String            @id @default(uuid())
+  commType            CommType
+  category            CommCategoy
+  subject             String
+  refNo               String?
+  sentBy              String
+  sentTo              String[]
+  cc                  String[]
+  status              CommStatus
+  responseDueBy       DateTime?
+  priorityLevel       CommPriorityLevel
+  summary             String
+  isDeleted           Boolean           @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  parentCommId        String?
+  parentCommunication Communication?    @relation("CommThread", fields: [parentCommId], references: [commId])
+  replies             Communication[]   @relation("CommThread")
+}
