@@ -1,54 +1,13 @@
-export const getIndentAuditTrail = async (
-  user: User,
-  indentId?: string,
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    // ✅ Restrict access to Compliance Maker/Checker
-    if (
-      user.role !== "COMPLIANCE_MAKER" &&
-      user.role !== "COMPLIANCE_CHECKER"
-    ) {
-      throw new Error("You are not authorized to view audit trails.");
-    }
+> athena-guard@1.0.0 build
+> npm run build-ts && npm run lint
 
-    const where: any = {};
-    if (indentId) where.indentId = indentId;
 
-    const offset = (page - 1) * pageSize;
+> athena-guard@1.0.0 build-ts
+> tsc
 
-    const [auditEntries, total] = await Promise.all([
-      prisma.indentAuditTrail.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { timestamp: "desc" },
-        select: {
-          indentId: true,
-          actionType: true,
-          role: true,
-          performedByName: true,
-          performedByEmail: true,
-          timestamp: true,
-          modifications: true,
-        },
-      }),
-      prisma.indentAuditTrail.count({ where }),
-    ]);
 
-    return {
-      success: true,
-      data: auditEntries,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  } catch (error) {
-    console.error("Failed to fetch audit trail", error);
-    throw new Error("Unable to fetch audit trail");
-  }
-};
+> athena-guard@1.0.0 lint
+> tsc --noEmit && eslint "src/**/*.{js,ts}" --quiet --fix
+
+'eslint' is not recognized as an internal or external command,
+operable program or batch file.
