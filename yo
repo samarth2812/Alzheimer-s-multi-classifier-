@@ -1,31 +1,18 @@
-for (const [key, value] of Object.entries(fieldsWithoutType)) {
-  const oldVal = (existingObservation as any)[key];
-  let mappedNewVal: any = value;
-
-  if (key === "status") {
-    mappedNewVal = STATUS_MAPPING[value];
-    updateData.status = mappedNewVal;
-  } else if (key === "department") {
-    mappedNewVal = DEPARTMENT_MAPPING[value];
-    updateData.department = mappedNewVal;
-  } else if (key === "priority") {
-    mappedNewVal = OBSERVATION_PRIORITY_MAPPING[value];
-    updateData.priority = mappedNewVal;
-  } else if (key === "observationTheme") {
-    mappedNewVal = OBSERVATION_THEME_MAPPING[value];
-    updateData.observationTheme = mappedNewVal;
-  } else if (key === "dueDate" && typeof value === "string") {
-    mappedNewVal = new Date(value);
-    updateData.dueDate = mappedNewVal;
-  } else {
-    mappedNewVal = value;
-    updateData[key] = mappedNewVal;
-  }
-
-  if (oldVal !== mappedNewVal) {
-    fieldChanges[key] = {
-      from: oldVal,
-      to: mappedNewVal,
-    };
+{
+  fields: {
+    priority: { from: "HIGH", to: "LOW" },
+    dueDate: { from: "2025-07-01", to: "2025-07-10" }
+  },
+  workflow: {
+    fromStep: "Department Maker",
+    toStep: "Department Checker"
+  },
+  attachments: {
+    added: [
+      { fileName: "report.pdf", uploadedBy: "samarth@example.com" }
+    ],
+    removed: [
+      { fileName: "old-specs.docx", removedBy: "anushka@example.com" }
+    ]
   }
 }
