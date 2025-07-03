@@ -1,90 +1,54 @@
-import { createIndentAuditTrail } from "path/to/indentAudit";
-import { createObservationAuditTrail } from "path/to/observationAudit";
-import { createIncidentAuditTrail } from "path/to/incidentAudit";
-
-export const uploadToS3 = async (
-  file: Express.Multer.File,
-  options: UploadParams,
-  userName: string
-): Promise<{ fileUrl: string; attachmentId: string }> => {
-  try {
-    const { moduleName, entityId, uploadedBy, uploadedByRole } = options;
-    const timestamp = Date.now();
-    const cleanFileName = file.originalname.replace(/\s+/g, "_");
-
-    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
-    const params = {
-      Bucket: process.env.AWS_S3_BUCKET!,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    };
-
-    let attachmentData: any = {
-      fileName: cleanFileName,
-      uploadedBy,
-      uploadedByRole,
-      s3Key: key,
-      moduleType: moduleName,
-    };
-
-    if (moduleName === "INDENT") {
-      attachmentData.indentId = entityId;
-    } else if (moduleName === "ISE_OBSERVATION") {
-      attachmentData.observationId = entityId;
-    } else if (moduleName === "INCIDENT") {
-      attachmentData.incidentId = entityId;
-    } else if (moduleName === "OBLIGATION") {
-      attachmentData.obligationId = entityId;
-    } else {
-      throw new Error("Invalid module name provided");
+    //  Process other user-updated fields
+    for (const [key, value] of Object.entries(fieldsWithoutType)) {
+      if (value !== undefined) {
+        updateData[key] =
+          (key === "dueDate" || key === "reportedDate") &&
+          typeof value === "string"
+            ? new Date(value)
+            : value;
+      }
+    }
+    // Special handling for mapped fields
+    if (fieldsWithoutType.department) {
+      updateData.department = DEPARTMENT_MAPPING[fieldsWithoutType.department];
+    }
+    if (fieldsWithoutType.status) {
+      updateData.status = INCIDENT_STATUS_MAPPING[fieldsWithoutType.status];
+    }
+    if (fieldsWithoutType.severity) {
+      updateData.severity =
+        INCIDENT_SEVERITY_MAPPING[fieldsWithoutType.severity];
+    }
+    if (fieldsWithoutType.type) {
+      updateData.type = INCIDENT_TYPE_MAPPING[fieldsWithoutType.type];
     }
 
-    // Upload to S3
-    await s3.putObject(params).promise();
+    for (const [key, value] of Object.entries(fieldsWithoutType)) {
+      const oldVal = (existingIndent as any)[key];
+      let mappedNewVal: any;
+      mappedNewVal = value;
 
-    // Create attachment record in DB
-    const attachment = await prisma.attachment.create({
-      data: attachmentData,
-    });
+      if (key === "department" && typeof value === "string") {
+        mappedNewVal = DEPARTMENT_MAPPING[value] || value;
+        updateData.department = mappedNewVal;
+      } else if (key === "status" && typeof value === "string") {
+        mappedNewVal = STATUS_MAPPING[value] || value;
+        updateData.status = mappedNewVal;
+      } else if (key === "priority" && typeof value === "string") {
+        mappedNewVal = INDENT_PRIORITY_MAPPING[value] || value;
+        updateData.priority = mappedNewVal;
+      } else if (key === "category" && typeof value === "string") {
+        mappedNewVal = INDENT_CATEGORY_MAPPING[value] || value;
+        updateData.priority = mappedNewVal;
+      } else if (key === "dueDate" && typeof value === "string") {
+        mappedNewVal = new Date(value);
+        updateData.dueDate = mappedNewVal;
+      } else {
+        mappedNewVal = value;
+        updateData[key] = mappedNewVal;
+      }
 
-    const baseAuditPayload = {
-      actionType: "CREATE",
-      step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
-      role: uploadedByRole as StepRoles,
-      performedByName: userName,
-      performedByEmail: uploadedBy,
-      modifications: {
-        attachments: {
-          added: [{ fileName: cleanFileName, uploadedBy }],
-        },
-      },
-    };
-
-    // Audit Trail Logic
-    if (moduleName === "INDENT") {
-      await createIndentAuditTrail({
-        indentId: entityId,
-        ...baseAuditPayload,
-      });
-    } else if (moduleName === "ISE_OBSERVATION") {
-      await createObservationAuditTrail({
-        observationId: entityId,
-        ...baseAuditPayload,
-      });
-    } else if (moduleName === "INCIDENT") {
-      await createIncidentAuditTrail({
-        incidentId: entityId,
-        ...baseAuditPayload,
-      });
+      if (oldVal !== mappedNewVal) {
+        fieldChanges[key] = { from: oldVal, to: mappedNewVal };
+      }
     }
-
-    return {
-      fileUrl: key,
-      attachmentId: attachment.id,
-    };
-  } catch (error) {
-    console.error("Error during S3 upload or DB insert:", error);
-    throw new Error("Upload failed. Please try again later.");
-  }
-};
