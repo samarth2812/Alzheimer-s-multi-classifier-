@@ -1,33 +1,83 @@
-for (const [key, value] of Object.entries(fieldsWithoutType)) {
-  const oldVal = (existingIncident as any)[key];
-  let mappedNewVal: any = value;
+export const deleteAttachmentById = async (attachmentId: string) => {
+  try {
+    if (!attachmentId) {
+    }
+    const existingIndent = await prisma.attachment.findUnique({
+      where: { id: attachmentId },
+    });
 
-  if (key === "department" && typeof value === "string") {
-    mappedNewVal = DEPARTMENT_MAPPING[value] || value;
-    updateData.department = mappedNewVal;
-  } else if (key === "status" && typeof value === "string") {
-    mappedNewVal = INCIDENT_STATUS_MAPPING[value] || value;
-    updateData.status = mappedNewVal;
-  } else if (key === "severity" && typeof value === "string") {
-    mappedNewVal = INCIDENT_SEVERITY_MAPPING[value] || value;
-    updateData.severity = mappedNewVal;
-  } else if (key === "type" && typeof value === "string") {
-    mappedNewVal = INCIDENT_TYPE_MAPPING[value] || value;
-    updateData.type = mappedNewVal;
-  } else if (
-    (key === "dueDate" || key === "reportedDate") &&
-    typeof value === "string"
-  ) {
-    mappedNewVal = new Date(value);
-    updateData[key] = mappedNewVal;
-  } else {
-    updateData[key] = value;
+    if (!existingIndent) {
+      throw new Error("attachment not found");
+    }
+
+    return await prisma.attachment.update({
+      where: { id: attachmentId },
+      data: { isDeleted: true },
+    });
+  } catch (error) {
+    console.error("Error deleting attachment:", error);
+    throw new Error("Failed to delete attachment");
   }
+};
 
-  if (oldVal !== mappedNewVal) {
-    fieldChanges[key] = {
-      from: oldVal,
-      to: mappedNewVal,
+export const getIndentAuditTrail = async (
+  user: User,
+  indentId?: string,
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const where: any = {};
+
+    // Filter by specific indent if provided
+    if (indentId) {
+      where.indentId = indentId;
+    }
+
+    // Role-based filtering
+    if (
+      user.role === "DEPARTMENT_MAKER" ||
+      user.role === "DEPARTMENT_CHECKER"
+    ) {
+      where.indent = {
+        department: user.department,
+      };
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    const [auditEntries, total] = await Promise.all([
+      prisma.indentAuditTrail.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { timestamp: "desc" },
+        include: {
+          indent: {
+            select: {
+              department: true,
+              description: true,
+              indentId: true,
+            },
+          },
+        },
+      }),
+
+      prisma.indentAuditTrail.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: auditEntries,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
     };
+  } catch (error) {
+    console.error("Failed to fetch audit trail", error);
+    throw new Error("Unable to fetch audit trail");
   }
-}
+};
