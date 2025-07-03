@@ -1,41 +1,9 @@
 type FieldChange =
-  | { value: any } // for CREATE OR DELETE
-  | { from: any; to: any }; // for UPDATE
+  | { value: any } // For CREATE or DELETE
+  | { from: any; to: any }; // For UPDATE
 
-export const createIndentAuditTrail = async ({
-  indentId,
-  actionType,
-  step,
-  role,
-  performedByName,
-  performedByEmail,
-  modifications,
-}: {
-  indentId: string;
-  actionType: AuditAction;
-  step: number;
-  role: StepRoles;
-  performedByName: string;
-  performedByEmail: string;
-  modifications: Record<string, FieldChange> | {
-    fromStep: string;
-    toStep: string;
-  } | { fileName: string }
-}) => {
-  try {
-    await prisma.indentAuditTrail.create({
-      data: {
-        indentId,
-        actionType,
-        step,
-        role,
-        performedByName,
-        performedByEmail,
-        modifications,
-      },
-    });
-  } catch (error) {
-    console.error("Failed to create indent audit trail:", error);
-    throw new Error("Audit trail creation failed");
-  }
+type Modifications = {
+  fields?: Record<string, FieldChange>;
+  workflow?: { fromStep: string; toStep: string };
+  attachments?: { fileName: string }[];
 };
