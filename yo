@@ -1,134 +1,70 @@
-export const updateIndentById = async (
-  indentId: string,
-  role: StepRoles,
-  department: string | undefined,
-  user: User,
-  updatedFields: {
-    type: "FIELD_UPDATE" | "WORKFLOW_UPDATE";
-    department?: Department;
-    description?: string;
-    status?: string;
-    priority?: string;
-    assignedTo?: string;
-    dueDate?: string;
-    comments?: string;
-    openStatus?: boolean;
-    rejectedStatus?: boolean;
-  }
-) => {
+export const uploadToS3 = async (
+  file: Express.Multer.File,
+  options: UploadParams,
+  userName: string
+): Promise<{ fileUrl: string; attachmentId: string }> => {
   try {
-    if (!indentId || !role) throw new Error("indentId & role are required");
-    if (role !== user.role) throw new Error("You are not authorized to update indents for this role");
+    const { moduleName, entityId, uploadedBy, uploadedByRole } = options;
+    const timestamp = Date.now();
+    const cleanFileName = file.originalname.replace(/\s+/g, "_");
 
-    if (
-      (role === "DEPARTMENT_CHECKER" || role === "DEPARTMENT_MAKER") &&
-      department !== user.department
-    ) {
-      throw new Error("You are not authorized to update indents for this department");
+    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET!,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    };
+
+    let attachmentData: any = {
+      fileName: cleanFileName,
+      uploadedBy,
+      uploadedByRole,
+      s3Key: key,
+      moduleType: moduleName,
+    };
+
+    if (moduleName === "INDENT") {
+      attachmentData.indentId = entityId;
+    } else if (moduleName === "ISE_OBSERVATION") {
+      attachmentData.observationId = entityId;
+    } else if (moduleName === "INCIDENT") {
+      attachmentData.incidentId = entityId;
+    } else if (moduleName === "OBLIGATION") {
+      attachmentData.obligationId = entityId;
+    } else {
+      throw new Error("Invalid module name provided");
     }
-
-    const existingIndent = await prisma.indents.findUnique({ where: { indentId } });
-    if (!existingIndent) throw new Error("Indent not found");
-
-    const { type, ...fieldsWithoutType } = updatedFields;
-    const updateData: Record<string, any> = {};
-    const fieldChanges: Record<string, { from: any; to: any }> = {};
-    let workflowChanges: { fromStep: string; toStep: string } | undefined = undefined;
-
-    if (updatedFields.type === "WORKFLOW_UPDATE") {
-      const rejectedStatus = updatedFields?.rejectedStatus ?? false;
-
-      const { newCurrStep, newPrevStep } = stepBasedUpdateFilter(
-        existingIndent.currStep,
-        rejectedStatus,
-        user.role,
-        department
-      );
-
-      updateData.currStep = newCurrStep;
-      updateData.prevStep = newPrevStep;
-      updateData.rejectedStatus = rejectedStatus;
-
-      workflowChanges = {
-        fromStep: stepNameMap[existingIndent.currStep],
-        toStep: stepNameMap[newCurrStep],
-      };
-
-      switch (newCurrStep) {
-        case 0:
-        case 1:
-          updateData.status = "PENDING";
-          break;
-        case 2:
-        case 3:
-          updateData.status = "IN_PROGRESS";
-          break;
-      }
-
-      if (
-        existingIndent.currStep === 4 &&
-        user.role === "COMPLIANCE_CHECKER" &&
-        !rejectedStatus
-      ) {
-        updateData.closedDate = new Date();
-        updateData.status = "COMPLETED";
-        updateData.openStatus = false;
-      }
-
-      updateData.lastStepChangeTime = new Date();
-    }
-
-    // Process other updated fields
-    for (const [key, value] of Object.entries(fieldsWithoutType)) {
-      const oldVal = (existingIndent as any)[key];
-      let mappedNewVal = value;
-
-      if (key === "department" && typeof value === "string") {
-        mappedNewVal = DEPARTMENT_MAPPING[value] || value;
-      } else if (key === "status" && typeof value === "string") {
-        mappedNewVal = STATUS_MAPPING[value] || value;
-      } else if (key === "priority" && typeof value === "string") {
-        mappedNewVal = INDENT_PRIORITY_MAPPING[value] || value;
-      } else if (key === "category" && typeof value === "string") {
-        mappedNewVal = INDENT_CATEGORY_MAPPING[value] || value;
-      } else if (key === "dueDate" && typeof value === "string") {
-        mappedNewVal = new Date(value);
-      }
-
-      updateData[key] = mappedNewVal;
-
-      if (oldVal !== mappedNewVal) {
-        fieldChanges[key] = { from: oldVal, to: mappedNewVal };
-      }
-    }
-
-    const updatedIndent = await prisma.indents.update({
-      where: { indentId },
-      data: updateData,
+    // Uploading to S3
+    await s3.putObject(params).promise();
+    // Creating attachment Record
+    const attachment = await prisma.attachment.create({
+      data: attachmentData,
     });
 
-    // Trigger audit log
-    await createIndentAuditTrail({
-      indentId,
-      actionType:
-        type === "WORKFLOW_UPDATE"
-          ? updatedFields.rejectedStatus
-            ? "REJECTED"
-            : "APPROVED"
-          : "UPDATE",
-      step: existingIndent.currStep,
-      role: user.role,
-      performedByName: user.name,
-      performedByEmail: user.email,
-      modifications: {
-        ...(Object.keys(fieldChanges).length > 0 && { fields: fieldChanges }),
-        ...(workflowChanges && { workflow: workflowChanges }),
-      },
-    });
+    // Create audit trail
+    if (moduleName === "INDENT") {
+      await createIndentAuditTrail({
+        indentId: entityId,
+        actionType: "CREATE",
+        step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
+        role: uploadedByRole as StepRoles,
+        performedByName: userName,
+        performedByEmail: uploadedBy,
+        modifications: {
+          attachments: {
+            added: { fileName: cleanFileName },
+          },
+        },
+      });
+    }
 
-    return updatedIndent;
+    return {
+      fileUrl: key,
+      attachmentId: attachment.id,
+    };
   } catch (error) {
-    console.error("Error updating indent:", error);
-    throw new Error("Failed to update indent");
+    console.error("Error during S3 upload or DB insert:", error);
+    throw new Error("Upload failed. Please try again later.");
   }
 };
