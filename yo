@@ -208,3 +208,18 @@
       </Box>
     );
   };
+
+Department,
+          <CustomSmartPasteField
+            value={formData.description}
+            label="Description"
+            placeholder="enter description"
+            disabled={!isComplianceMaker}
+            onChange={handleDescriptionChange}
+            error={errors.description}
+          />
+Category
+Priority
+assignedTo
+dueDate
+comments
