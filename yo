@@ -1,33 +1,154 @@
-export const formatIndentTableData = (rawData, actions = {}) => {
-  if (!Array.isArray(rawData)) {
-    return { columns: [], rows: [] };
-  }
+  // Render obligation specific fields
+  const renderObligationFields = () => {
+    return (
+      <Grid container spacing={2}>
+        {/* Basic Information */}
+        <Grid item xs={12}>
+          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
+            Basic Information
+          </Typography>
+        </Grid>
 
-  const columns = [
-    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "left" },
-    { Header: "Current Step", accessor: "currentStepName", width: "20%", align: "left" },
-    { Header: "Pending With", accessor: "pendingWith", width: "30%", align: "left" },
-    { Header: "Department", accessor: "department", width: "20%", align: "left" },
-    { Header: "Actions", accessor: "actions", width: "15%", align: "center" },
-  ];
+        <Grid item xs={12} md={6}>
+          {renderField("ID", item.id)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Product", item.product)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Circular Reference", item.circularReference)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Title", item.title)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Year", item.year)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Regulator", item.regulator)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Section Reference", item.sectionReference)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Applicability", item.applicability?.replace(/_/g, " "))}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Regulatory Timeline", item.regulatoryTimeline, "date")}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Current Step Name", item.currentStepName)}
+        </Grid>
 
-  const rows = rawData.map((item, index) => ({
-    serialNumber: index + 1,
-    currentStepName: formatText(item.currentStepName, 30),
-    pendingWith: formatText(item.responsibleOwner, 40),
-    department:
-      departmentLabels.find((d) => d.value === item.department)?.name || item.department || "-",
-    actions: (
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <CustomIconButton
-          icon={Visibility}
-          label="View More"
-          onClick={() => actions.onViewMore && actions.onViewMore(item)}
-          size="small"
-        />
-      </Box>
-    ),
-  }));
+        <Grid item xs={12}>
+          {renderField("Regulatory Extract", item.regulatoryExtract, "multiline")}
+        </Grid>
 
-  return { columns, rows };
-};
+        {/* Process Information */}
+        <Grid item xs={12}>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
+            Process Information
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          {renderField("Process", item.process)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Sub Process", item.subProcess)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Internal Circular Ref Number", item.internalCircularRefNumber, "number")}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Policy SOP Reference", item.policySopReference)}
+        </Grid>
+
+        <Grid item xs={12}>
+          {renderField("Policy SOP Extract", item.policySopExtract, "multiline")}
+        </Grid>
+
+        {/* Control Information */}
+        <Grid item xs={12}>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
+            Control Information
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          {renderField("Level of Documentation", item.levelOfDocumentation?.replace(/_/g, " "))}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Periodicity", item.periodicity?.replace(/_/g, " "))}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Types of Control", item.typesOfControl?.replace(/_/g, " "))}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Documentation of Control", item.documentationOfControl, "number")}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Level of Automation of Control", item.levelOfAutomationOfControl, "number")}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Total Score", item.totalScore, "number")}
+        </Grid>
+
+        <Grid item xs={12}>
+          {renderField(
+            "Established Controls Description",
+            item.establishedControlsDesc,
+            "multiline"
+          )}
+        </Grid>
+
+        {/* Compliance Information */}
+        <Grid item xs={12}>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
+            Compliance Information
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          {renderField("Department", item.department?.replace(/_/g, " "))}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Responsible Owner", item.responsibleOwner)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField(
+            "Internal Timeline for Compliance",
+            item.internalTimelineForCompliance,
+            "number"
+          )}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Compliance", item.compliance?.replace(/_/g, " "))}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Compliance Score", item.complianceScore, "number")}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Final Risk Score", item.finalRiskScore, "number")}
+        </Grid>
+
+        {/* Testing Information */}
+        <Grid item xs={12}>
+          <Divider sx={{ my: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
+            Testing Information
+          </Typography>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          {renderField("Test Step", item.testStep)}
+        </Grid>
+        <Grid item xs={12} md={6}>
+          {renderField("Test Evidence", item.testEvidence)}
+        </Grid>
+      </Grid>
+    );
+  };
