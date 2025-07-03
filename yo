@@ -1,35 +1,5 @@
-const renderIndentFields = () => {
-  return (
-    <Grid container spacing={2}>
-      {/* Basic Information */}
-      <Grid item xs={12}>
-        <Typography variant="h6" sx={{ mb: 1, color: (theme) => theme.palette.custom.text2 }}>
-          Indent Information
-        </Typography>
-      </Grid>
-
-      <Grid item xs={12} md={6}>
-        {renderField("Department", item.department)}
-      </Grid>
-      <Grid item xs={12} md={6}>
-        {renderField("Category", item.category)}
-      </Grid>
-      <Grid item xs={12} md={6}>
-        {renderField("Priority", item.priority)}
-      </Grid>
-      <Grid item xs={12} md={6}>
-        {renderField("Assigned To", item.assignedTo)}
-      </Grid>
-      <Grid item xs={12} md={6}>
-        {renderField("Due Date", item.dueDate, "date")}
-      </Grid>
-      <Grid item xs={12} md={6}>
-        {renderField("Comments", item.comments, "multiline")}
-      </Grid>
-
-      <Grid item xs={12}>
-        {renderField("Description", item.description, "multiline")}
-      </Grid>
-    </Grid>
-  );
-};
+            {item.finalStatus && (
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                {formatStatusDisplay(item.finalStatus)}
+              </Box>
+            )}
