@@ -1,74 +1,24 @@
-export const createCommunication = async (data: CommunicationInput) => {
-  try {
-    const payload = buildCreatePayload(data);
-    return await prisma.communication.create({ data: payload });
-  } catch (error) {
-    console.error("Error creating communication:", error);
-    throw new Error("Failed to create communication");
-  }
-};
-
-export const fetchCommunications = async (
-  type: "inbox" | "sent" | "thread",
-  userEmail: string,
-  threadId?: string,
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const where = buildFetchFilter(type, userEmail, threadId);
-    const offset = (page - 1) * pageSize;
-
-    const [communications, total] = await Promise.all([
-      prisma.communication.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { createdAt: "desc" },
-        include: {
-          replies: {
-            orderBy: {
-              createdAt: "desc", // latest first
-            },
-          },
-        },
-      }),
-      prisma.communication.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: communications,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  } catch (error) {
-    console.error("Error fetching communications:", error);
-    throw new Error("Failed to fetch communications");
-  }
-};
-
-model Communication {
-  commId              String            @id @default(uuid())
-  commType            CommType
-  category            CommCategoy
-  subject             String
-  refNo               String?
-  sentBy              String
-  sentTo              String[]
-  cc                  String[]
-  status              CommStatus
-  responseDueBy       DateTime?
-  priorityLevel       CommPriorityLevel
-  summary             String
-  isDeleted           Boolean           @default(false)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  parentCommId        String?
-  parentCommunication Communication?    @relation("CommThread", fields: [parentCommId], references: [commId])
-  replies             Communication[]   @relation("CommThread")
-}
+the frontend is giving error => ERROR [build 6/6] RUN npm run build                                                                                       121.7s
+------
+> [build 6/6] RUN npm run build:
+0.456
+0.456 > material-dashboard-2-react@2.2.0 build
+0.456 > react-scripts build
+0.456
+1.884 Creating an optimized production build...
+121.2 Failed to compile.
+121.2
+121.2 static/css/main.487e92e6.css from Css Minimizer plugin
+121.2 Error: Unexpected '/'. Escaping special characters with \ may help.
+121.2
+121.2
+------
+Dockerfile:8
+--------------------
+   6 |     COPY . .
+   7 |     ENV NODE_OPTIONS="--max-old-space-size=8192"
+   8 | >>> RUN npm run build
+   9 |     #serve with nginx
+  10 |     FROM nginx:1.28.0-alpine-slim
+--------------------
+ERROR: failed to solve: process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
