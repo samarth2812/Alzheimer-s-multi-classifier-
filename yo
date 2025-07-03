@@ -1,9 +1,1 @@
-type FieldChange =
-  | { value: any } // For CREATE or DELETE
-  | { from: any; to: any }; // For UPDATE
-
-type Modifications = {
-  fields?: Record<string, FieldChange>;
-  workflow?: { fromStep: string; toStep: string };
-  attachments?: { fileName: string }[];
-};
+Object literal may only specify known properties, and 'modifications' does not exist in type 'Without<IndentAuditTrailCreateInput, IndentAuditTrailUncheckedCreateInput> & IndentAuditTrailUncheckedCreateInput'.
