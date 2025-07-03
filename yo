@@ -1,18 +1,41 @@
-{
-  fields: {
-    priority: { from: "HIGH", to: "LOW" },
-    dueDate: { from: "2025-07-01", to: "2025-07-10" }
-  },
-  workflow: {
-    fromStep: "Department Maker",
-    toStep: "Department Checker"
-  },
-  attachments: {
-    added: [
-      { fileName: "report.pdf", uploadedBy: "samarth@example.com" }
-    ],
-    removed: [
-      { fileName: "old-specs.docx", removedBy: "anushka@example.com" }
-    ]
+type FieldChange =
+  | { value: any } // for CREATE OR DELETE
+  | { from: any; to: any }; // for UPDATE
+
+export const createIndentAuditTrail = async ({
+  indentId,
+  actionType,
+  step,
+  role,
+  performedByName,
+  performedByEmail,
+  modifications,
+}: {
+  indentId: string;
+  actionType: AuditAction;
+  step: number;
+  role: StepRoles;
+  performedByName: string;
+  performedByEmail: string;
+  modifications: Record<string, FieldChange> | {
+    fromStep: string;
+    toStep: string;
+  } | { fileName: string }
+}) => {
+  try {
+    await prisma.indentAuditTrail.create({
+      data: {
+        indentId,
+        actionType,
+        step,
+        role,
+        performedByName,
+        performedByEmail,
+        modifications,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to create indent audit trail:", error);
+    throw new Error("Audit trail creation failed");
   }
-}
+};
