@@ -1,54 +1,33 @@
-    //  Process other user-updated fields
-    for (const [key, value] of Object.entries(fieldsWithoutType)) {
-      if (value !== undefined) {
-        updateData[key] =
-          (key === "dueDate" || key === "reportedDate") &&
-          typeof value === "string"
-            ? new Date(value)
-            : value;
-      }
-    }
-    // Special handling for mapped fields
-    if (fieldsWithoutType.department) {
-      updateData.department = DEPARTMENT_MAPPING[fieldsWithoutType.department];
-    }
-    if (fieldsWithoutType.status) {
-      updateData.status = INCIDENT_STATUS_MAPPING[fieldsWithoutType.status];
-    }
-    if (fieldsWithoutType.severity) {
-      updateData.severity =
-        INCIDENT_SEVERITY_MAPPING[fieldsWithoutType.severity];
-    }
-    if (fieldsWithoutType.type) {
-      updateData.type = INCIDENT_TYPE_MAPPING[fieldsWithoutType.type];
-    }
+for (const [key, value] of Object.entries(fieldsWithoutType)) {
+  const oldVal = (existingIncident as any)[key];
+  let mappedNewVal: any = value;
 
-    for (const [key, value] of Object.entries(fieldsWithoutType)) {
-      const oldVal = (existingIndent as any)[key];
-      let mappedNewVal: any;
-      mappedNewVal = value;
+  if (key === "department" && typeof value === "string") {
+    mappedNewVal = DEPARTMENT_MAPPING[value] || value;
+    updateData.department = mappedNewVal;
+  } else if (key === "status" && typeof value === "string") {
+    mappedNewVal = INCIDENT_STATUS_MAPPING[value] || value;
+    updateData.status = mappedNewVal;
+  } else if (key === "severity" && typeof value === "string") {
+    mappedNewVal = INCIDENT_SEVERITY_MAPPING[value] || value;
+    updateData.severity = mappedNewVal;
+  } else if (key === "type" && typeof value === "string") {
+    mappedNewVal = INCIDENT_TYPE_MAPPING[value] || value;
+    updateData.type = mappedNewVal;
+  } else if (
+    (key === "dueDate" || key === "reportedDate") &&
+    typeof value === "string"
+  ) {
+    mappedNewVal = new Date(value);
+    updateData[key] = mappedNewVal;
+  } else {
+    updateData[key] = value;
+  }
 
-      if (key === "department" && typeof value === "string") {
-        mappedNewVal = DEPARTMENT_MAPPING[value] || value;
-        updateData.department = mappedNewVal;
-      } else if (key === "status" && typeof value === "string") {
-        mappedNewVal = STATUS_MAPPING[value] || value;
-        updateData.status = mappedNewVal;
-      } else if (key === "priority" && typeof value === "string") {
-        mappedNewVal = INDENT_PRIORITY_MAPPING[value] || value;
-        updateData.priority = mappedNewVal;
-      } else if (key === "category" && typeof value === "string") {
-        mappedNewVal = INDENT_CATEGORY_MAPPING[value] || value;
-        updateData.priority = mappedNewVal;
-      } else if (key === "dueDate" && typeof value === "string") {
-        mappedNewVal = new Date(value);
-        updateData.dueDate = mappedNewVal;
-      } else {
-        mappedNewVal = value;
-        updateData[key] = mappedNewVal;
-      }
-
-      if (oldVal !== mappedNewVal) {
-        fieldChanges[key] = { from: oldVal, to: mappedNewVal };
-      }
-    }
+  if (oldVal !== mappedNewVal) {
+    fieldChanges[key] = {
+      from: oldVal,
+      to: mappedNewVal,
+    };
+  }
+}
