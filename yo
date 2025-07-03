@@ -152,3 +152,59 @@
       </Grid>
     );
   };
+
+
+  // Render field based on type and value
+  const renderField = (label, value, type = "text") => {
+    if (type === "date") {
+      return (
+        <Box>
+          <Typography sx={labelStyle}>{label}</Typography>
+          <InputField
+            value={formatDateForDisplay(value)}
+            disabled
+            type="text"
+            endAdornment={
+              <InputAdornment position="end">
+                <CalendarToday sx={{ color: "action.disabled", fontSize: "1.2rem" }} />
+              </InputAdornment>
+            }
+          />
+        </Box>
+      );
+    }
+
+    if (type === "number") {
+      return (
+        <Box>
+          <Typography sx={labelStyle}>{label}</Typography>
+          <InputField value={value || "N/A"} disabled type="text" />
+        </Box>
+      );
+    }
+
+    if (type === "multiline") {
+      return (
+        <Box>
+          <Typography sx={labelStyle}>{label}</Typography>
+          <InputField value={value || "N/A"} disabled multiline rows={3} type="text" />
+        </Box>
+      );
+    }
+
+    if (type === "status") {
+      return (
+        <Box>
+          <Typography sx={labelStyle}>{label}</Typography>
+          <Box sx={{ mt: 1 }}>{formatStatusDisplay(value)}</Box>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        <Typography sx={labelStyle}>{label}</Typography>
+        <InputField value={value || "N/A"} disabled type="text" />
+      </Box>
+    );
+  };
