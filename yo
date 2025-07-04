@@ -107,6 +107,11 @@ export const getIndentRepository = async (
         search: filters.search || null,
       },
     };
+
+ const response = await apiRequest(
+          "GET",
+          isComplianceDepartment
+            ? `${process.env.REACT_APP_BACKEND_URL}/api/admin/v1/users?role=COMPLIANCE_CHECKER`
   } catch (error: any) {
     console.error("Error in getIndentRepository:", error);
     throw new Error(`Indent repository fetch failed: ${error.message}`);
