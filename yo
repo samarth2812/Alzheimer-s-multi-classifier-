@@ -1,5 +1,114 @@
-{(moduleId === "indents" ? item.status : item.finalStatus) && (
-  <Box sx={{ display: "flex", alignItems: "center" }}>
-    {formatStatusDisplay(moduleId === "indents" ? item.status : item.finalStatus)}
-  </Box>
-)}
+export const getIndentRepository = async (
+  userRole: Position,
+  userDepartment: Department,
+  filters: {
+    status?: "open" | "closed";
+    priorityLevel?: IndentPriority;
+    department?: Department;
+    category?: IndentCategory;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const offset = (page - 1) * pageSize;
+
+    const where: any = { AND: [{ isDeleted: false }] };
+
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
+    }
+
+    // Filter: status
+    if (filters.status === "open") {
+      where.AND.push({ openStatus: true });
+    } else if (filters.status === "closed") {
+      where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    }
+
+    // Filter: other fields
+    if (filters.priorityLevel) {
+      where.AND.push({ priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel] });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
+    }
+
+    if (filters.category) {
+      where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
+    }
+
+    if (filters.startDate || filters.endDate) {
+      if (filters.startDate) {
+        where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
+      }
+
+      if (filters.endDate) {
+        where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
+      }
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { indentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const [indents, total] = await Promise.all([
+      prisma.indents.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: true,
+        },
+      }),
+      prisma.indents.count({ where }),
+    ]);
+
+    // Add currentStepName to each indent
+    const indentsWithMeta = indents.map((indent) => ({
+      ...indent,
+      currentStepName: getStepName(indent.currStep),
+      currentStatus: indent.openStatus === true ? "OPEN" : "CLOSE",
+      
+    }));
+
+    return {
+      success: true,
+      data: indentsWithMeta,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter(
+          (k) => filters[k as keyof typeof filters]
+        ),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getIndentRepository:", error);
+    throw new Error(`Indent repository fetch failed: ${error.message}`);
+  }
+};
