@@ -1,16 +1,4 @@
-fieldsChanged: (
-  <Box sx={{ maxHeight: 200, overflowY: "auto" }}>
-    <pre
-      style={{
-        fontSize: "11px",
-        fontFamily: "monospace",
-        margin: 0,
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        color: "#607d8b", // optional: soft gray-blue
-      }}
-    >
-      {JSON.stringify(item.modifications, null, 2)}
-    </pre>
-  </Box>
-),
+          const response = await fetchUsersList({
+           ...(pendingWith === 'DEPARTMENT_MAKER' || pendingWith === 'DEPARTMENT_CHECKER' && {department: indent.department,}),
+            role: pendingWith as Position,
+          });
