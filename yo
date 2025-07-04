@@ -1,4 +1,3 @@
-
 export const getIndentRepository = async (
   userRole: Position,
   userDepartment: Department,
@@ -18,7 +17,7 @@ export const getIndentRepository = async (
     const offset = (page - 1) * pageSize;
     const where: any = { AND: [{ isDeleted: false }] };
 
-    // Restrict department-level visibility
+    // Department-based restriction
     if (
       (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
       userDepartment
@@ -26,14 +25,14 @@ export const getIndentRepository = async (
       where.AND.push({ department: userDepartment });
     }
 
-    // Default to open status unless explicitly 'closed'
+    // ✅ Default to open unless status=closed
     if (filters.status === "closed") {
       where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
     } else {
       where.AND.push({ openStatus: true });
     }
 
-    // Additional filters
+    // Apply filters
     if (filters.priorityLevel) {
       where.AND.push({ priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel] });
     }
@@ -46,13 +45,12 @@ export const getIndentRepository = async (
       where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
     }
 
-    if (filters.startDate || filters.endDate) {
-      if (filters.startDate) {
-        where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
-      }
-      if (filters.endDate) {
-        where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
-      }
+    if (filters.startDate) {
+      where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
+    }
+
+    if (filters.endDate) {
+      where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
     }
 
     if (filters.search?.trim()) {
@@ -66,7 +64,7 @@ export const getIndentRepository = async (
       });
     }
 
-    // Fetch indents and total
+    // Fetch indents
     const [indents, total] = await Promise.all([
       prisma.indents.findMany({
         where,
@@ -84,21 +82,41 @@ export const getIndentRepository = async (
       prisma.indents.count({ where }),
     ]);
 
-    // Process each indent and add currentStepName, currentStatus, assignedPerson
     const indentsWithMeta = await Promise.all(
       indents.map(async (indent) => {
+        const currentStepName = getStepName(indent.currStep);
         let assignedPerson = null;
-        const currentStepName =  getStepName(indent.currStep);
-        const response = await fetchUsersList( filters :{
-          department: indent.department,
-          role: currentStepName,
-        })
-        const userList = response?.data || [];
-        if(currentStepName === "DEPARTMENT_MAKER"){
-          const userMatch = userList.find((user) => user.email === indent.assignedTo);
-           assignedPerson = { name: userMatch.name, email: userMatch.email };
-        }else{
-          assignedPerson = { name: userList[0].name, email: userList[0].email };
+
+        try {
+          const response = await fetchUsersList({
+            department: indent.department,
+            role: currentStepName,
+          });
+
+          const userList = response?.data || [];
+
+          if (currentStepName === "DEPARTMENT_MAKER") {
+            const userMatch = userList.find(
+              (user) => user.email === indent.assignedTo
+            );
+
+            assignedPerson = userMatch
+              ? { name: userMatch.name, email: userMatch.email }
+              : { name: null, email: indent.assignedTo || null };
+          } else {
+            const fallbackUser = userList[0];
+            assignedPerson = fallbackUser
+              ? { name: fallbackUser.name, email: fallbackUser.email }
+              : null;
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to fetch users for indent ${indent.indentId}:`,
+            error
+          );
+          if (indent.assignedTo) {
+            assignedPerson = { name: null, email: indent.assignedTo };
+          }
         }
 
         return {
