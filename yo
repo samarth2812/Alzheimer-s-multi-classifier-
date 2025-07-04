@@ -84,20 +84,20 @@ export const getIndentRepository = async (
 
     const indentsWithMeta = await Promise.all(
       indents.map(async (indent) => {
+        const pendingWith = getNameFromStep(indent.currStep);
         const currentStepName = getStepName(indent.currStep);
         let assignedPerson = null;
 
         try {
           const response = await fetchUsersList({
             department: indent.department,
-            role: currentStepName,
+            role: pendingWith as Position,
           });
+          const userList = response || [];
 
-          const userList = response?.data || [];
-
-          if (currentStepName === "DEPARTMENT_MAKER") {
+          if (pendingWith === "DEPARTMENT_MAKER") {
             const userMatch = userList.find(
-              (user) => user.email === indent.assignedTo
+              (user:any) => user.email === indent.assignedTo
             );
 
             assignedPerson = userMatch
@@ -114,9 +114,6 @@ export const getIndentRepository = async (
             `Failed to fetch users for indent ${indent.indentId}:`,
             error
           );
-          if (indent.assignedTo) {
-            assignedPerson = { name: null, email: indent.assignedTo };
-          }
         }
 
         return {
