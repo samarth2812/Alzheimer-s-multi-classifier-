@@ -1,26 +1,31 @@
-export const formatIndentAuditTrailTableData = (rawData, actions = {}) => {
-  if (!Array.isArray(rawData)) {
-    return { columns: [], rows: [] };
-  }
-
-  const columns = [
-    { Header: "S. No.", accessor: "serialNumber", width: "5%", align: "center" },
-    { Header: "Action Type", accessor: "actionType", width: "10%", align: "left" },
-    { Header: "Role", accessor: "role", width: "15%", align: "left" },
-    { Header: "Performed By", accessor: "performedBy", width: "20%", align: "left" },
-    { Header: "Fields Changed", accessor: "fieldsChanged", width: "40%", align: "left" },
-    { Header: "Actions", accessor: "actions", width: "10%", align: "center" },
-  ];
-
-  const rows = rawData.map((item, index) => {
-    const fieldEntries = Object.entries(item.fields || {}).map(
-      ([key, val]) => `${key}: ${val.value}`
-    );
-
     return {
       serialNumber: index + 1,
-      actionType: item.actionType,
-      role: item.role,
+      actionType: (
+        <Box>
+          <MDTypography
+            variant="button"
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+            }}
+          >
+            {item.actionType}
+          </MDTypography>
+        </Box>
+      ),
+      role: (
+        <Box>
+          <MDTypography
+            variant="button"
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+            }}
+          >
+            {item.role}
+          </MDTypography>
+        </Box>
+      ),
       performedBy: (
         <Box>
           <Typography variant="body2">{item.performedByName}</Typography>
@@ -29,27 +34,17 @@ export const formatIndentAuditTrailTableData = (rawData, actions = {}) => {
           </Typography>
         </Box>
       ),
-      fieldsChanged: (
+      fieldsChanged:(
         <Box>
-          {fieldEntries.map((entry, idx) => (
-            <Typography key={idx} variant="body2">
-              {entry}
-            </Typography>
-          ))}
+          <MDTypography
+            variant="button"
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+            }}
+          >
+            {item.modifications}
+          </MDTypography>
         </Box>
-      ),
-      actions: (
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
-          <CustomIconButton
-            icon={Visibility}
-            label="View Details"
-            onClick={() => actions.onViewMore && actions.onViewMore(item)}
-            size="small"
-          />
-        </Box>
-      ),
+      ) ,
     };
-  });
-
-  return { columns, rows };
-};
