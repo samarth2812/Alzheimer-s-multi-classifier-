@@ -30,3 +30,34 @@ export const formatObligationTableData = (rawData, actions = {}) => {
 
   return { columns, rows };
 };
+
+
+
+{
+  "fields": {
+    "status": {
+      "value": "PENDING"
+    },
+    "dueDate": {
+      "value": "2025-07-04T12:54:00.000Z"
+    },
+    "category": {
+      "value": "Compliance Query"
+    },
+    "comments": {
+      "value": "None"
+    },
+    "priority": {
+      "value": "Low"
+    },
+    "assignedTo": {
+      "value": "dmh@gmail.com"
+    },
+    "department": {
+      "value": "HR"
+    },
+    "description": {
+      "value": "1234"
+    }
+  }
+}
