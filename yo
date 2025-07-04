@@ -1,4 +1,2 @@
-          const response = await fetchUsersList({
-           ...(pendingWith === 'DEPARTMENT_MAKER' || pendingWith === 'DEPARTMENT_CHECKER' && {department: indent.department,}),
-            role: pendingWith as Position,
-          });
+...(pendingWith === 'DEPARTMENT_MAKER' || pendingWith === 'DEPARTMENT_CHECKER' && {department: indent.department,}),
+
