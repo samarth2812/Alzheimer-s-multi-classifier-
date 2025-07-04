@@ -1,63 +1,55 @@
-export const formatObligationTableData = (rawData, actions = {}) => {
+export const formatIndentAuditTrailTableData = (rawData, actions = {}) => {
   if (!Array.isArray(rawData)) {
     return { columns: [], rows: [] };
   }
 
   const columns = [
-    { Header: "ID", accessor: "id", width: "5%", align: "left" },
-    { Header: "Current Status", accessor: "currentStepName", width: "20%", align: "left" },
-    { Header: "Pending With", accessor: "pendingWith", width: "30%", align: "left" },
-    { Header: "Circular Reference", accessor: "circularReference", width: "20%", align: "left" },
-    { Header: "Actions", accessor: "actions", width: "15%", align: "center" },
+    { Header: "S. No.", accessor: "serialNumber", width: "5%", align: "center" },
+    { Header: "Action Type", accessor: "actionType", width: "10%", align: "left" },
+    { Header: "Role", accessor: "role", width: "15%", align: "left" },
+    { Header: "Performed By", accessor: "performedBy", width: "20%", align: "left" },
+    { Header: "Fields Changed", accessor: "fieldsChanged", width: "40%", align: "left" },
+    { Header: "Actions", accessor: "actions", width: "10%", align: "center" },
   ];
 
-  const rows = rawData.map((item) => ({
-    id: formatText(item.id, 15),
-    currentStepName: formatCurrentStep(item.currentStepName),
-    pendingWith: formatText(item.responsibleOwner, 40),
-    circularReference: formatText(item.circularReference, 35),
-    actions: (
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <CustomIconButton
-          icon={Visibility}
-          label="View More"
-          onClick={() => actions.onViewMore && actions.onViewMore(item)}
-          size="small"
-        />
-      </Box>
-    ),
-  }));
+  const rows = rawData.map((item, index) => {
+    const fieldEntries = Object.entries(item.fields || {}).map(
+      ([key, val]) => `${key}: ${val.value}`
+    );
+
+    return {
+      serialNumber: index + 1,
+      actionType: item.actionType,
+      role: item.role,
+      performedBy: (
+        <Box>
+          <Typography variant="body2">{item.performedByName}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {item.performedByEmail}
+          </Typography>
+        </Box>
+      ),
+      fieldsChanged: (
+        <Box>
+          {fieldEntries.map((entry, idx) => (
+            <Typography key={idx} variant="body2">
+              {entry}
+            </Typography>
+          ))}
+        </Box>
+      ),
+      actions: (
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
+          <CustomIconButton
+            icon={Visibility}
+            label="View Details"
+            onClick={() => actions.onViewMore && actions.onViewMore(item)}
+            size="small"
+          />
+        </Box>
+      ),
+    };
+  });
 
   return { columns, rows };
 };
-
-
-
-{
-  "fields": {
-    "status": {
-      "value": "PENDING"
-    },
-    "dueDate": {
-      "value": "2025-07-04T12:54:00.000Z"
-    },
-    "category": {
-      "value": "Compliance Query"
-    },
-    "comments": {
-      "value": "None"
-    },
-    "priority": {
-      "value": "Low"
-    },
-    "assignedTo": {
-      "value": "dmh@gmail.com"
-    },
-    "department": {
-      "value": "HR"
-    },
-    "description": {
-      "value": "1234"
-    }
-  }
-}
