@@ -1,11 +1,11 @@
-export const getIndentRepository = async (
+export const getIncidentRepository = async (
   userRole: Position,
   userDepartment: Department,
   filters: {
-    status?: "open" | "closed";
-    priorityLevel?: IndentPriority;
+    status?: "open" | "closed" | "rejected";
+    severity?: IncidentSeverity;
     department?: Department;
-    category?: IndentCategory;
+    type?: IncidentType;
     search?: string;
     startDate?: string;
     endDate?: string;
@@ -17,7 +17,7 @@ export const getIndentRepository = async (
     const offset = (page - 1) * pageSize;
     const where: any = { AND: [{ isDeleted: false }] };
 
-    // Department-based restriction
+    // Department scope
     if (
       (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
       userDepartment
@@ -25,26 +25,26 @@ export const getIndentRepository = async (
       where.AND.push({ department: userDepartment });
     }
 
-    // Default to open unless status=closed
+    // Status filters
     if (filters.status === "closed") {
       where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    } else if (filters.status === "rejected") {
+      where.AND.push({ rejectedStatus: true });
     } else {
       where.AND.push({ openStatus: true });
     }
 
-    // Apply filters
-    if (filters.priorityLevel) {
-      where.AND.push({
-        priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel],
-      });
+    // Additional filters
+    if (filters.severity) {
+      where.AND.push({ severity: INCIDENT_SEVERITY_MAPPING[filters.severity] });
     }
 
     if (filters.department) {
       where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
     }
 
-    if (filters.category) {
-      where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
+    if (filters.type) {
+      where.AND.push({ type: INCIDENT_TYPE_MAPPING[filters.type] });
     }
 
     if (filters.startDate) {
@@ -59,16 +59,16 @@ export const getIndentRepository = async (
       const searchTerm = filters.search.trim();
       where.AND.push({
         OR: [
-          { description: { contains: searchTerm, mode: "insensitive" } },
+          { department: { contains: searchTerm, mode: "insensitive" } },
           { comments: { contains: searchTerm, mode: "insensitive" } },
-          { indentId: { contains: searchTerm, mode: "insensitive" } },
+          { incidentId: { contains: searchTerm, mode: "insensitive" } },
         ],
       });
     }
 
-    // Fetch indents
-    const [indents, total] = await Promise.all([
-      prisma.indents.findMany({
+    // Fetch incidents
+    const [incidents, total] = await Promise.all([
+      prisma.incidentReporting.findMany({
         where,
         skip: offset,
         take: pageSize,
@@ -81,13 +81,14 @@ export const getIndentRepository = async (
           attachments: true,
         },
       }),
-      prisma.indents.count({ where }),
+      prisma.incidentReporting.count({ where }),
     ]);
 
-    const indentsWithMeta = await Promise.all(
-      indents.map(async (indent) => {
-        const pendingWith = getNameFromStep(indent.currStep);
-        const currentStepName = getStepName(indent.currStep);
+    // Attach meta
+    const incidentsWithMeta = await Promise.all(
+      incidents.map(async (incident) => {
+        const pendingWith = getNameFromStep(incident.currStep);
+        const currentStepName = getStepName(incident.currStep);
         let assignees: {
           name: string | null;
           email: string | null;
@@ -96,14 +97,15 @@ export const getIndentRepository = async (
 
         try {
           const response = await fetchUsersList({
-            department: indent.department,
+            department: incident.department,
             role: pendingWith as Position,
           });
+
           const userList = response || [];
 
           if (pendingWith === "DEPARTMENT_MAKER") {
             const userMatch = userList.find(
-              (user: any) => user.email === indent.assignedTo
+              (user: any) => user.email === incident.assignedTo
             );
             if (userMatch) {
               assignees.push({
@@ -128,16 +130,13 @@ export const getIndentRepository = async (
             }
           }
         } catch (error) {
-          console.warn(
-            `Failed to fetch users for indent ${indent.indentId}:`,
-            error
-          );
+          console.warn(`Failed to fetch users for incident ${incident.incidentId}:`, error);
         }
 
         return {
-          ...indent,
+          ...incident,
           currentStepName,
-          currentStatus: indent.openStatus ? "OPEN" : "CLOSE",
+          currentStatus: incident.openStatus ? "OPEN" : "CLOSE",
           assignees,
         };
       })
@@ -145,7 +144,7 @@ export const getIndentRepository = async (
 
     return {
       success: true,
-      data: indentsWithMeta,
+      data: incidentsWithMeta,
       pagination: {
         total,
         page,
@@ -160,8 +159,8 @@ export const getIndentRepository = async (
       },
     };
   } catch (error: any) {
-    console.error("Error in getIndentRepository:", error);
-    throw new Error(`Indent repository fetch failed: ${error.message}`);
+    console.error("Error in getIncidentRepository:", error);
+    throw new Error(`Incident repository fetch failed: ${error.message}`);
   }
 };
 
@@ -185,6 +184,7 @@ export const getObservationRepository = async (
     const offset = (page - 1) * pageSize;
     const where: any = { AND: [{ isDeleted: false }] };
 
+    // Department-based restriction
     if (
       (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
       userDepartment
@@ -192,12 +192,14 @@ export const getObservationRepository = async (
       where.AND.push({ department: userDepartment });
     }
 
-    if (filters.status === "open") {
-      where.AND.push({ openStatus: true });
-    } else if (filters.status === "closed") {
+    // Default to open unless explicitly closed
+    if (filters.status === "closed") {
       where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    } else {
+      where.AND.push({ openStatus: true });
     }
 
+    // Apply filters
     if (filters.priorityLevel) {
       where.AND.push({ priority: OBSERVATION_PRIORITY_MAPPING[filters.priorityLevel] });
     }
@@ -210,14 +212,12 @@ export const getObservationRepository = async (
       where.AND.push({ observationTheme: OBSERVATION_THEME_MAPPING[filters.theme] });
     }
 
-    if (filters.startDate || filters.endDate) {
-      if (filters.startDate) {
-        where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
-      }
+    if (filters.startDate) {
+      where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
+    }
 
-      if (filters.endDate) {
-        where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
-      }
+    if (filters.endDate) {
+      where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
     }
 
     if (filters.search?.trim()) {
@@ -248,11 +248,60 @@ export const getObservationRepository = async (
       prisma.iSEObservations.count({ where }),
     ]);
 
-    const observationsWithMeta = observations.map((observation) => ({
-      ...observation,
-      currentStepName: getStepName(observation.currStep),
-      currentStatus: observation.openStatus === true ? "OPEN" : "CLOSE",
-    }));
+    const observationsWithMeta = await Promise.all(
+      observations.map(async (observation) => {
+        const pendingWith = getNameFromStep(observation.currStep);
+        const currentStepName = getStepName(observation.currStep);
+        let assignees: { name: string | null; email: string | null; role: string }[] = [];
+
+        try {
+          const response = await fetchUsersList({
+            department: observation.department,
+            role: pendingWith as Position,
+          });
+          const userList = response || [];
+
+          if (pendingWith === "DEPARTMENT_MAKER") {
+            const userMatch = userList.find(
+              (user: any) => user.email === observation.assignedTo
+            );
+            if (userMatch) {
+              assignees.push({
+                name: userMatch.name,
+                email: userMatch.email,
+                role: userMatch.role,
+              });
+            }
+          } else {
+            if (userList.length > 1) {
+              assignees = userList.map((user: any) => ({
+                name: user.name,
+                email: user.email,
+                role: user.role,
+              }));
+            } else if (userList[0]) {
+              assignees.push({
+                name: userList[0].name,
+                email: userList[0].email,
+                role: userList[0].role,
+              });
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to fetch users for observation ${observation.observationId}:`,
+            error
+          );
+        }
+
+        return {
+          ...observation,
+          currentStepName,
+          currentStatus: observation.openStatus ? "OPEN" : "CLOSE",
+          assignees,
+        };
+      })
+    );
 
     return {
       success: true,
@@ -273,118 +322,5 @@ export const getObservationRepository = async (
   } catch (error: any) {
     console.error("Error in getObservationRepository:", error);
     throw new Error(`Observation repository fetch failed: ${error.message}`);
-  }
-};
-
-
-export const getIncidentRepository = async (
-  userRole: Position,
-  userDepartment: Department,
-  filters: {
-    status?: "open" | "closed" | "rejected";
-    severity?: IncidentSeverity;
-    department?: Department;
-    type?: IncidentType;
-    search?: string;
-    startDate?: string;
-    endDate?: string;
-  },
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const offset = (page - 1) * pageSize;
-    const where: any = { AND: [{ isDeleted: false }] };
-
-    if (
-      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
-      userDepartment
-    ) {
-      where.AND.push({ department: userDepartment });
-    }
-
-    if (filters.status === "open") {
-      where.AND.push({ openStatus: true });
-    } else if (filters.status === "closed") {
-      where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
-    } else if (filters.status === "rejected") {
-      where.AND.push({ rejectedStatus: true });
-    }
-
-    if (filters.severity) {
-      where.AND.push({ severity: INCIDENT_SEVERITY_MAPPING[filters.severity] });
-    }
-
-    if (filters.department) {
-      where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
-    }
-
-    if (filters.type) {
-      where.AND.push({ type: INCIDENT_TYPE_MAPPING[filters.type] });
-    }
-
-    if (filters.startDate || filters.endDate) {
-      if (filters.startDate) {
-        where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
-      }
-
-      if (filters.endDate) {
-        where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
-      }
-    }
-
-    if (filters.search?.trim()) {
-      const searchTerm = filters.search.trim();
-      where.AND.push({
-        OR: [
-          { department: { contains: searchTerm, mode: "insensitive" } },
-          { comments: { contains: searchTerm, mode: "insensitive" } },
-          { incidentId: { contains: searchTerm, mode: "insensitive" } },
-        ],
-      });
-    }
-
-    const [incidents, total] = await Promise.all([
-      prisma.incidentReporting.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: "desc" },
-        include: {
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: "asc" },
-          },
-          attachments: true,
-        },
-      }),
-      prisma.incidentReporting.count({ where }),
-    ]);
-
-    const incidentsWithMeta = incidents.map((incident) => ({
-      ...incident,
-      currentStepName: getStepName(incident.currStep),
-      currentStatus: incident.openStatus === true ? "OPEN" : "CLOSE",
-    }));
-
-    return {
-      success: true,
-      data: incidentsWithMeta,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter(
-          (k) => filters[k as keyof typeof filters]
-        ),
-        search: filters.search || null,
-      },
-    };
-  } catch (error: any) {
-    console.error("Error in getIncidentRepository:", error);
-    throw new Error(`Incident repository fetch failed: ${error.message}`);
   }
 };
