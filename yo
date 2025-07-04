@@ -15,9 +15,9 @@ export const getIndentRepository = async (
 ) => {
   try {
     const offset = (page - 1) * pageSize;
-
     const where: any = { AND: [{ isDeleted: false }] };
 
+    // Restrict department-level visibility
     if (
       (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
       userDepartment
@@ -25,14 +25,14 @@ export const getIndentRepository = async (
       where.AND.push({ department: userDepartment });
     }
 
-    // Filter: status
-    if (filters.status === "open") {
-      where.AND.push({ openStatus: true });
-    } else if (filters.status === "closed") {
+    // ✅ Default to open status unless explicitly 'closed'
+    if (filters.status === "closed") {
       where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
+    } else {
+      where.AND.push({ openStatus: true });
     }
 
-    // Filter: other fields
+    // Additional filters
     if (filters.priorityLevel) {
       where.AND.push({ priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel] });
     }
@@ -49,7 +49,6 @@ export const getIndentRepository = async (
       if (filters.startDate) {
         where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
       }
-
       if (filters.endDate) {
         where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
       }
@@ -66,6 +65,7 @@ export const getIndentRepository = async (
       });
     }
 
+    // Fetch indents and total
     const [indents, total] = await Promise.all([
       prisma.indents.findMany({
         where,
@@ -83,13 +83,50 @@ export const getIndentRepository = async (
       prisma.indents.count({ where }),
     ]);
 
-    // Add currentStepName to each indent
-    const indentsWithMeta = indents.map((indent) => ({
-      ...indent,
-      currentStepName: getStepName(indent.currStep),
-      currentStatus: indent.openStatus === true ? "OPEN" : "CLOSE",
-      
-    }));
+    // Process each indent and add currentStepName, currentStatus, assignedPerson
+    const indentsWithMeta = await Promise.all(
+      indents.map(async (indent) => {
+        let assignedPerson = null;
+
+        if (userRole === "DEPARTMENT_MAKER") {
+          // ✅ Use email directly
+          if (indent.assignedTo) {
+            assignedPerson = { name: null, email: indent.assignedTo };
+          }
+        } else {
+          try {
+            const dept = indent.department;
+            const role = dept === "Compliance" ? "COMPLIANCE_CHECKER" : "DEPARTMENT_MAKER";
+
+            const response = await apiRequest(
+              "GET",
+              `${process.env.REACT_APP_BACKEND_URL}/api/admin/v1/users?department=${dept}&role=${role}`
+            );
+
+            const userList = response?.data || [];
+            const userMatch = userList.find((user) => user.email === indent.assignedTo);
+
+            if (userMatch) {
+              assignedPerson = { name: userMatch.name, email: userMatch.email };
+            } else if (indent.assignedTo) {
+              assignedPerson = { name: null, email: indent.assignedTo };
+            }
+          } catch (err) {
+            console.warn(`Failed to resolve assigned user for indent ${indent.indentId}`);
+            if (indent.assignedTo) {
+              assignedPerson = { name: null, email: indent.assignedTo };
+            }
+          }
+        }
+
+        return {
+          ...indent,
+          currentStepName: getStepName(indent.currStep),
+          currentStatus: indent.openStatus ? "OPEN" : "CLOSE",
+          assignedPerson,
+        };
+      })
+    );
 
     return {
       success: true,
@@ -107,11 +144,6 @@ export const getIndentRepository = async (
         search: filters.search || null,
       },
     };
-
- const response = await apiRequest(
-          "GET",
-          isComplianceDepartment
-            ? `${process.env.REACT_APP_BACKEND_URL}/api/admin/v1/users?role=COMPLIANCE_CHECKER`
   } catch (error: any) {
     console.error("Error in getIndentRepository:", error);
     throw new Error(`Indent repository fetch failed: ${error.message}`);
