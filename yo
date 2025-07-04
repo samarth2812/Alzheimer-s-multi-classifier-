@@ -1,50 +1,16 @@
-    return {
-      serialNumber: index + 1,
-      actionType: (
-        <Box>
-          <MDTypography
-            variant="button"
-            sx={{
-              color: (theme) => theme.palette.custom.text2,
-              fontSize: "11.2px !important",
-            }}
-          >
-            {item.actionType}
-          </MDTypography>
-        </Box>
-      ),
-      role: (
-        <Box>
-          <MDTypography
-            variant="button"
-            sx={{
-              color: (theme) => theme.palette.custom.text2,
-              fontSize: "11.2px !important",
-            }}
-          >
-            {item.role}
-          </MDTypography>
-        </Box>
-      ),
-      performedBy: (
-        <Box>
-          <Typography variant="body2">{item.performedByName}</Typography>
-          <Typography variant="caption" color="text.secondary">
-            {item.performedByEmail}
-          </Typography>
-        </Box>
-      ),
-      fieldsChanged:(
-        <Box>
-          <MDTypography
-            variant="button"
-            sx={{
-              color: (theme) => theme.palette.custom.text2,
-              fontSize: "11.2px !important",
-            }}
-          >
-            {item.modifications}
-          </MDTypography>
-        </Box>
-      ) ,
-    };
+fieldsChanged: (
+  <Box sx={{ maxHeight: 200, overflowY: "auto" }}>
+    <pre
+      style={{
+        fontSize: "11px",
+        fontFamily: "monospace",
+        margin: 0,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        color: "#607d8b", // optional: soft gray-blue
+      }}
+    >
+      {JSON.stringify(item.modifications, null, 2)}
+    </pre>
+  </Box>
+),
