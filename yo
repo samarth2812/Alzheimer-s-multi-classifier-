@@ -171,3 +171,176 @@ export const generateObligationsExcel = async (
     throw ApiError.internal(`Error generating Excel export: ${error.message}`);
   }
 };
+
+
+export const getIndentRepository = async (
+  userRole: Position,
+  userDepartment: Department,
+  filters: {
+    status?: "open" | "Closed";
+    priorityLevel?: IndentPriority;
+    department?: Department;
+    category?: IndentCategory;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    const offset = (page - 1) * pageSize;
+    const where: any = { AND: [{ isDeleted: false }] };
+
+    // Department-based restriction
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
+    }
+
+    // Default to open unless status=closed
+    if (filters.status === "Closed") {
+      where.AND.push({ openStatus: false });
+    } else {
+      where.AND.push({ openStatus: true });
+    }
+
+    // Apply filters
+    if (filters.priorityLevel) {
+      where.AND.push({
+        priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel],
+      });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
+    }
+
+    if (filters.category) {
+      where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
+    }
+
+    if (filters.startDate) {
+      where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
+    }
+
+    if (filters.endDate) {
+      where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { indentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    // Fetch indents
+    const [indents, total] = await Promise.all([
+      prisma.indents.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { updatedAt: "desc" },
+        include: {
+          remarkHistory: {
+            where: { isDeleted: false },
+            orderBy: { createdAt: "asc" },
+          },
+          attachments: true,
+        },
+      }),
+      prisma.indents.count({ where }),
+    ]);
+
+    const indentsWithMeta = await Promise.all(
+      indents.map(async (indent) => {
+        const pendingWith = getNameFromStep(indent.currStep, indent.prevStep);
+        const currentStepName = getStepName(indent.currStep, indent.prevStep, indent.department);
+        let assignees: {
+          name: string | null;
+          email: string | null;
+          role: string;
+        }[] = [];
+
+        try {
+          if (pendingWith !== "Closed") {
+            const response = await fetchUsersList({
+              ...(pendingWith === "DEPARTMENT_MAKER" ||
+              pendingWith === "DEPARTMENT_CHECKER"
+                ? { department: indent.department }
+                : {}),
+              role: pendingWith as Position,
+            });
+            const userList = response || [];
+
+            if (pendingWith === "DEPARTMENT_MAKER") {
+              const userMatch = userList.find(
+                (user: any) => user.email === indent.assignedTo
+              );
+              if (userMatch) {
+                assignees.push({
+                  name: userMatch.name,
+                  email: userMatch.email,
+                  role: currentStepName,
+                });
+              }
+            } else {
+              if (userList.length > 1) {
+                assignees = userList.map((user: any) => ({
+                  name: user.name,
+                  email: user.email,
+                  role: currentStepName,
+                }));
+              } else if (userList[0]) {
+                assignees.push({
+                  name: userList[0].name,
+                  email: userList[0].email,
+                  role: currentStepName,
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `Failed to fetch users for indent ${indent.indentId}:`,
+            error
+          );
+        }
+
+        return {
+          ...indent,
+          currentStepName,
+          currentStatus: indent.openStatus ? "open" : "closed",
+          assignees,
+        };
+      })
+    );
+
+    return {
+      success: true,
+      data: indentsWithMeta,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+      filters: {
+        applied: Object.keys(filters).filter(
+          (k) => filters[k as keyof typeof filters]
+        ),
+        search: filters.search || null,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error in getIndentRepository:", error);
+    throw new Error(`Indent repository fetch failed: ${error.message}`);
+  }
+};
