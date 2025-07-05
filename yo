@@ -1,42 +1,49 @@
-/**
- * Export obligations to Excel with all filters
- */
-export const exportObligationsExcel = async (
+export const exportIndentsExcel = async (
   req: customRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
     const user = req.user!;
-    const { regulator, status, department, year, compliance, search } = req.query;
+    const {
+      status,
+      priorityLevel,
+      department,
+      category,
+      search,
+      startDate,
+      endDate,
+    } = req.query;
 
     const filters = {
-      regulator: regulator as string,
-      status: status as string,
+      status: status as "open" | "Closed",
+      priorityLevel: priorityLevel as IndentPriority,
       department: department as Department,
-      year: year as string,
-      compliance: compliance as string,
-      search: search as string // NEW: search in Excel export
+      category: category as IndentCategory,
+      search: search as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
     };
 
-    // Set headers for Excel download
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `obligations_${timestamp}.xlsx`;
+    const filename = `indents_${timestamp}.xlsx`;
 
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
-    await generateObligationsExcelService(
-      res,
-      user.role,
-      user.department,
-      filters
-    );
-  } catch (error) {
+    await generateIndentExcel(res, user.role, user.department, filters);
+  } catch (error: any) {
+    console.error("Error exporting indents Excel:", error);
+
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        message: `Failed to generate Excel export: ${error instanceof Error ? error.message : "Unknown error"}`
+        message: `Failed to generate Excel export: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       });
     } else {
       res.end();
