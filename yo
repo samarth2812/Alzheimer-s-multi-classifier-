@@ -1,179 +1,18 @@
-export const generateObligationsExcel = async (
+import { Response as ExpressResponse } from "express";
+import ExcelJS from "exceljs";
+import { Stream } from "stream";
+import { prisma } from "../prisma";
+import { getStepName, getNameFromStep } from "../helpers/workflowHelper";
+import { fetchUsersList } from "../helpers/fetchUsers";
+import {
+  DEPARTMENT_MAPPING,
+  INDENT_CATEGORY_MAPPING,
+  INDENT_PRIORITY_MAPPING,
+} from "../constants/mappings";
+import { Department, IndentCategory, IndentPriority, Position } from "@prisma/client";
+
+export const generateIndentExcel = async (
   res: ExpressResponse,
-  userRole: Position,
-  userDepartment: Department,
-  filters: {
-    regulator?: string;
-    status?: string;
-    department?: Department;
-    year?: string;
-    compliance?: string;
-    search?: string;
-  }
-) => {
-  try {
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Obligation Management System";
-    workbook.created = new Date();
-
-    const worksheet = workbook.addWorksheet("Obligations", {
-      views: [{ state: "frozen", ySplit: 1 }],
-    });
-
-    // Define headers
-    const headers = [
-      "ID",
-      "Product",
-      "Circular Reference",
-      "Title",
-      "Year",
-      "Regulator",
-      "Section Reference",
-      "Applicability",
-      "Regulatory Timeline",
-      "Process",
-      "Sub Process",
-      "Department",
-      "Responsible Owner",
-      "Current Step",
-      "Final Status",
-      "Compliance",
-      "Final Risk Score",
-      "Test Step",
-      "Test Evidence",
-      "Created At",
-      "Updated At",
-    ];
-
-    // Add header row
-    const headerRow = worksheet.addRow(headers);
-    headerRow.font = { bold: true, size: 11 };
-    headerRow.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "F0F0F0" },
-    };
-
-    // Build filter for data export (same logic as repository)
-    const whereFilter: any = {
-      AND: [{ isTempSaved: false }],
-    };
-
-    // Department-based pre-filtering
-    if (userDepartment !== Department.COMPLIANCE) {
-      whereFilter.AND.push({ department: userDepartment });
-    }
-
-    // Apply filters
-    if (filters.status === "closed") {
-      whereFilter.AND.push({ currStep: 6 });
-    } else if (filters.status === "open") {
-      whereFilter.AND.push({ currStep: { not: 6 } });
-    }
-
-    if (filters.regulator) {
-      whereFilter.AND.push({
-        regulator: {
-          contains: filters.regulator,
-          mode: "insensitive",
-        },
-      });
-    }
-
-    if (filters.department) {
-      whereFilter.AND.push({ department: filters.department });
-    }
-
-    if (filters.year) {
-      whereFilter.AND.push({ year: filters.year });
-    }
-
-    if (filters.compliance) {
-      whereFilter.AND.push({
-        compliance: convertToComplianceStatus(filters.compliance),
-      });
-    }
-
-    // Search functionality
-    if (filters.search && filters.search.trim()) {
-      const searchTerm = filters.search.trim();
-      whereFilter.AND.push({
-        OR: [
-          { title: { contains: searchTerm, mode: "insensitive" } },
-          { circularReference: { contains: searchTerm, mode: "insensitive" } },
-          { id: { contains: searchTerm, mode: "insensitive" } },
-          { regulator: { contains: searchTerm, mode: "insensitive" } },
-        ],
-      });
-    }
-
-    // Fetch all matching obligations
-    const obligations = await prisma.obligation.findMany({
-      where: whereFilter,
-      orderBy: { createdAt: "desc" },
-    });
-
-    // Helper function to format dates
-    const formatDate = (date: Date | null): string => {
-      if (!date) return "N/A";
-      try {
-        return date.toLocaleDateString("en-GB");
-      } catch {
-        return "N/A";
-      }
-    };
-
-    // Add data rows
-    obligations.forEach((obligation) => {
-      const finalStatus = obligation.currStep === 6 ? "CLOSED" : "OPEN";
-
-      const row = [
-        obligation.id || "N/A",
-        obligation.product || "N/A",
-        obligation.circularReference || "N/A",
-        obligation.title || "N/A",
-        obligation.year || "N/A",
-        obligation.regulator || "N/A",
-        obligation.sectionReference || "N/A",
-        obligation.applicability || "N/A",
-        formatDate(obligation.regulatoryTimeline),
-        obligation.process || "N/A",
-        obligation.subProcess || "N/A",
-        obligation.department || "N/A",
-        obligation.responsibleOwner || "N/A",
-        workflowHelper.getStepName(obligation.currStep),
-        finalStatus,
-        obligation.compliance || "N/A",
-        obligation.finalRiskScore || "N/A",
-        obligation.testStep || "N/A",
-        obligation.testEvidence || "N/A",
-        formatDate(obligation.createdAt),
-        formatDate(obligation.updatedAt),
-      ];
-
-      worksheet.addRow(row);
-    });
-
-    // Set column widths
-    worksheet.columns.forEach((column: any) => {
-      if (column) column.width = 15;
-    });
-
-    // Write to response stream
-    await workbook.xlsx.write(res as unknown as Stream);
-
-    return true;
-  } catch (error: any) {
-    console.error("Error in generateObligationsExcel:", error);
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw ApiError.internal(`Error generating Excel export: ${error.message}`);
-  }
-};
-
-
-export const getIndentRepository = async (
   userRole: Position,
   userDepartment: Department,
   filters: {
@@ -184,15 +23,43 @@ export const getIndentRepository = async (
     search?: string;
     startDate?: string;
     endDate?: string;
-  },
-  page: number = 1,
-  pageSize: number = 10
+  }
 ) => {
   try {
-    const offset = (page - 1) * pageSize;
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Indent Management System";
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet("Indents", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+
+    const headers = [
+      "Serial Number",
+      "Description",
+      "Priority",
+      "Category",
+      "Department",
+      "Created By",
+      "Assigned To",
+      "Current Step",
+      "Status",
+      "Created At",
+      "Updated At",
+      "Closed Date",
+      "Comments",
+    ];
+
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "F0F0F0" },
+    };
+
     const where: any = { AND: [{ isDeleted: false }] };
 
-    // Department-based restriction
     if (
       (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
       userDepartment
@@ -200,18 +67,14 @@ export const getIndentRepository = async (
       where.AND.push({ department: userDepartment });
     }
 
-    // Default to open unless status=closed
     if (filters.status === "Closed") {
       where.AND.push({ openStatus: false });
     } else {
       where.AND.push({ openStatus: true });
     }
 
-    // Apply filters
     if (filters.priorityLevel) {
-      where.AND.push({
-        priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel],
-      });
+      where.AND.push({ priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel] });
     }
 
     if (filters.department) {
@@ -241,106 +104,71 @@ export const getIndentRepository = async (
       });
     }
 
-    // Fetch indents
-    const [indents, total] = await Promise.all([
-      prisma.indents.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: "desc" },
-        include: {
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: "asc" },
-          },
-          attachments: true,
-        },
-      }),
-      prisma.indents.count({ where }),
-    ]);
+    const indents = await prisma.indents.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+    });
 
-    const indentsWithMeta = await Promise.all(
-      indents.map(async (indent) => {
-        const pendingWith = getNameFromStep(indent.currStep, indent.prevStep);
-        const currentStepName = getStepName(indent.currStep, indent.prevStep, indent.department);
-        let assignees: {
-          name: string | null;
-          email: string | null;
-          role: string;
-        }[] = [];
-
-        try {
-          if (pendingWith !== "Closed") {
-            const response = await fetchUsersList({
-              ...(pendingWith === "DEPARTMENT_MAKER" ||
-              pendingWith === "DEPARTMENT_CHECKER"
-                ? { department: indent.department }
-                : {}),
-              role: pendingWith as Position,
-            });
-            const userList = response || [];
-
-            if (pendingWith === "DEPARTMENT_MAKER") {
-              const userMatch = userList.find(
-                (user: any) => user.email === indent.assignedTo
-              );
-              if (userMatch) {
-                assignees.push({
-                  name: userMatch.name,
-                  email: userMatch.email,
-                  role: currentStepName,
-                });
-              }
-            } else {
-              if (userList.length > 1) {
-                assignees = userList.map((user: any) => ({
-                  name: user.name,
-                  email: user.email,
-                  role: currentStepName,
-                }));
-              } else if (userList[0]) {
-                assignees.push({
-                  name: userList[0].name,
-                  email: userList[0].email,
-                  role: currentStepName,
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(
-            `Failed to fetch users for indent ${indent.indentId}:`,
-            error
-          );
-        }
-
-        return {
-          ...indent,
-          currentStepName,
-          currentStatus: indent.openStatus ? "open" : "closed",
-          assignees,
-        };
-      })
-    );
-
-    return {
-      success: true,
-      data: indentsWithMeta,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter(
-          (k) => filters[k as keyof typeof filters]
-        ),
-        search: filters.search || null,
-      },
+    const formatDate = (date: Date | null): string => {
+      if (!date) return "N/A";
+      return date.toLocaleDateString("en-GB");
     };
+
+    for (let index = 0; index < indents.length; index++) {
+      const indent = indents[index];
+      const pendingWith = getNameFromStep(indent.currStep, indent.prevStep);
+      const currentStepName = getStepName(indent.currStep, indent.prevStep, indent.department);
+      let assigneeName = "N/A";
+
+      if (pendingWith !== "Closed") {
+        try {
+          const response = await fetchUsersList({
+            ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
+              ? { department: indent.department }
+              : {}),
+            role: pendingWith as Position,
+          });
+
+          const userList = response || [];
+
+          if (pendingWith === "DEPARTMENT_MAKER") {
+            const match = userList.find((user: any) => user.email === indent.assignedTo);
+            if (match) assigneeName = match.name || match.email;
+          } else if (userList.length) {
+            assigneeName = userList.map((u: any) => u.name || u.email).join(", ");
+          }
+        } catch (err) {
+          console.warn("Error fetching assignee list:", err);
+        }
+      }
+
+      const row = [
+        index + 1, // Serial Number
+        indent.description || "N/A",
+        indent.priority || "N/A",
+        indent.category || "N/A",
+        indent.department || "N/A",
+        indent.createdBy || "N/A",
+        assigneeName,
+        currentStepName,
+        indent.openStatus ? "Open" : "Closed",
+        formatDate(indent.createdAt),
+        formatDate(indent.updatedAt),
+        formatDate(indent.closedDate),
+        indent.comments || "N/A",
+      ];
+
+      worksheet.addRow(row);
+    }
+
+    worksheet.columns.forEach((column: any) => {
+      if (column) column.width = 18;
+    });
+
+    await workbook.xlsx.write(res as unknown as Stream);
+    return true;
   } catch (error: any) {
-    console.error("Error in getIndentRepository:", error);
-    throw new Error(`Indent repository fetch failed: ${error.message}`);
+    console.error("Error in generateIndentExcel:", error);
+    throw new Error(`Indent Excel export failed: ${error.message}`);
   }
 };
