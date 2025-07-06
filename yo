@@ -1,101 +1,216 @@
-import { PrismaClient } from "@prisma/client";
-import { Router } from "express";
-import requireUser from "../middleware/requireUser";
-import { authorize } from "../middleware/authorize";
-import {
-  addIndent,
-  addIndentRemark,
-  deleteIndent,
-  editIndentRemark,
-  exportIndentsExcel,
-  getIndentAuditTrailController,
-  getIndentRepo,
-  getIndents,
-  updateIndent,
-} from "../controllers/indentManagement/indentController";
-import { PERMISSIONS } from "../constants/permissions";
-import { getNotificationIndent } from "../controllers/indentManagement/notificationController";
+export const exportIndentsExcel = async (
+  req: customRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    console.log(3, "hello");
+    const user = req.user!;
+    const {
+      status,
+      priorityLevel,
+      department,
+      category,
+      search,
+      startDate,
+      endDate,
+    } = req.query;
 
-const prisma = new PrismaClient();
+    const filters = {
+      status: status as "open" | "Closed",
+      priorityLevel: priorityLevel as IndentPriority,
+      department: department as Department,
+      category: category as IndentCategory,
+      search: search as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+    };
 
-export const indentRouter = Router();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `indents_${timestamp}.xlsx`;
 
-//Fetch all indents
-indentRouter.get(
-  "/:role/:tab/:department?",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  getIndents
-);
-//create a new indent
-indentRouter.post(
-  "/",
-  requireUser,
-  authorize([PERMISSIONS.COMPLIANCE_MAKER]),
-  addIndent
-);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
-// delete a indent
-indentRouter.delete(
-  "/:indentId",
-  requireUser,
-  authorize([PERMISSIONS.COMPLIANCE_MAKER]),
-  deleteIndent
-);
+    await generateIndentExcel(res, user.role, user.department, filters);
+  } catch (error: any) {
+    console.error("Error exporting indents Excel:", error);
 
-//update a indent
-indentRouter.put(
-  "/:role/:department/:indentId",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  updateIndent
-);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: `Failed to generate Excel export: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      });
+    } else {
+      res.end();
+    }
+  }
+};
 
-// crete a new Indent Remark
-indentRouter.post(
-  "/remarks/:indentId",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  addIndentRemark
-);
+export const generateIndentExcel = async (
+  res: ExpressResponse,
+  userRole: Position,
+  userDepartment: Department,
+  filters: {
+    status?: "open" | "Closed";
+    priorityLevel?: IndentPriority;
+    department?: Department;
+    category?: IndentCategory;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }
+) => {
+  try {
+    console.log(0, filters);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Indent Management System";
+    workbook.created = new Date();
 
-// edit a indent Remark
-indentRouter.put(
-  "/remarks/:remarkId",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  editIndentRemark
-);
+    const worksheet = workbook.addWorksheet("Indents", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
 
-//Get Indent Repository with filters and search
-indentRouter.get(
-  "/repository",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  getIndentRepo
-);
+    const headers = [
+      "Serial Number",
+      "Description",
+      "Priority",
+      "Category",
+      "Department",
+      "Created By",
+      "Assigned To",
+      "Current Step",
+      "Status",
+      "Created At",
+      "Updated At",
+      "Closed Date",
+      "Comments",
+    ];
 
-// Notification endpoint
-indentRouter.get(
-  "/notifications",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  getNotificationIndent
-);
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "F0F0F0" },
+    };
 
-// audit-trail endpoint
-indentRouter.get(
-  "/audit-trail",
-  requireUser,
-  authorize([PERMISSIONS.CLOSURE_ACCESS]),
-  getIndentAuditTrailController
-);
+    const where: any = { AND: [{ isDeleted: false }] };
 
-indentRouter.get(
-  "/export/excel",
-  requireUser,
-  authorize([PERMISSIONS.IBA]),
-  exportIndentsExcel
-);
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
+    }
 
-Incoming request: GET /api/v1/indents/export/excel?
+    if (filters.status === "Closed") {
+      where.AND.push({ openStatus: false });
+    } else {
+      where.AND.push({ openStatus: true });
+    }
+
+    if (filters.priorityLevel) {
+      where.AND.push({ priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel] });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
+    }
+
+    if (filters.category) {
+      where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
+    }
+
+    if (filters.startDate) {
+      where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
+    }
+
+    if (filters.endDate) {
+      where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { indentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const indents = await prisma.indents.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const formatDate = (date: Date | null): string => {
+      if (!date) return "N/A";
+      return date.toLocaleDateString("en-GB");
+    };
+
+    for (let index = 0; index < indents.length; index++) {
+      const indent = indents[index];
+      const pendingWith = getNameFromStep(indent.currStep, indent.prevStep);
+      const currentStepName = getStepName(indent.currStep, indent.prevStep, indent.department);
+      let assigneeName = "N/A";
+
+      if (pendingWith !== "Closed") {
+        try {
+          const response = await fetchUsersList({
+            ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
+              ? { department: indent.department }
+              : {}),
+            role: pendingWith as Position,
+          });
+
+          const userList = response || [];
+
+          if (pendingWith === "DEPARTMENT_MAKER") {
+            const match = userList.find((user: any) => user.email === indent.assignedTo);
+            if (match) assigneeName = match.name || match.email;
+          } else if (userList.length) {
+            assigneeName = userList.map((u: any) => u.name || u.email).join(", ");
+          }
+        } catch (err) {
+          console.warn("Error fetching assignee list:", err);
+        }
+      }
+
+      const row = [
+        index + 1, // Serial Number
+        indent.description || "N/A",
+        indent.priority || "N/A",
+        indent.category || "N/A",
+        indent.department || "N/A",
+        indent.createdAt || "N/A",
+        assigneeName,
+        currentStepName,
+        indent.openStatus ? "Open" : "Closed",
+        formatDate(indent.createdAt),
+        formatDate(indent.updatedAt),
+        formatDate(indent.closedDate),
+        indent.comments || "N/A",
+      ];
+
+      worksheet.addRow(row);
+    }
+
+    worksheet.columns.forEach((column: any) => {
+      if (column) column.width = 18;
+    });
+
+    await workbook.xlsx.write(res as unknown as Stream);
+    return true;
+  } catch (error: any) {
+    console.error("Error in generateIndentExcel:", error);
+    throw new Error(`Indent Excel export failed: ${error.message}`);
+  }
+};
