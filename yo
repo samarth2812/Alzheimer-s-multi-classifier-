@@ -1,17 +1,47 @@
+export const buildFetchFilter = (
+  type: "inbox" | "sent" | "thread",
+  userEmail: string,
+  threadId?: string
+) => {
+  switch (type) {
+    case "inbox":
+      return {
+        AND: [
+          {
+            OR: [
+              { sentTo: { has: userEmail } },
+              { cc: { has: userEmail } },
+            ],
+          },
+          {
+            NOT: { sentBy: userEmail },
+          },
+          {
+            isDeleted: false,
+          },
+        ],
+      };
 
-{
-  AND: [
-    {
-      OR: [
-        { sentTo: { has: userEmail } },
-        { cc: { has: userEmail } },
-      ],
-    },
-    {
-      NOT: { sentBy: userEmail }, // Exclude self-sent messages
-    },
-  ],
-}
+    case "sent":
+      return {
+        sentBy: userEmail,
+        isDeleted: false,
+      };
+
+    case "thread":
+      return {
+        OR: [
+          { commId: threadId },
+          { parentCommId: threadId },
+        ],
+        isDeleted: false,
+      };
+
+    default:
+      return { isDeleted: false };
+  }
+};
+
 
 
 /**
