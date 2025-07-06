@@ -1,18 +1,22 @@
-export const apiRequest = async (method, url, data = null) => {
+export const apiRequest = async (method, url, data = null, extraConfig = {}) => {
   try {
     const config = {
       method,
       url,
+      ...extraConfig, // ✅ Support passing `responseType`, etc.
     };
 
     if (!(data instanceof FormData)) {
       config.headers = {
+        ...config.headers,
         "Content-Type": "application/json",
       };
     } else {
-      config.headers = {};
+      config.headers = {
+        ...config.headers,
+      };
     }
-    // only adding for the once who req body
+
     if (data && ["POST", "PUT", "PATCH"].includes(method.toUpperCase())) {
       config.data = data;
     }
