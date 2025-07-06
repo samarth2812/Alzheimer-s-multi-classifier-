@@ -1,4 +1,4 @@
-export const exportIndentsExcel = async (
+export const exportObservationsExcel = async (
   req: customRequest,
   res: Response,
   next: NextFunction
@@ -9,24 +9,24 @@ export const exportIndentsExcel = async (
       status,
       priorityLevel,
       department,
-      category,
+      theme,
       search,
       startDate,
       endDate,
     } = req.query;
 
     const filters = {
-      status: status as "open" | "Closed",
-      priorityLevel: priorityLevel as IndentPriority,
+      status: status as "open" | "closed",
+      priorityLevel: priorityLevel as observationPriority,
       department: department as Department,
-      category: category as IndentCategory,
+      theme: theme as ObservationTheme,
       search: search as string,
       startDate: startDate as string,
       endDate: endDate as string,
     };
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `indents_${timestamp}.xlsx`;
+    const filename = `observations_${timestamp}.xlsx`;
 
     res.setHeader(
       "Content-Type",
@@ -34,9 +34,62 @@ export const exportIndentsExcel = async (
     );
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
 
-    await generateIndentExcel(res, user.role, user.department, filters);
+    await generateObservationExcel(res, user.role, user.department, filters);
   } catch (error: any) {
-    console.error("Error exporting indents Excel:", error);
+    console.error("Error exporting observations Excel:", error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: `Failed to generate Excel export: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      });
+    } else {
+      res.end();
+    }
+  }
+};
+
+export const exportIncidentsExcel = async (
+  req: customRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const user = req.user!;
+    const {
+      status,
+      severity,
+      department,
+      type,
+      search,
+      startDate,
+      endDate,
+    } = req.query;
+
+    const filters = {
+      status: status as "open" | "closed" | "rejected",
+      severity: severity as IncidentSeverity,
+      department: department as Department,
+      type: type as IncidentType,
+      search: search as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+    };
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `incidents_${timestamp}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    await generateIncidentExcel(res, user.role, user.department, filters);
+  } catch (error: any) {
+    console.error("Error exporting incidents Excel:", error);
 
     if (!res.headersSent) {
       res.status(500).json({
