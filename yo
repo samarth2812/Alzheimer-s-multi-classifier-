@@ -1,3 +1,19 @@
+
+{
+  AND: [
+    {
+      OR: [
+        { sentTo: { has: userEmail } },
+        { cc: { has: userEmail } },
+      ],
+    },
+    {
+      NOT: { sentBy: userEmail }, // Exclude self-sent messages
+    },
+  ],
+}
+
+
 /**
 =========================================================
 * Athena Guard - v2.2.0
