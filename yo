@@ -1,12 +1,23 @@
-export const generateIndentExcel = async (
+import ExcelJS from "exceljs";
+import { Response as ExpressResponse } from "express";
+import { getNameFromStep, getStepName } from "@/utils/workflow";
+import { fetchUsersList } from "@/utils/fetchUsers";
+import { prisma } from "@/lib/prisma";
+import {
+  DEPARTMENT_MAPPING,
+  OBSERVATION_PRIORITY_MAPPING,
+  OBSERVATION_THEME_MAPPING,
+} from "@/constants";
+
+export const generateObservationExcel = async (
   res: ExpressResponse,
   userRole: Position,
   userDepartment: Department,
   filters: {
-    status?: "open" | "Closed";
-    priorityLevel?: IndentPriority;
+    status?: "open" | "closed";
+    priorityLevel?: observationPriority;
     department?: Department;
-    category?: IndentCategory;
+    theme?: ObservationTheme;
     search?: string;
     startDate?: string;
     endDate?: string;
@@ -14,18 +25,19 @@ export const generateIndentExcel = async (
 ) => {
   try {
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Indent Management System";
+    workbook.creator = "ISE Observation System";
     workbook.created = new Date();
 
-    const worksheet = workbook.addWorksheet("Indents", {
+    const worksheet = workbook.addWorksheet("Observations", {
       views: [{ state: "frozen", ySplit: 1 }],
     });
 
     const headers = [
       "Serial Number",
+      "Observation ID",
       "Description",
       "Priority",
-      "Category",
+      "Theme",
       "Department",
       "Created By",
       "Assigned To",
@@ -54,147 +66,12 @@ export const generateIndentExcel = async (
       where.AND.push({ department: userDepartment });
     }
 
-    if (filters.status === "Closed") {
-      where.AND.push({ openStatus: false });
-    } else {
-      where.AND.push({ openStatus: true });
-    }
-
-    if (filters.priorityLevel) {
-      where.AND.push({ priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel] });
-    }
-
-    if (filters.department) {
-      where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
-    }
-
-    if (filters.category) {
-      where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
-    }
-
-    if (filters.startDate) {
-      where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
-    }
-
-    if (filters.endDate) {
-      where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
-    }
-
-    if (filters.search?.trim()) {
-      const searchTerm = filters.search.trim();
-      where.AND.push({
-        OR: [
-          { description: { contains: searchTerm, mode: "insensitive" } },
-          { comments: { contains: searchTerm, mode: "insensitive" } },
-          { indentId: { contains: searchTerm, mode: "insensitive" } },
-        ],
-      });
-    }
-
-    const indents = await prisma.indents.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-    });
-
-    const formatDate = (date: Date | null): string => {
-      if (!date) return "N/A";
-      return date.toLocaleDateString("en-GB");
-    };
-
-    for (let index = 0; index < indents.length; index++) {
-      const indent = indents[index];
-      const pendingWith = getNameFromStep(indent.currStep, indent.prevStep);
-      const currentStepName = getStepName(indent.currStep, indent.prevStep, indent.department);
-      let assigneeName = "N/A";
-
-      if (pendingWith !== "Closed") {
-        try {
-          const response = await fetchUsersList({
-            ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
-              ? { department: indent.department }
-              : {}),
-            role: pendingWith as Position,
-          });
-
-          const userList = response || [];
-
-          if (pendingWith === "DEPARTMENT_MAKER") {
-            const match = userList.find((user: any) => user.email === indent.assignedTo);
-            if (match) assigneeName = match.name || match.email;
-          } else if (userList.length) {
-            assigneeName = userList.map((u: any) => u.name || u.email).join(", ");
-          }
-        } catch (err) {
-          console.warn("Error fetching assignee list:", err);
-        }
-      }
-      const row = [
-        index + 1, // Serial Number
-        indent.description || "N/A",
-        indent.priority || "N/A",
-        indent.category || "N/A",
-        indent.department || "N/A",
-        indent.createdAt || "N/A",
-        assigneeName,
-        currentStepName,
-        indent.openStatus ? "Open" : "Closed",
-        formatDate(indent.createdAt),
-        formatDate(indent.updatedAt),
-        formatDate(indent.closedDate),
-        indent.comments || "N/A",
-      ];
-
-      worksheet.addRow(row);
-    }
-
-    worksheet.columns.forEach((column: any) => {
-      if (column) column.width = 18;
-    });
-
-    await workbook.xlsx.write(res as unknown as Stream);
-    res.end();
-    return true;
-  } catch (error: any) {
-    console.error("Error in generateIndentExcel:", error);
-    throw new Error(`Indent Excel export failed: ${error.message}`);
-  }
-};
-
-export const getObservationRepository = async (
-  userRole: Position,
-  userDepartment: Department,
-  filters: {
-    status?: "open" | "closed";
-    priorityLevel?: observationPriority;
-    department?: Department;
-    theme?: ObservationTheme;
-    search?: string;
-    startDate?: string;
-    endDate?: string;
-  },
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const offset = (page - 1) * pageSize;
-    const where: any = { AND: [{ isDeleted: false }] };
-
-    // Department-based restriction
-    if (
-      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
-      userDepartment
-    ) {
-      where.AND.push({ department: userDepartment });
-    }
-
-    // Default to open unless explicitly closed
     if (filters.status === "closed") {
       where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
     } else {
       where.AND.push({ openStatus: true });
     }
 
-    // Apply filters
     if (filters.priorityLevel) {
       where.AND.push({
         priority: OBSERVATION_PRIORITY_MAPPING[filters.priorityLevel],
@@ -230,117 +107,90 @@ export const getObservationRepository = async (
       });
     }
 
-    const [observations, total] = await Promise.all([
-      prisma.iSEObservations.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: "desc" },
-        include: {
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: "asc" },
-          },
-          attachments: true,
-        },
-      }),
-      prisma.iSEObservations.count({ where }),
-    ]);
+    const observations = await prisma.iSEObservations.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+    });
 
-    const observationsWithMeta = await Promise.all(
-      observations.map(async (observation) => {
-        const pendingWith = getNameFromStep(
-          observation.currStep,
-          observation.prevStep
-        );
-        const currentStepName = getStepName(
-          observation.currStep,
-          observation.prevStep,
-          observation.department
-        );
-        let assignees: {
-          name: string | null;
-          email: string | null;
-          role: string;
-        }[] = [];
-
-        try {
-          if (pendingWith !== "Closed") {
-            const response = await fetchUsersList({
-              ...(pendingWith === "DEPARTMENT_MAKER" ||
-              pendingWith === "DEPARTMENT_CHECKER"
-                ? { department: observation.department }
-                : {}),
-              role: pendingWith as Position,
-            });
-            const userList = response || [];
-
-            if (pendingWith === "DEPARTMENT_MAKER") {
-              const userMatch = userList.find(
-                (user: any) => user.email === observation.assignedTo
-              );
-              if (userMatch) {
-                assignees.push({
-                  name: userMatch.name,
-                  email: userMatch.email,
-                  role: userMatch.role,
-                });
-              }
-            } else {
-              if (userList.length > 1) {
-                assignees = userList.map((user: any) => ({
-                  name: user.name,
-                  email: user.email,
-                  role: user.role,
-                }));
-              } else if (userList[0]) {
-                assignees.push({
-                  name: userList[0].name,
-                  email: userList[0].email,
-                  role: userList[0].role,
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(
-            `Failed to fetch users for observation ${observation.observationId}:`,
-            error
-          );
-        }
-
-        return {
-          ...observation,
-          currentStepName,
-          currentStatus: observation.openStatus ? "open" : "closed",
-          assignees,
-        };
-      })
-    );
-
-    return {
-      success: true,
-      data: observationsWithMeta,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter(
-          (k) => filters[k as keyof typeof filters]
-        ),
-        search: filters.search || null,
-      },
+    const formatDate = (date: Date | null): string => {
+      return date ? date.toLocaleDateString("en-GB") : "N/A";
     };
+
+    for (let index = 0; index < observations.length; index++) {
+      const obs = observations[index];
+      const pendingWith = getNameFromStep(obs.currStep, obs.prevStep);
+      const currentStepName = getStepName(obs.currStep, obs.prevStep, obs.department);
+      let assigneeName = "N/A";
+
+      if (pendingWith !== "Closed") {
+        try {
+          const response = await fetchUsersList({
+            ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
+              ? { department: obs.department }
+              : {}),
+            role: pendingWith as Position,
+          });
+
+          const userList = response || [];
+
+          if (pendingWith === "DEPARTMENT_MAKER") {
+            const match = userList.find((user: any) => user.email === obs.assignedTo);
+            if (match) assigneeName = match.name || match.email;
+          } else if (userList.length) {
+            assigneeName = userList.map((u: any) => u.name || u.email).join(", ");
+          }
+        } catch (err) {
+          console.warn("Error fetching assignee list:", err);
+        }
+      }
+
+      const row = [
+        index + 1,
+        obs.observationId || "N/A",
+        obs.description || "N/A",
+        obs.priority || "N/A",
+        obs.observationTheme || "N/A",
+        obs.department || "N/A",
+        obs.createdBy || "N/A",
+        assigneeName,
+        currentStepName,
+        obs.openStatus ? "Open" : "Closed",
+        formatDate(obs.createdAt),
+        formatDate(obs.updatedAt),
+        formatDate(obs.closedDate),
+        obs.comments || "N/A",
+      ];
+
+      worksheet.addRow(row);
+    }
+
+    worksheet.columns.forEach((column: any) => {
+      if (column) column.width = 18;
+    });
+
+    await workbook.xlsx.write(res as any);
+    res.end();
+    return true;
   } catch (error: any) {
-    console.error("Error in getObservationRepository:", error);
-    throw new Error(`Observation repository fetch failed: ${error.message}`);
+    console.error("Error in generateObservationExcel:", error);
+    throw new Error(`Observation Excel export failed: ${error.message}`);
   }
 };
 
-export const getIncidentRepository = async (
+
+import ExcelJS from "exceljs";
+import { Response as ExpressResponse } from "express";
+import { prisma } from "@/lib/prisma";
+import { fetchUsersList } from "@/utils/fetchUsers";
+import { getNameFromStep, getStepName } from "@/utils/workflow";
+import {
+  DEPARTMENT_MAPPING,
+  INCIDENT_SEVERITY_MAPPING,
+  INCIDENT_TYPE_MAPPING,
+} from "@/constants";
+
+export const generateIncidentExcel = async (
+  res: ExpressResponse,
   userRole: Position,
   userDepartment: Department,
   filters: {
@@ -351,15 +201,44 @@ export const getIncidentRepository = async (
     search?: string;
     startDate?: string;
     endDate?: string;
-  },
-  page: number = 1,
-  pageSize: number = 10
+  }
 ) => {
   try {
-    const offset = (page - 1) * pageSize;
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Incident Reporting System";
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet("Incidents", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
+
+    const headers = [
+      "Serial Number",
+      "Incident ID",
+      "Description",
+      "Severity",
+      "Type",
+      "Department",
+      "Created By",
+      "Assigned To",
+      "Current Step",
+      "Status",
+      "Created At",
+      "Updated At",
+      "Closed Date",
+      "Comments",
+    ];
+
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "F0F0F0" },
+    };
+
     const where: any = { AND: [{ isDeleted: false }] };
 
-    // Department scope
     if (
       (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
       userDepartment
@@ -367,7 +246,6 @@ export const getIncidentRepository = async (
       where.AND.push({ department: userDepartment });
     }
 
-    // Status filters
     if (filters.status === "closed") {
       where.AND.push({ currStep: 4, rejectedStatus: false, openStatus: false });
     } else if (filters.status === "rejected") {
@@ -376,7 +254,6 @@ export const getIncidentRepository = async (
       where.AND.push({ openStatus: true });
     }
 
-    // Additional filters
     if (filters.severity) {
       where.AND.push({ severity: INCIDENT_SEVERITY_MAPPING[filters.severity] });
     }
@@ -408,108 +285,76 @@ export const getIncidentRepository = async (
       });
     }
 
-    // Fetch incidents
-    const [incidents, total] = await Promise.all([
-      prisma.incidentReporting.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { updatedAt: "desc" },
-        include: {
-          remarkHistory: {
-            where: { isDeleted: false },
-            orderBy: { createdAt: "asc" },
-          },
-          attachments: true,
-        },
-      }),
-      prisma.incidentReporting.count({ where }),
-    ]);
+    const incidents = await prisma.incidentReporting.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+    });
 
-    // Attach meta
-    const incidentsWithMeta = await Promise.all(
-      incidents.map(async (incident) => {
-        const pendingWith = getNameFromStep(incident.currStep, incident.prevStep);
-        const currentStepName = getStepName(incident.currStep, incident.prevStep, incident.department);
-        let assignees: {
-          name: string | null;
-          email: string | null;
-          role: string;
-        }[] = [];
-
-        try {
-          if (pendingWith !== "Closed") {
-            const response = await fetchUsersList({
-              ...(pendingWith === "DEPARTMENT_MAKER" ||
-              pendingWith === "DEPARTMENT_CHECKER"
-                ? { department: incident.department }
-                : {}),
-              role: pendingWith as Position,
-            });
-
-            const userList = response || [];
-
-            if (pendingWith === "DEPARTMENT_MAKER") {
-              const userMatch = userList.find(
-                (user: any) => user.email === incident.assignedTo
-              );
-              if (userMatch) {
-                assignees.push({
-                  name: userMatch.name,
-                  email: userMatch.email,
-                  role: userMatch.role,
-                });
-              }
-            } else {
-              if (userList.length > 1) {
-                assignees = userList.map((user: any) => ({
-                  name: user.name,
-                  email: user.email,
-                  role: user.role,
-                }));
-              } else if (userList[0]) {
-                assignees.push({
-                  name: userList[0].name,
-                  email: userList[0].email,
-                  role: userList[0].role,
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.warn(
-            `Failed to fetch users for incident ${incident.incidentId}:`,
-            error
-          );
-        }
-
-        return {
-          ...incident,
-          currentStepName,
-          currentStatus: incident.openStatus ? "open" : "closed",
-          assignees,
-        };
-      })
-    );
-
-    return {
-      success: true,
-      data: incidentsWithMeta,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-      filters: {
-        applied: Object.keys(filters).filter(
-          (k) => filters[k as keyof typeof filters]
-        ),
-        search: filters.search || null,
-      },
+    const formatDate = (date: Date | null): string => {
+      return date ? date.toLocaleDateString("en-GB") : "N/A";
     };
+
+    for (let index = 0; index < incidents.length; index++) {
+      const incident = incidents[index];
+      const pendingWith = getNameFromStep(incident.currStep, incident.prevStep);
+      const currentStepName = getStepName(incident.currStep, incident.prevStep, incident.department);
+      let assigneeName = "N/A";
+
+      if (pendingWith !== "Closed") {
+        try {
+          const response = await fetchUsersList({
+            ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
+              ? { department: incident.department }
+              : {}),
+            role: pendingWith as Position,
+          });
+
+          const userList = response || [];
+
+          if (pendingWith === "DEPARTMENT_MAKER") {
+            const match = userList.find((user: any) => user.email === incident.assignedTo);
+            if (match) assigneeName = match.name || match.email;
+          } else if (userList.length) {
+            assigneeName = userList.map((u: any) => u.name || u.email).join(", ");
+          }
+        } catch (err) {
+          console.warn("Error fetching assignee list:", err);
+        }
+      }
+
+      const row = [
+        index + 1,
+        incident.incidentId || "N/A",
+        incident.description || "N/A",
+        incident.severity || "N/A",
+        incident.type || "N/A",
+        incident.department || "N/A",
+        incident.createdBy || "N/A",
+        assigneeName,
+        currentStepName,
+        incident.rejectedStatus
+          ? "Rejected"
+          : incident.openStatus
+          ? "Open"
+          : "Closed",
+        formatDate(incident.createdAt),
+        formatDate(incident.updatedAt),
+        formatDate(incident.closedDate),
+        incident.comments || "N/A",
+      ];
+
+      worksheet.addRow(row);
+    }
+
+    worksheet.columns.forEach((column: any) => {
+      if (column) column.width = 18;
+    });
+
+    await workbook.xlsx.write(res as any);
+    res.end();
+    return true;
   } catch (error: any) {
-    console.error("Error in getIncidentRepository:", error);
-    throw new Error(`Incident repository fetch failed: ${error.message}`);
+    console.error("Error in generateIncidentExcel:", error);
+    throw new Error(`Incident Excel export failed: ${error.message}`);
   }
 };
