@@ -1,52 +1,101 @@
-export const exportIndentsExcel = async (
-  req: customRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const user = req.user!;
-    const {
-      status,
-      priorityLevel,
-      department,
-      category,
-      search,
-      startDate,
-      endDate,
-    } = req.query;
+import { PrismaClient } from "@prisma/client";
+import { Router } from "express";
+import requireUser from "../middleware/requireUser";
+import { authorize } from "../middleware/authorize";
+import {
+  addIndent,
+  addIndentRemark,
+  deleteIndent,
+  editIndentRemark,
+  exportIndentsExcel,
+  getIndentAuditTrailController,
+  getIndentRepo,
+  getIndents,
+  updateIndent,
+} from "../controllers/indentManagement/indentController";
+import { PERMISSIONS } from "../constants/permissions";
+import { getNotificationIndent } from "../controllers/indentManagement/notificationController";
 
-    const filters = {
-      status: status as "open" | "Closed",
-      priorityLevel: priorityLevel as IndentPriority,
-      department: department as Department,
-      category: category as IndentCategory,
-      search: search as string,
-      startDate: startDate as string,
-      endDate: endDate as string,
-    };
+const prisma = new PrismaClient();
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `indents_${timestamp}.xlsx`;
+export const indentRouter = Router();
 
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+//Fetch all indents
+indentRouter.get(
+  "/:role/:tab/:department?",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  getIndents
+);
+//create a new indent
+indentRouter.post(
+  "/",
+  requireUser,
+  authorize([PERMISSIONS.COMPLIANCE_MAKER]),
+  addIndent
+);
 
-    await generateIndentExcel(res, user.role, user.department, filters);
-  } catch (error: any) {
-    console.error("Error exporting indents Excel:", error);
+// delete a indent
+indentRouter.delete(
+  "/:indentId",
+  requireUser,
+  authorize([PERMISSIONS.COMPLIANCE_MAKER]),
+  deleteIndent
+);
 
-    if (!res.headersSent) {
-      res.status(500).json({
-        success: false,
-        message: `Failed to generate Excel export: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-      });
-    } else {
-      res.end();
-    }
-  }
-};
+//update a indent
+indentRouter.put(
+  "/:role/:department/:indentId",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  updateIndent
+);
+
+// crete a new Indent Remark
+indentRouter.post(
+  "/remarks/:indentId",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  addIndentRemark
+);
+
+// edit a indent Remark
+indentRouter.put(
+  "/remarks/:remarkId",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  editIndentRemark
+);
+
+//Get Indent Repository with filters and search
+indentRouter.get(
+  "/repository",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  getIndentRepo
+);
+
+// Notification endpoint
+indentRouter.get(
+  "/notifications",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  getNotificationIndent
+);
+
+// audit-trail endpoint
+indentRouter.get(
+  "/audit-trail",
+  requireUser,
+  authorize([PERMISSIONS.CLOSURE_ACCESS]),
+  getIndentAuditTrailController
+);
+
+indentRouter.get(
+  "/export/excel",
+  requireUser,
+  authorize([PERMISSIONS.IBA]),
+  exportIndentsExcel
+);
+
+Incoming request: GET /api/v1/indents/export/excel?
