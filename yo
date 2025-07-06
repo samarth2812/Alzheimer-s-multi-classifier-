@@ -1,37 +1,36 @@
-    exportToExcel: async (params = {}) => {
-      try {
-        const queryParams = new URLSearchParams();
+exportToExcel: async (params = {}) => {
+  try {
+    const queryParams = new URLSearchParams();
 
-        // Add filter params for export
-        Object.keys(params).forEach((key) => {
-          if (key !== "page" && key !== "limit" && params[key]) {
-            queryParams.append(key, params[key]);
-          }
-        });
-
-        console.log(0, `${getBaseUrl()}${getExportEndpoint()}?${queryParams.toString()}`);
-        const response = await apiRequest(
-          "GET",
-          `${getBaseUrl()}${getExportEndpoint()}?${queryParams.toString()}`,
-          null,
-          { responseType: "blob" }
-        );
-
-        // Create blob link to download
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement("a");
-        link.href = url;
-
-        // Generate filename with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        link.setAttribute("download", `${moduleType}_${timestamp}.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        return true;
-      } catch (error) {
-        console.log(3, error);
-        throw error;
+    Object.keys(params).forEach((key) => {
+      if (key !== "page" && key !== "limit" && params[key]) {
+        queryParams.append(key, params[key]);
       }
-    },
+    });
+
+    const response = await apiRequest(
+      "GET",
+      `${getBaseUrl()}${getExportEndpoint()}?${queryParams.toString()}`,
+      null,
+      { responseType: "blob" }
+    );
+
+    const url = window.URL.createObjectURL(response.data);
+    const link = document.createElement("a");
+    link.href = url;
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.setAttribute("download", `${moduleType}_${timestamp}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+
+    // Clean up
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    return true;
+  } catch (error) {
+    console.log("Error exporting Excel:", error);
+    throw error;
+  }
+}
