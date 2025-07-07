@@ -1,68 +1,12 @@
-/**
-=========================================================
-* Athena Guard - v2.2.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2023 Grant Thornton (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
 import { useEffect, useState, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
-import * as XLSX from "xlsx";
-
-// @mui material components
-import DeleteIcon from "@mui/icons-material/Delete";
-import DownloadIcon from "@mui/icons-material/Download";
-import EditIcon from "@mui/icons-material/Edit";
-import SearchIcon from "@mui/icons-material/Search";
-import { IconButton, Tooltip, Typography } from "@mui/material";
-import Box from "@mui/material/Box";
-import InputAdornment from "@mui/material/InputAdornment";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import { ArrowCircleUp, ChatBubbleOutline, Visibility } from "@mui/icons-material";
-import { apiRequest } from "../../axios/apiRequest";
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import { useSelector, useDispatch } from "react-redux";
 import debounce from "lodash.debounce";
+import { apiRequest } from "../../axios/apiRequest";
+import { fetchNotifications } from "features/notificationSlice";
 
-// Athena Guard components
-import MDTypography from "components/MDTypography";
-import DataTable from "examples/Tables/DataTable";
-import Skeleton from "@mui/material/Skeleton";
-
-// Athena Guard example components
-import AddIcon from "@mui/icons-material/Add";
-import { Stack } from "@mui/material";
-import CustomDeleteDialog from "layouts/resuableComponents/customDeleteDialog";
-import IncidentFormDialog from "./incidentFormDialog";
-import DescriptionDialog from "layouts/resuableComponents/customDescriptionViewDialog";
-import { topBarStyle } from "layouts/resuableComponents/styles";
-import { topBarSearchStyle } from "layouts/resuableComponents/styles";
-import { animatedButtonStyle } from "layouts/resuableComponents/styles";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
-import { useSelector } from "react-redux";
-import InputWithDialog from "layouts/resuableComponents/InputWithDialog ";
-import { CustomDropdownChip } from "layouts/resuableComponents/customDropdownChipField";
-import RemarksInputDialog from "layouts/resuableComponents/RemarksInputDialog";
-import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
-import { AttachmentDrawer } from "layouts/resuableComponents/attachmentDrawer";
-import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
-import { BsTable } from "react-icons/bs";
-import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
-
-const statusOptions = [
-  { label: "Approve", value: "approve" },
-  { label: "Reject", value: "reject" },
-];
-
-const CreateIncidentPage = () => {
+export const useIncidentManagement = (pageType) => {
+  // Common state
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredData, setFilteredData] = useState([]);
@@ -85,34 +29,47 @@ const CreateIncidentPage = () => {
   const [totalPages, setTotalPages] = useState(1);
 
   const user = useSelector((state) => state.user.user);
-  const fetchIncidentsListUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/${user?.role}/created?page=${currentPage}&limit=${rowsPerPage}`;
+  const dispatch = useDispatch();
 
-  const handleIncidentDelete = async () => {
-    try {
-      const deleteIncidentUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/${incidentToDelete.incidentId}`;
-      const result = await apiRequest("DELETE", deleteIncidentUrl);
-      if (result.status === 200 || result.status === 204) {
-        toast.success("Incident Deleted Successfully");
-        setData((prev) =>
-          prev.filter((incident) => incident.incidentId !== incidentToDelete.incidentId)
-        );
-        fetchData();
-      }
-    } catch (error) {
-      console.error("Error deleting incident:", error);
-    } finally {
-      setIsDeleteDialogOpen(false);
+  // API endpoint configuration based on page type
+  const getApiEndpoint = useCallback(() => {
+    const baseUrl = process.env.REACT_APP_BACKEND_URL;
+    const role = user?.role;
+    const department = user?.department;
+    const pagination = `page=${currentPage}&limit=${rowsPerPage}`;
+
+    switch (pageType) {
+      case "created":
+        return `${baseUrl}/api/v1/incidents/${role}/created?${pagination}`;
+      case "latest":
+        return role === "COMPLIANCE_CHECKER"
+          ? `${baseUrl}/api/v1/incidents/${role}/latest?${pagination}`
+          : `${baseUrl}/api/v1/incidents/${role}/latest/${department}?${pagination}`;
+      case "closure":
+        return `${baseUrl}/api/v1/incidents/${role}/closure?${pagination}`;
+      case "rejected":
+        return role === "COMPLIANCE_MAKER"
+          ? `${baseUrl}/api/v1/incidents/${role}/rejected?${pagination}`
+          : `${baseUrl}/api/v1/incidents/${role}/rejected/${department}?${pagination}`;
+      default:
+        return `${baseUrl}/api/v1/incidents/${role}/created?${pagination}`;
     }
-  };
+  }, [pageType, user?.role, user?.department, currentPage, rowsPerPage]);
 
-  const fetchData = async () => {
+  // Fetch data function
+  const fetchData = useCallback(async () => {
+    if (!user?.role) return;
+
     setLoading(true);
     try {
-      const response = await apiRequest("GET", fetchIncidentsListUrl);
+      const endpoint = getApiEndpoint();
+      const response = await apiRequest("GET", endpoint);
+
       setData(response.data.data);
       setTotalRecords(response.data.pagination.total);
       setTotalPages(response.data.pagination.totalPages);
 
+      // Update attachments if incidentId exists
       if (incidentId) {
         const updatedIncident = response.data.data.find(
           (incident) => incident.incidentId === incidentId
@@ -121,20 +78,19 @@ const CreateIncidentPage = () => {
           setAttachments(updatedIncident.attachments || []);
         }
       }
-    } catch {
+    } catch (error) {
       toast.error("Failed to fetch incidents");
     } finally {
       setLoading(false);
     }
-  };
+  }, [getApiEndpoint, incidentId, user?.role]);
 
+  // Initial data fetch
   useEffect(() => {
-    if (user?.role) {
-      fetchData();
-    }
-  }, [currentPage, rowsPerPage, user?.role]);
+    fetchData();
+  }, [fetchData]);
 
-  // Debounced filter function
+  // Debounced search function
   const debouncedFilter = useMemo(
     () =>
       debounce((term, data) => {
@@ -154,6 +110,7 @@ const CreateIncidentPage = () => {
     []
   );
 
+  // Search effect with normalization
   useEffect(() => {
     const normalizeSearchTerm = (term) => {
       const mappings = {
@@ -163,15 +120,16 @@ const CreateIncidentPage = () => {
         "show cause": "show_cause",
         penalty: "penalty",
         advisory: "advisory",
-        // Add more mappings as needed
+        low: "low",
+        medium: "medium",
+        high: "high",
+        critical: "critical",
       };
       const lowerTerm = term.toLowerCase().trim();
-      if (!lowerTerm) return ""; // Return empty string if nothing is typed
-      // Exact match
+      if (!lowerTerm) return "";
       if (mappings[lowerTerm]) {
         return mappings[lowerTerm];
       }
-      // Partial match
       for (const [key, value] of Object.entries(mappings)) {
         if (key.startsWith(lowerTerm) || lowerTerm.includes(key)) {
           return value;
@@ -179,10 +137,10 @@ const CreateIncidentPage = () => {
       }
       return lowerTerm;
     };
+
     const normalizedTerm = normalizeSearchTerm(searchTerm);
 
     if (!normalizedTerm) {
-      // If search bar is empty, show all data
       setFilteredData(data);
     } else {
       debouncedFilter(normalizedTerm, data);
@@ -191,16 +149,208 @@ const CreateIncidentPage = () => {
     return () => debouncedFilter.cancel();
   }, [searchTerm, data, debouncedFilter]);
 
-  const handleAddIncidentClick = () => {
+  // Common handlers
+  const handleSearch = useCallback((event) => {
+    setSearchTerm(event.target.value);
+  }, []);
+
+  const handleAddIncidentClick = useCallback(() => {
     setEditIncidentData(null);
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value);
-  };
+  const handleChange = useCallback((e, incidentId) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [incidentId]: {
+        ...prev[incidentId],
+        [name]: value,
+      },
+    }));
+  }, []);
 
-  const formatDateTime = (dateString) => {
+  const handleIncidentDelete = useCallback(async () => {
+    if (!incidentToDelete) return;
+
+    try {
+      const deleteIncidentUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/${incidentToDelete.incidentId}`;
+      const result = await apiRequest("DELETE", deleteIncidentUrl);
+
+      if (result.status === 200 || result.status === 204) {
+        toast.success("Incident Deleted Successfully");
+        setData((prev) => prev.filter((incident) => incident.incidentId !== incidentToDelete.incidentId));
+        fetchData();
+      }
+    } catch (error) {
+      console.error("Error deleting incident:", error);
+    } finally {
+      setIsDeleteDialogOpen(false);
+    }
+  }, [incidentToDelete, fetchData]);
+
+  const handleSubmitIncident = useCallback(
+    async (incidentId, department) => {
+      try {
+        const isComplianceDepartment = department === "COMPLIANCE";
+        const payload = {
+          updatedFields: {
+            updateType: "WORKFLOW_UPDATE",
+            rejectedStatus:
+              pageType === "latest" || pageType === "rejected" || pageType === "closure"
+                ? formData[incidentId]?.approvalStatus === "approve"
+                  ? false
+                  : true
+                : false,
+          },
+        };
+
+        const result = await apiRequest(
+          "PUT",
+          `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/${user.role}/${department}/${incidentId}`,
+          payload
+        );
+
+        if (result.status === 200 || result.status === 204) {
+          // Success message logic based on page type and approval status
+          if (pageType === "created") {
+            toast.success("Incident Sent to Compliance Checker Successfully");
+          } else if (pageType === "latest") {
+            const approvalStatus = formData[incidentId]?.approvalStatus;
+            // Add specific success messages based on role and approval status
+            if (isComplianceDepartment) {
+              if (approvalStatus === "approve") {
+                toast.success("Incident Sent to back to Compliance Maker for Closure Successfully");
+              } else {
+                toast.success("Incident Sent to back to Compliance Maker Successfully");
+              }
+            } else {
+              if (approvalStatus === "approve") {
+                if (user.role === "COMPLIANCE_CHECKER") {
+                  toast.success("Incident Sent to Department Maker Successfully");
+                } else if (user.role === "DEPARTMENT_MAKER") {
+                  toast.success("Incident Sent to Department Checker Successfully");
+                } else {
+                  toast.success("Incident Sent to Compliance Maker Successfully");
+                }
+              } else {
+                if (user.role === "COMPLIANCE_CHECKER") {
+                  toast.success("Incident Sent to back to Compliance Maker Successfully");
+                } else if (user.role === "DEPARTMENT_MAKER") {
+                  toast.success("Incident Sent to back to Compliance Maker Successfully");
+                } else {
+                  toast.success("Incident Sent to back to Department Maker Successfully");
+                }
+              }
+            }
+          } else if (pageType === "rejected") {
+            if (formData[incidentId]?.approvalStatus === "approve") {
+              if (user.role === "COMPLIANCE_MAKER") {
+                toast.success("Incident Sent to Compliance Checker Successfully");
+              } else if (user.role === "DEPARTMENT_MAKER") {
+                toast.success("Incident Sent to Department Checker Successfully");
+              } else {
+                toast.success("Incident Sent Successfully");
+              }
+            } else {
+              if (user.role === "COMPLIANCE_MAKER") {
+                toast.success("Incident Sent to back to Department Maker Successfully");
+              } else if (user.role === "DEPARTMENT_MAKER") {
+                toast.success("Incident Sent to back to Compliance Maker Successfully");
+              } else {
+                toast.success("Incident Sent Successfully");
+              }
+            }
+          } else if (pageType === "closure") {
+            if (formData[incidentId]?.approvalStatus === "approve") {
+              if (user.role === "COMPLIANCE_MAKER") {
+                toast.success("Incident Sent For Closure to Compliance Checker Successfully");
+              } else if (user.role === "COMPLIANCE_CHECKER") {
+                toast.success("Incident Closed Successfully");
+              }
+            } else if (formData[incidentId]?.approvalStatus !== "approve") {
+              if (user.role === "COMPLIANCE_MAKER") {
+                toast.success("Incident Sent Back to Department Maker Successfully");
+              } else if (user.role === "COMPLIANCE_CHECKER") {
+                toast.success("Incident Sent Back to Compliance Maker Successfully");
+              }
+            } else {
+              toast.success("Incident Sent to back to Compliance Checker Successfully");
+            }
+          }
+        }
+
+        fetchData();
+        dispatch(fetchNotifications());
+      } catch (error) {
+        toast.error("An error occurred while submitting the Incident.");
+      }
+    },
+    [pageType, formData, user.role, fetchData, dispatch]
+  );
+
+  const handleSubmitRemark = useCallback(
+    async (incidentId, remarkData) => {
+      try {
+        const result = await apiRequest(
+          "POST",
+          `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/remarks/${incidentId}`,
+          remarkData
+        );
+
+        if (result.status === 201 || result.status === 204) {
+          toast.success("Incident Remark Added Successfully");
+        }
+        fetchData();
+      } catch (error) {
+        toast.error("An error occurred while submitting the Remark.");
+      }
+    },
+    [fetchData]
+  );
+
+  const handleEditRemark = useCallback(
+    async (incidentId, remarkContent) => {
+      try {
+        const result = await apiRequest(
+          "PUT",
+          `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/remarks/${incidentId}`,
+          { remarkContent }
+        );
+
+        if (result.status === 201 || result.status === 204) {
+          toast.success("Incident Remark Updated Successfully");
+        }
+        fetchData();
+      } catch (error) {
+        toast.error("An error occurred while submitting the Remark.");
+      }
+    },
+    [fetchData]
+  );
+
+  const handleSortBySeverity = useCallback(() => {
+    const severityOrder = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const sortedData = [...data].sort((a, b) => {
+      return severityOrder[b.severity] - severityOrder[a.severity];
+    });
+    setData(sortedData);
+  }, [data]);
+
+  const handlePageChange = useCallback((event, newPage) => {
+    setCurrentPage(newPage);
+  }, []);
+
+  const handleRowsPerPageChange = useCallback((event) => {
+    const { numericValue, resetToFirstPage } = event;
+    setRowsPerPage(numericValue);
+    if (resetToFirstPage) {
+      setCurrentPage(1);
+    }
+  }, []);
+
+  // Utility functions
+  const formatDateTime = useCallback((dateString) => {
     return new Date(dateString).toLocaleString("en-GB", {
       day: "2-digit",
       month: "2-digit",
@@ -209,95 +359,173 @@ const CreateIncidentPage = () => {
       minute: "2-digit",
       hour12: true,
     });
+  }, []);
+
+  const displayData = searchTerm ? filteredData : data;
+
+  return {
+    // State
+    data,
+    searchTerm,
+    filteredData,
+    isModalOpen,
+    setIsModalOpen,
+    editIncidentData,
+    setEditIncidentData,
+    incidentToDelete,
+    setIncidentToDelete,
+    isDeleteDialogOpen,
+    setIsDeleteDialogOpen,
+    descriptionDialogOpen,
+    setDescriptionDialogOpen,
+    currentDescription,
+    setCurrentDescription,
+    loading,
+    formData,
+    setFormData,
+    viewAttachementDialogOpen,
+    setViewAttachementDialogOpen,
+    attachments,
+    setAttachments,
+    incidentId,
+    setIncidentId,
+    currentPage,
+    rowsPerPage,
+    totalRecords,
+    totalPages,
+    displayData,
+    user,
+
+    // Handlers
+    handleSearch,
+    handleAddIncidentClick,
+    handleChange,
+    handleIncidentDelete,
+    handleSubmitIncident,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSortBySeverity,
+    handlePageChange,
+    handleRowsPerPageChange,
+    fetchData,
+    formatDateTime,
   };
+};
 
-  const handleChange = (e, observationId) => {
-    const { name, value } = e.target;
+import React from "react";
+import { IconButton, Tooltip, Stack, Box } from "@mui/material";
+import {
+  Visibility,
+  ArrowCircleUp,
+  ChatBubbleOutline,
+  VisibilitySharp,
+  Edit,
+  Delete,
+  VisibilityOff,
+} from "@mui/icons-material";
+import MDTypography from "components/MDTypography";
+import { iconButtonStyle } from "layouts/resuableComponents/styles";
+import { CustomDropdownChip } from "layouts/resuableComponents/customDropdownChipField";
+import RemarksInputDialog from "layouts/resuableComponents/RemarksInputDialog";
+import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
+import InputWithDialog from "layouts/resuableComponents/InputWithDialog ";
 
-    setFormData((prev) => ({
-      ...prev,
-      [observationId]: {
-        ...prev[observationId],
-        [name]: value,
-      },
-    }));
-  };
+const statusOptions = [
+  { label: "Approve", value: "approve" },
+  { label: "Reject", value: "reject" },
+];
 
-  const handleSubmitIncident = async (incidentId, department) => {
-    try {
-      const payload = {
-        updatedFields: {
-          updateType: "WORKFLOW_UPDATE",
-          rejectedStatus: false,
-        },
-      };
-      const result = await apiRequest(
-        "PUT",
-        `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/${user.role}/${department}/${incidentId}`,
-        payload
-      );
-      if (result.status === 200 || result.status === 204) {
-        toast.success("Incident Sent to Compliace Checker Successfully");
-      }
-      fetchData();
-    } catch (error) {
-      toast.error("An error occurred while submitting the Indent.");
-    }
-  };
+export const formatIncidentTableData = (
+  rawData,
+  pageType,
+  {
+    currentPage,
+    rowsPerPage,
+    user,
+    formData,
+    setCurrentDescription,
+    setDescriptionDialogOpen,
+    setEditIncidentData,
+    setIsModalOpen,
+    setIncidentToDelete,
+    setIsDeleteDialogOpen,
+    setIncidentId,
+    setAttachments,
+    setViewAttachementDialogOpen,
+    handleChange,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSubmitIncident,
+    formatDateTime,
+  }
+) => {
+  const isComplianceRoles = user.role === "COMPLIANCE_MAKER" || user.role === "COMPLIANCE_CHECKER";
+  const showDeleteAction = pageType === "created";
+  const showApproval =
+    pageType === "latest" ||
+    pageType === "rejected" ||
+    (pageType === "closure" && user.role !== "COMPLIANCE_MAKER");
+  const showActions =
+    pageType === "created" ||
+    (pageType === "latest" && isComplianceRoles) ||
+    pageType === "closure" ||
+    pageType === "rejected";
 
-  const handleSubmitRemark = async (incidentId, remarkData) => {
-    try {
-      const result = await apiRequest(
-        "POST",
-        `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/remarks/${incidentId}`,
-        remarkData
-      );
-      if (result.status === 201 || result.status === 204) {
-        toast.success("Incident Remark Added Successfully");
-      }
-      fetchData();
-    } catch (error) {
-      toast.error("An error occurred while submitting the Remark.");
-    }
-  };
+  // Base columns that are common to all page types
+  const baseColumns = [
+    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "center" },
+    { Header: "Department", accessor: "department", width: "15%", align: "left" },
+    { Header: "Description", accessor: "description", width: "15%", align: "left" },
+    { Header: "Type", accessor: "type", width: "10%", align: "center" },
+    { Header: "Status", accessor: "status", width: "10%", align: "center" },
+    { Header: "Severity", accessor: "severity", width: "10%", align: "center" },
+    { Header: "Assigned To", accessor: "assignedTo", width: "10%", align: "center" },
+    { Header: "Due Date", accessor: "dueDate", width: "10%", align: "center" },
+    { Header: "Reported Date", accessor: "reportedDate", width: "10%", align: "center" },
+    { Header: "Created At", accessor: "createdAt", width: "10%", align: "center" },
+    { Header: "Comments", accessor: "comments", width: "15%", align: "left" },
+  ];
 
-  const handleEditRemark = async (incidentId, remarkContent) => {
-    try {
-      const result = await apiRequest(
-        "PUT",
-        `${process.env.REACT_APP_BACKEND_URL}/api/v1/incidents/remarks/${incidentId}`,
-        { remarkContent }
-      );
-      if (result.status === 201 || result.status === 204) {
-        toast.success("Incident Remark Updated Successfully");
-      }
-      fetchData();
-    } catch (error) {
-      toast.error("An error occurred while submitting the Remark.");
-    }
-  };
+  // Conditional columns based on page type
+  const conditionalColumns = [];
 
-  // Function to format the table data for DataTable component
-  const formatTableData = (rawData) => {
-    const columns = [
-      { Header: "S.No", accessor: "serialNumber", width: "5%", align: "center" },
-      { Header: "Department", accessor: "department", width: "15%", align: "left" },
-      { Header: "Description", accessor: "description", width: "15%", align: "left" },
-      { Header: "Type", accessor: "type", width: "10%", align: "center" },
-      { Header: "Status", accessor: "status", width: "10%", align: "center" },
-      { Header: "Severity", accessor: "severity", width: "10%", align: "center" },
-      { Header: "Assigned To", accessor: "assignedTo", width: "10%", align: "center" },
-      { Header: "Due Date", accessor: "dueDate", width: "10%", align: "center" },
-      { Header: "Reported Date", accessor: "reportedDate", width: "10%", align: "center" },
-      { Header: "Created At", accessor: "createdAt", width: "10%", align: "center" },
-      { Header: "Comments", accessor: "comments", width: "15%", align: "left" },
-      { Header: "Actions", accessor: "actions", width: "15%", align: "center" },
-      { Header: "Attachments", accessor: "attachments", width: "15%", align: "center" },
-      { Header: "Remarks", accessor: "remarks", width: "15%", align: "center" },
-      { Header: "Submit", accessor: "submit", width: "10%", align: "center" },
-    ];
+  if (showActions) {
+    conditionalColumns.push({
+      Header: "Actions",
+      accessor: "actions",
+      width: "15%",
+      align: "center",
+    });
+  }
 
-    const rows = rawData.map((item, index) => ({
+  conditionalColumns.push({
+    Header: "Attachments",
+    accessor: "attachments",
+    width: "15%",
+    align: "center",
+  });
+
+  if (showApproval) {
+    conditionalColumns.push({
+      Header: "Approval",
+      accessor: "approval",
+      width: "10%",
+      align: "center",
+    });
+  }
+
+  conditionalColumns.push({
+    Header: "Remarks",
+    accessor: "remarks",
+    width: "15%",
+    align: "center",
+  });
+  conditionalColumns.push({ Header: "Submit", accessor: "submit", width: "10%", align: "center" });
+
+  const columns = [...baseColumns, ...conditionalColumns];
+
+  const rows = rawData.map((item, index) => {
+    const baseRow = {
       serialNumber: (
         <MDTypography
           variant="button"
@@ -389,56 +617,28 @@ const CreateIncidentPage = () => {
           dialogTitle="Comments"
           dialogPlaceholder="Comments"
           cancelButtonLabel="Cancel"
-          icon={VisibilityIcon}
+          icon={VisibilityOff}
           name="name"
           type="text"
           callOnSave={false}
           isDisabled={true}
         />
       ),
-      actions: (
-        <Stack direction="row" spacing={1} justifyContent="center">
-          <Tooltip title="Edit Incident Details">
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setEditIncidentData(item);
-                setIsModalOpen(true);
-              }}
-            >
-              <EditIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete Incident">
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setIncidentToDelete(item);
-                setIsDeleteDialogOpen(true);
-              }}
-            >
-              <DeleteIcon />
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      ),
       attachments: (
-        <>
-          <Tooltip title="View Attachments">
-            <span>
-              <IconButton
-                sx={iconButtonStyle}
-                onClick={() => {
-                  setIncidentId(item.incidentId);
-                  setAttachments(item.attachments);
-                  setViewAttachementDialogOpen(true);
-                }}
-              >
-                <VisibilityIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </>
+        <Tooltip title="View Attachments">
+          <span>
+            <IconButton
+              sx={iconButtonStyle}
+              onClick={() => {
+                setIncidentId(item.incidentId);
+                setAttachments(item.attachments);
+                setViewAttachementDialogOpen(true);
+              }}
+            >
+              <VisibilitySharp />
+            </IconButton>
+          </span>
+        </Tooltip>
       ),
       remarks: (
         <Box sx={{ minWidth: "150px" }}>
@@ -454,400 +654,6 @@ const CreateIncidentPage = () => {
           />
         </Box>
       ),
-      submit: (
-        <CustomIconButton
-          icon={ArrowCircleUp}
-          label="Submit"
-          disabled={(() => {
-            const remarks = item.remarkHistory || [];
-
-            const lastMyRemark = [...remarks].reverse().find((r) => r.role === user.role);
-
-            const lastMyRemarkTime = lastMyRemark?.createdAt;
-
-            const lastBackToMeTime = item.lastStepChangeTime;
-
-            const addedNewRemark =
-              lastMyRemarkTime && new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
-
-            return !addedNewRemark;
-          })()}
-          onClick={() => handleSubmitIncident(item.incidentId, item.department)}
-        />
-      ),
-    }));
-
-    return { columns, rows };
-  };
-
-  // Handle page change
-  const handlePageChange = useCallback((event, newPage) => {
-    setCurrentPage(newPage);
-  }, []);
-
-  // Handle rows per page change
-  const handleRowsPerPageChange = useCallback((event) => {
-    const { numericValue, resetToFirstPage } = event;
-
-    setRowsPerPage(numericValue);
-    if (resetToFirstPage) {
-      setCurrentPage(1); // Reset to first page when changing page size
-    }
-  }, []);
-  const displayData = searchTerm ? filteredData : data;
-  const tableData = formatTableData(displayData);
-  return (
-    <>
-      <Box
-        sx={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-          position: "relative",
-        }}
-      >
-        <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
-          <TextField
-            fullWidth
-            placeholder="Search Incident Records..."
-            variant="outlined"
-            sx={topBarSearchStyle}
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon
-                    fontSize="medium"
-                    sx={{
-                      color: (theme) => theme.palette.custom.text2,
-                      fontSize: "1rem !important",
-                    }}
-                  />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={handleAddIncidentClick}
-            color="info"
-            sx={animatedButtonStyle}
-          >
-            Add Incident
-          </Button>
-        </Box>
-        {loading ? (
-          <Box>
-            {[...Array(5)].map((_, index) => (
-              <Skeleton
-                key={index}
-                variant="rectangular"
-                animation="wave"
-                height={40}
-                sx={{
-                  mb: 2,
-                  borderRadius: 2,
-                  backgroundColor: (theme) => theme.palette.custom.background1,
-                }}
-              />
-            ))}
-          </Box>
-        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
-          <Box pb={2} sx={{ maxHeight: "calc(100vh - 180px)", overflow: "auto" }}>
-            <DataTable
-              table={tableData}
-              isSorted={false}
-              entriesPerPage={true}
-              showTotalEntries={true}
-              noEndBorder
-            />
-          </Box>
-        ) : (
-          <EmptyStateBox
-            icon={BsTable}
-            title="Currently there are no created Incidents"
-            description="Start a new Incident by tapping the 'Add Incident' button "
-          />
-        )}
-        {/* Pagination Footer */}
-        {!searchTerm && tableData && tableData?.rows && tableData?.rows.length > 0 && (
-          <PaginationFooter
-            currentPage={currentPage}
-            rowsPerPage={rowsPerPage}
-            totalPages={totalPages}
-            totalRecords={totalRecords}
-            onPageChange={handlePageChange}
-            onRowsPerPageChange={handleRowsPerPageChange}
-            loading={loading}
-          />
-        )}
-      </Box>
-      <IncidentFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editIncidentData}
-        onSubmit={() => {
-          fetchData();
-        }}
-      />
-      <CustomDeleteDialog
-        open={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleIncidentDelete}
-        type="Incident"
-        field={incidentToDelete ? incidentToDelete.department : ""}
-      />
-      <DescriptionDialog
-        open={descriptionDialogOpen}
-        onClose={() => setDescriptionDialogOpen(false)}
-        description={currentDescription}
-      />
-      <AttachmentDrawer
-        moduleId={incidentId}
-        module={"INCIDENT"}
-        uploadedBy={user.email}
-        uploadedByRole={user.role}
-        attachments={attachments}
-        open={viewAttachementDialogOpen}
-        onClose={() => setViewAttachementDialogOpen(false)}
-        onUploadComplete={fetchData}
-        user={user}
-      />
-    </>
-  );
-};
-export default CreateIncidentPage;
-
-
-
-import React from "react";
-import { IconButton, Tooltip, Stack, Box } from "@mui/material";
-import {
-  Visibility,
-  ArrowCircleUp,
-  ChatBubbleOutline,
-  VisibilitySharp,
-  Edit,
-  Delete,
-  VisibilityOff,
-} from "@mui/icons-material";
-import MDTypography from "components/MDTypography";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
-import { CustomDropdownChip } from "layouts/resuableComponents/customDropdownChipField";
-import RemarksInputDialog from "layouts/resuableComponents/RemarksInputDialog";
-import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
-import InputWithDialog from "layouts/resuableComponents/InputWithDialog ";
-
-const statusOptions = [
-  { label: "Approve", value: "approve" },
-  { label: "Reject", value: "reject" },
-];
-
-export const formatTableData = (
-  rawData,
-  pageType,
-  {
-    currentPage,
-    rowsPerPage,
-    user,
-    formData,
-    setCurrentDescription,
-    setDescriptionDialogOpen,
-    setEditIndentData,
-    setIsModalOpen,
-    setIndentToDelete,
-    setIsDeleteDialogOpen,
-    setIndentId,
-    setAttachments,
-    setViewAttachementDialogOpen,
-    handleChange,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSubmitIndent,
-    formatDateTime,
-  }
-) => {
-  const isComplianceRoles = user.role === "COMPLIANCE_MAKER" || user.role === "COMPLIANCE_CHECKER";
-  const showDeleteAction = pageType === "created";
-  const showApproval =
-    pageType === "latest" ||
-    pageType === "rejected" ||
-    (pageType === "closure" && user.role !== "COMPLIANCE_MAKER");
-  const showActions =
-    pageType === "created" ||
-    (pageType === "latest" && isComplianceRoles) ||
-    pageType === "closure" ||
-    pageType === "rejected";
-
-  // Base columns that are common to all page types
-  const baseColumns = [
-    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "center" },
-    { Header: "Department", accessor: "department", width: "15%", align: "left" },
-    { Header: "Description", accessor: "description", width: "15%", align: "left" },
-    { Header: "Status", accessor: "status", width: "10%", align: "center" },
-    { Header: "Priority", accessor: "priority", width: "15%", align: "left" },
-    { Header: "Assigned To", accessor: "assignedTo", width: "10%", align: "center" },
-    { Header: "Due Date", accessor: "dueDate", width: "10%", align: "center" },
-    { Header: "Created At", accessor: "createdAt", width: "10%", align: "center" },
-    { Header: "Comments", accessor: "comments", width: "15%", align: "left" },
-  ];
-
-  // Conditional columns based on page type
-  const conditionalColumns = [];
-
-  if (showActions) {
-    conditionalColumns.push({
-      Header: "Actions",
-      accessor: "actions",
-      width: "15%",
-      align: "center",
-    });
-  }
-
-  conditionalColumns.push({
-    Header: "Attachments",
-    accessor: "attachments",
-    width: "15%",
-    align: "center",
-  });
-
-  if (showApproval) {
-    conditionalColumns.push({
-      Header: "Approval",
-      accessor: "approval",
-      width: "10%",
-      align: "center",
-    });
-  }
-
-  conditionalColumns.push({
-    Header: "Remarks",
-    accessor: "remarks",
-    width: "15%",
-    align: "center",
-  });
-  conditionalColumns.push({ Header: "Submit", accessor: "submit", width: "10%", align: "center" });
-
-  const columns = [...baseColumns, ...conditionalColumns];
-
-  const rows = rawData.map((item, index) => {
-    const baseRow = {
-      serialNumber: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {(currentPage - 1) * rowsPerPage + index + 1}
-        </MDTypography>
-      ),
-      department: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.department.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      description: (
-        <Tooltip title="Preview Description">
-          <IconButton
-            sx={iconButtonStyle}
-            onClick={() => {
-              setCurrentDescription(item.description);
-              setDescriptionDialogOpen(true);
-            }}
-          >
-            <Visibility />
-          </IconButton>
-        </Tooltip>
-      ),
-      status: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.status.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      priority: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.priority.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      assignedTo: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.assignedTo}
-        </MDTypography>
-      ),
-      dueDate: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {formatDateTime(item.dueDate)}
-        </MDTypography>
-      ),
-      createdAt: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {formatDateTime(item.createdAt)}
-        </MDTypography>
-      ),
-      comments: (
-        <InputWithDialog
-          value={item.comments}
-          dialogTitle="Comments"
-          dialogPlaceholder="Comments"
-          cancelButtonLabel="Cancel"
-          icon={VisibilityOff}
-          name="name"
-          type="text"
-          callOnSave={false}
-          isDisabled={true}
-        />
-      ),
-      attachments: (
-        <Tooltip title="View Attachments">
-          <span>
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setIndentId(item.indentId);
-                setAttachments(item.attachments);
-                setViewAttachementDialogOpen(true);
-              }}
-            >
-              <VisibilitySharp />
-            </IconButton>
-          </span>
-        </Tooltip>
-      ),
-      remarks: (
-        <Box sx={{ minWidth: "150px" }}>
-          <RemarksInputDialog
-            name="remarks"
-            value={formData[item.indentId]?.remarks || ""}
-            onChange={(e) => handleChange(e, item.indentId)}
-            remarks={item.remarkHistory || []}
-            currentUser={user}
-            onSendRemark={(newRemark) => handleSubmitRemark(item.indentId, newRemark)}
-            onEditRemark={(remarkId, remarkText) => handleEditRemark(remarkId, remarkText)}
-            icon={ChatBubbleOutline}
-          />
-        </Box>
-      ),
     };
 
     // Add conditional columns based on page type
@@ -856,11 +662,11 @@ export const formatTableData = (
 
       // Edit button (always present when actions are shown)
       actionButtons.push(
-        <Tooltip key="edit" title="Edit Indent Details">
+        <Tooltip key="edit" title="Edit Incident Details">
           <IconButton
             sx={iconButtonStyle}
             onClick={() => {
-              setEditIndentData(item);
+              setEditIncidentData(item);
               setIsModalOpen(true);
             }}
           >
@@ -872,11 +678,11 @@ export const formatTableData = (
       // Delete button (only for created page)
       if (showDeleteAction) {
         actionButtons.push(
-          <Tooltip key="delete" title="Delete Indent">
+          <Tooltip key="delete" title="Delete Incident">
             <IconButton
               sx={iconButtonStyle}
               onClick={() => {
-                setIndentToDelete(item);
+                setIncidentToDelete(item);
                 setIsDeleteDialogOpen(true);
               }}
             >
@@ -893,13 +699,13 @@ export const formatTableData = (
       );
     }
 
-    // Add approval dropdown for latest page
+    // Add approval dropdown for applicable pages
     if (showApproval) {
       baseRow.approval = (
         <CustomDropdownChip
           options={statusOptions}
-          value={formData[item.indentId]?.approvalStatus || ""}
-          onChange={(e) => handleChange(e, item.indentId)}
+          value={formData[item.incidentId]?.approvalStatus || ""}
+          onChange={(e) => handleChange(e, item.incidentId)}
           name="approvalStatus"
         />
       );
@@ -911,7 +717,7 @@ export const formatTableData = (
         icon={ArrowCircleUp}
         label="Submit"
         disabled={getSubmitDisabledState(item, formData, user, pageType)}
-        onClick={() => handleSubmitIndent(item.indentId, item.department)}
+        onClick={() => handleSubmitIncident(item.incidentId, item.department)}
       />
     );
 
@@ -931,7 +737,7 @@ const getSubmitDisabledState = (item, formData, user, pageType) => {
     lastMyRemarkTime && new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
 
   if (pageType === "latest" || pageType === "rejected" || (pageType === "closure" && user.role !== "COMPLIANCE_MAKER")) {
-    const approvalStatus = formData[item.indentId]?.approvalStatus;
+    const approvalStatus = formData[item.incidentId]?.approvalStatus;
     return !approvalStatus || !addedNewRemark;
   }
 
@@ -939,377 +745,60 @@ const getSubmitDisabledState = (item, formData, user, pageType) => {
 };
 
 
+/**
+=========================================================
+* Athena Guard - v2.2.0
+=========================================================
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import toast from "react-hot-toast";
-import { useSelector, useDispatch } from "react-redux";
-import debounce from "lodash.debounce";
-import { apiRequest } from "../../axios/apiRequest";
-import { fetchNotifications } from "features/notificationSlice";
+* Product Page: https://www.creative-tim.com/product/material-dashboard-react
+* Copyright 2023 Grant Thornton (https://www.creative-tim.com)
 
-export const useIndentManagement = (pageType) => {
-  // Common state
-  const [data, setData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editIndentData, setEditIndentData] = useState(null);
-  const [indentToDelete, setIndentToDelete] = useState(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
-  const [currentDescription, setCurrentDescription] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({});
-  const [viewAttachementDialogOpen, setViewAttachementDialogOpen] = useState(false);
-  const [attachments, setAttachments] = useState([]);
-  const [indentId, setIndentId] = useState("");
+Coded by www.creative-tim.com
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [totalRecords, setTotalRecords] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+ =========================================================
 
-  const user = useSelector((state) => state.user.user);
-  const dispatch = useDispatch();
+* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+*/
 
-  // API endpoint configuration based on page type
-  const getApiEndpoint = useCallback(() => {
-    const baseUrl = process.env.REACT_APP_BACKEND_URL;
-    const role = user?.role;
-    const department = user?.department;
-    const pagination = `page=${currentPage}&limit=${rowsPerPage}`;
+import React from "react";
 
-    switch (pageType) {
-      case "created":
-        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}`;
-      case "latest":
-        return role === "COMPLIANCE_CHECKER"
-          ? `${baseUrl}/api/v1/indents/${role}/latest?${pagination}`
-          : `${baseUrl}/api/v1/indents/${role}/latest/${department}?${pagination}`;
-      case "closure":
-        return `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${role}/closure?${pagination}`;
-      case "rejected":
-        role === "COMPLIANCE_MAKER"
-          ? `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${role}/rejected?${pagination}`
-          : `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${user}/rejected/${department}?${pagination}`;
-      default:
-        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}`;
-    }
-  }, [pageType, user?.role, user?.department, currentPage, rowsPerPage]);
+// @mui material components
+import SearchIcon from "@mui/icons-material/Search";
+import Box from "@mui/material/Box";
+import InputAdornment from "@mui/material/InputAdornment";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Skeleton from "@mui/material/Skeleton";
 
-  // Fetch data function
-  const fetchData = useCallback(async () => {
-    if (!user?.role) return;
+// Athena Guard components
+import DataTable from "examples/Tables/DataTable";
 
-    setLoading(true);
-    try {
-      const endpoint = getApiEndpoint();
-      const response = await apiRequest("GET", endpoint);
+// Athena Guard example components
+import AddIcon from "@mui/icons-material/Add";
+import CustomDeleteDialog from "layouts/resuableComponents/customDeleteDialog";
+import IncidentFormDialog from "./incidentFormDialog";
+import DescriptionDialog from "layouts/resuableComponents/customDescriptionViewDialog";
+import { topBarStyle } from "layouts/resuableComponents/styles";
+import { topBarSearchStyle } from "layouts/resuableComponents/styles";
+import { animatedButtonStyle } from "layouts/resuableComponents/styles";
+import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
+import { AttachmentDrawer } from "layouts/resuableComponents/attachmentDrawer";
+import { BsTable } from "react-icons/bs";
+import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
 
-      setData(response.data.data);
-      setTotalRecords(response.data.pagination.total);
-      setTotalPages(response.data.pagination.totalPages);
+// Import custom hooks and utilities
+import { useIncidentManagement } from "./hooks/useIncidentManagement";
+import { formatIncidentTableData } from "./utils/formatIncidentTableData";
 
-      // Update attachments if indentId exists
-      if (indentId) {
-        const updatedIndent = response.data.data.find((indent) => indent.indentId === indentId);
-        if (updatedIndent) {
-          setAttachments(updatedIndent.attachments || []);
-        }
-      }
-    } catch (error) {
-      toast.error("Failed to fetch Indent");
-    } finally {
-      setLoading(false);
-    }
-  }, [getApiEndpoint, indentId, user?.role]);
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Debounced search function
-  const debouncedFilter = useMemo(
-    () =>
-      debounce((term, data) => {
-        if (term) {
-          const lowercasedFilter = term.toLowerCase();
-          const filtered = data.filter((item) =>
-            Object.keys(item).some((key) => {
-              const value = item[key];
-              return value !== null && value.toString().toLowerCase().includes(lowercasedFilter);
-            })
-          );
-          setFilteredData(filtered);
-        } else {
-          setFilteredData(data);
-        }
-      }, 300),
-    []
-  );
-
-  // Search effect with normalization
-  useEffect(() => {
-    const normalizeSearchTerm = (term) => {
-      const mappings = {
-        "in progress": "in_progress",
-        completed: "completed",
-        pending: "pending",
-        low: "low",
-        medium: "medium",
-        high: "high",
-      };
-      const lowerTerm = term.toLowerCase().trim();
-      if (!lowerTerm) return "";
-      if (mappings[lowerTerm]) {
-        return mappings[lowerTerm];
-      }
-      for (const [key, value] of Object.entries(mappings)) {
-        if (key.startsWith(lowerTerm) || lowerTerm.includes(key)) {
-          return value;
-        }
-      }
-      return lowerTerm;
-    };
-
-    const normalizedTerm = normalizeSearchTerm(searchTerm);
-
-    if (!normalizedTerm) {
-      setFilteredData(data);
-    } else {
-      debouncedFilter(normalizedTerm, data);
-    }
-
-    return () => debouncedFilter.cancel();
-  }, [searchTerm, data, debouncedFilter]);
-
-  // Common handlers
-  const handleSearch = useCallback((event) => {
-    setSearchTerm(event.target.value);
-  }, []);
-
-  const handleAddIndentClick = useCallback(() => {
-    setEditIndentData(null);
-    setIsModalOpen(true);
-  }, []);
-
-  const handleChange = useCallback((e, indentId) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [indentId]: {
-        ...prev[indentId],
-        [name]: value,
-      },
-    }));
-  }, []);
-
-  const handleIndentDelete = useCallback(async () => {
-    if (!indentToDelete) return;
-
-    try {
-      const deleteIndentUrl = `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${indentToDelete.indentId}`;
-      const result = await apiRequest("DELETE", deleteIndentUrl);
-
-      if (result.status === 200 || result.status === 204) {
-        toast.success("Indent Deleted Successfully");
-        setData((prev) => prev.filter((indent) => indent.indentId !== indentToDelete.indentId));
-        fetchData();
-      }
-    } catch (error) {
-      console.error("Error deleting indent:", error);
-    } finally {
-      setIsDeleteDialogOpen(false);
-    }
-  }, [indentToDelete, fetchData]);
-
-  const handleSubmitIndent = useCallback(
-    async (indentId, department) => {
-      try {
-        const isComplianceDepartment = department === "COMPLIANCE";
-        const payload = {
-          updatedFields: {
-            type: "WORKFLOW_UPDATE",
-            rejectedStatus:
-              pageType === "latest" || pageType === "rejected" || pageType === "closure"
-                ? formData[indentId]?.approvalStatus === "approve"
-                  ? false
-                  : true
-                : false,
-          },
-        };
-
-        const result = await apiRequest(
-          "PUT",
-          `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${user.role}/${department}/${indentId}`,
-          payload
-        );
-
-        if (result.status === 200 || result.status === 204) {
-          // Success message logic based on page type and approval status
-          if (pageType === "created") {
-            toast.success("Indent Sent to Compliance Checker Successfully");
-          } else if (pageType === "latest") {
-            const approvalStatus = formData[indentId]?.approvalStatus;
-            // Add specific success messages based on role and approval status
-            if (isComplianceDepartment) {
-              if (approvalStatus === "approve") {
-                toast.success("Indent Sent to back to Compliance Maker for Closure Successfully");
-              } else {
-                toast.success("Indent Sent to back to Compliance Maker Successfully");
-              }
-            } else {
-              if (approvalStatus === "approve") {
-                if (user.role === "COMPLIANCE_CHECKER") {
-                  toast.success("Indent Sent to Department Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Indent Sent to Department Checker Successfully");
-                } else {
-                  toast.success("Indent Sent to Compliance Maker Successfully");
-                }
-              } else {
-                if (user.role === "COMPLIANCE_CHECKER") {
-                  toast.success("Indent Sent to back to Compliance Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Indent Sent to back to Compliance Maker Successfully");
-                } else {
-                  toast.success("Indent Sent to back to Department Maker Successfully");
-                }
-              }
-            }
-          } else if (pageType === "rejected") {
-            if (formData[indentId]?.approvalStatus === "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent to Compliance Checker Successfully");
-              } else if (user.role === "DEPARTMENT_MAKER") {
-                toast.success("Indent Sent to Department Checker Successfully");
-              } else {
-                toast.success("Indent Sent Successfully");
-              }
-            } else {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent to back to Department Maker Successfully");
-              } else if (user.role === "DEPARTMENT_MAKER") {
-                toast.success("Indent Sent to back to Compliance Maker Successfully");
-              } else {
-                toast.success("Indent Sent Successfully");
-              }
-            }
-          } else if (pageType === "closure") {
-            if (formData[indentId]?.approvalStatus === "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent For Closure to Compliance Checker Successfully");
-              } else if (user.role === "COMPLIANCE_CHECKER") {
-                toast.success("Indent Closed Successfully");
-              }
-            } else if (formData[indentId]?.approvalStatus !== "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent Back to Department Maker Successfully");
-              } else if (user.role === "COMPLIANCE_CHECKER") {
-                toast.success("Indent Sent Back to Compliance Maker Successfully");
-              }
-            } else {
-              toast.success("Indent Sent to back to Compliance Checker Successfully");
-            }
-          }
-        }
-
-        fetchData();
-        dispatch(fetchNotifications());
-      } catch (error) {
-        toast.error("An error occurred while submitting the Indent.");
-      }
-    },
-    [pageType, formData, user.role, fetchData, dispatch]
-  );
-
-  const handleSubmitRemark = useCallback(
-    async (indentId, remarkData) => {
-      try {
-        const result = await apiRequest(
-          "POST",
-          `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/remarks/${indentId}`,
-          remarkData
-        );
-
-        if (result.status === 201 || result.status === 204) {
-          toast.success("Indent Remark Added Successfully");
-        }
-        fetchData();
-      } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
-      }
-    },
-    [fetchData]
-  );
-
-  const handleEditRemark = useCallback(
-    async (remarkId, remarkContent) => {
-      try {
-        const result = await apiRequest(
-          "PUT",
-          `${process.env.REACT_APP_BACKEND_URL}/api/v1/indents/remarks/${remarkId}`,
-          { remarkContent }
-        );
-
-        if (result.status === 201 || result.status === 204) {
-          toast.success("Indent Remark Updated Successfully");
-        }
-        fetchData();
-      } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
-      }
-    },
-    [fetchData]
-  );
-
-  const handleSortByPriority = useCallback(() => {
-    const priorityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-    const sortedData = [...data].sort((a, b) => {
-      return priorityOrder[b.priority] - priorityOrder[a.priority];
-    });
-    setData(sortedData);
-  }, [data]);
-
-  const handlePageChange = useCallback((event, newPage) => {
-    setCurrentPage(newPage);
-  }, []);
-
-  const handleRowsPerPageChange = useCallback((event) => {
-    const { numericValue, resetToFirstPage } = event;
-    setRowsPerPage(numericValue);
-    if (resetToFirstPage) {
-      setCurrentPage(1);
-    }
-  }, []);
-
-  // Utility functions
-  const formatDateTime = useCallback((dateString) => {
-    return new Date(dateString).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  }, []);
-
-  const displayData = searchTerm ? filteredData : data;
-
-  return {
+const CreateIncidentPage = () => {
+  // Use the incident management hook
+  const {
     // State
-    data,
     searchTerm,
-    filteredData,
     isModalOpen,
     setIsModalOpen,
-    editIndentData,
-    setEditIndentData,
-    indentToDelete,
-    setIndentToDelete,
+    editIncidentData,
+    incidentToDelete,
     isDeleteDialogOpen,
     setIsDeleteDialogOpen,
     descriptionDialogOpen,
@@ -1318,13 +807,12 @@ export const useIndentManagement = (pageType) => {
     setCurrentDescription,
     loading,
     formData,
-    setFormData,
     viewAttachementDialogOpen,
     setViewAttachementDialogOpen,
     attachments,
     setAttachments,
-    indentId,
-    setIndentId,
+    incidentId,
+    setIncidentId,
     currentPage,
     rowsPerPage,
     totalRecords,
@@ -1334,17 +822,16 @@ export const useIndentManagement = (pageType) => {
 
     // Handlers
     handleSearch,
-    handleAddIndentClick,
+    handleAddIncidentClick,
     handleChange,
-    handleIndentDelete,
-    handleSubmitIndent,
+    handleIncidentDelete,
+    handleSubmitIncident,
     handleSubmitRemark,
     handleEditRemark,
-    handleSortByPriority,
     handlePageChange,
     handleRowsPerPageChange,
     fetchData,
     formatDateTime,
-  };
-};
-
+    setEditIncidentData,
+    setIncidentToDelete,
+    setIsModalOpen
