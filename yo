@@ -11,3 +11,14 @@ in db enum as   COMPLIANCE_MAKER
   COMPLIANCE_CHECKER
   DEPARTMENT_MAKER
   DEPARTMENT_CHECKER
+    if (filters?.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { role: { contains: searchTerm, mode: "insensitive" } },
+          { actionType: { contains: searchTerm, mode: "insensitive" } },
+          { performedByName: { contains: searchTerm, mode: "insensitive" } },
+          { performedByEmail: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
