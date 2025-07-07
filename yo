@@ -9,10 +9,7 @@ export const getIndentAuditTrailController = async (
 
     const pageNumber = parseInt(page as string, 10);
     const limitNumber = parseInt(limit as string, 10);
-    const filters = {
-      ...(userRole && { userRole }),
-      ...(actionType && { actionType }),
-    };
+
     if (
       isNaN(pageNumber) ||
       isNaN(limitNumber) ||
@@ -22,7 +19,12 @@ export const getIndentAuditTrailController = async (
       throw ApiError.badRequest("Invalid pagination parameters");
     }
 
-    const result = await getIndentAuditTrail(user, pageNumber, limitNumber, filters);
+    const filters = {
+      ...(userRole && typeof userRole === "string" && { userRole }),
+      ...(actionType && typeof actionType === "string" && { actionType }),
+    };
+
+    const result = await getIndentAuditTrail(user, undefined, pageNumber, limitNumber, filters);
 
     res.status(200).json(result);
   } catch (error) {
