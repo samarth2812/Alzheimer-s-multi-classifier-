@@ -1,47 +1,10 @@
-// mapping UI department names to database enum values
-const DEPARTMENT_MAPPING: Record<string, string> = {
-  "Consumer Finance - Analytics": "CONSUMER_FINANCE_ANALYTICS",
-  "Customer Success": "CUSTOMER_SUCCESS",
-  "Dealer Management & Relationship": "DEALER_MANAGEMENT",
-  "Consumer Finance - Growth": "CONSUMER_FINANCE_GROWTH",
-  "Consumer Finance - MSME Product": "CONSUMER_FINANCE_MSME_PRODUCT",
-  "Consumer Finance - MSME Credit": "CONSUMER_FINANCE_MSME_CREDIT",
-  "Consumer Finance - MSME Business Development": "CONSUMER_FINANCE_MSME_BD",
-  "Consumer Finance - Product & Banking Partnerships":
-    "CONSUMER_FINANCE_PRODUCT_PARTNERSHIPS",
-  "Fraud & Collections": "FRAUD_COLLECTIONS",
-  "Business Development (BD)": "BUSINESS_DEVELOPMENT",
-  "Project Management": "PROJECT_MANAGEMENT",
-  "Credit & Policy": "CREDIT_POLICY",
-  "Technology - Consumer Business": "TECHNOLOGY_CONSUMER",
-  Operations: "OPERATIONS",
-  "Investor Relations": "INVESTOR_RELATIONS",
-  HR: "HR",
-  "Data Science": "DATA_SCIENCE",
-  Analytics: "ANALYTICS",
-  Treasury: "TREASURY",
-  Finance: "FINANCE",
-  Compliance: "COMPLIANCE",
-  Secretarial: "SECRETARIAL",
-  Risk: "RISK",
-  Legal: "LEGAL",
-  "Internal Audit": "INTERNAL_AUDIT",
-  Litigation: "LITIGATION",
-  Admin: "ADMIN",
-  "Brand & Communication": "BRAND_COMMUNICATION",
-  "Strategy & Planning": "STRATEGY_PLANNING",
-  "Technology-Infra": "TECHNOLOGY_INFRA",
-  "Information Security": "INFORMATION_SECURITY",
-  Technology: "TECHNOLOGY",
-  "Credit Monitoring": "CREDIT_MONITORING",
-  "Digital Strategy and Platforms": "DIGITAL_STRATEGY_AND_PLATFORMS",
-  "Founders Office": "FOUNDERS_OFFICE",
-  "F & A": " F_AND_A",
-};
+const searchTerm = filters.search.trim().toLowerCase();
 
-    if (filters.search?.trim()) {
-      const searchTerm = filters.search.trim();
-      where.AND.push({
-        OR: [{ department: { contains: searchTerm, mode: "insensitive" } }],
-      });
-    }
+// this finds matching UI labels like "Consumer Finance - Growth"
+const matchedEnumValues = Object.entries(DEPARTMENT_MAPPING)
+  .filter(([label]) => label.toLowerCase().includes(searchTerm))
+  .map(([, enumValue]) => enumValue);
+
+where.AND.push({
+  OR: matchedEnumValues.map((enumVal) => ({ department: enumVal })),
+});
