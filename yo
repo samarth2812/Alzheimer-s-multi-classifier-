@@ -1,68 +1,31 @@
-export const getIndentAuditTrail = async (
-  user: User,
-  indentId?: string,
-  page: number = 1,
-  pageSize: number = 10,
-  filters?: {
-    userRole?: string;
-    actionType?: string;
-  }
-) => {
+export const getIndentAuditTrailController = async (
+  req: customRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    if (
-      user.role !== "COMPLIANCE_MAKER" &&
-      user.role !== "COMPLIANCE_CHECKER"
-    ) {
-      throw new Error("You are not authorized to view audit trails.");
-    }
+    const user: any = get(req, "user");
+    const { userRole, actionType, page = "1", limit = "10" } = req.query;
 
-    const where: any = {};
-
-    if (indentId) {
-      where.indentId = indentId;
-    }
-
-    if (filters?.userRole?.trim()) {
-      where.role = filters.userRole.trim();
-    }
-
-    if (filters?.actionType?.trim()) {
-      where.actionType = filters.actionType.trim();
-    }
-
-    const offset = (page - 1) * pageSize;
-
-    const [auditEntries, total] = await Promise.all([
-      prisma.indentAuditTrail.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { timestamp: "desc" },
-        select: {
-          indentId: true,
-          actionType: true,
-          role: true,
-          performedByName: true,
-          performedByEmail: true,
-          timestamp: true,
-          modifications: true,
-        },
-      }),
-      prisma.indentAuditTrail.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: auditEntries,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
+    const pageNumber = parseInt(page as string, 10);
+    const limitNumber = parseInt(limit as string, 10);
+    const filters = {
+      ...(userRole && { userRole }),
+      ...(actionType && { actionType }),
     };
+    if (
+      isNaN(pageNumber) ||
+      isNaN(limitNumber) ||
+      pageNumber < 1 ||
+      limitNumber < 1
+    ) {
+      throw ApiError.badRequest("Invalid pagination parameters");
+    }
+
+    const result = await getIndentAuditTrail(user, pageNumber, limitNumber, filters);
+
+    res.status(200).json(result);
   } catch (error) {
-    console.error("Failed to fetch audit trail", error);
-    throw new Error("Unable to fetch audit trail");
+    next(error);
   }
 };
