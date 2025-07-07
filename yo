@@ -1,46 +1,213 @@
-export const buildFetchFilter = (
-  type: "inbox" | "sent" | "thread",
-  userEmail: string,
-  threadId?: string
-) => {
-  switch (type) {
-    case "inbox":
-      return {
-        AND: [
-          {
-            OR: [
-              { sentTo: { has: userEmail } },
-              { cc: { has: userEmail } },
-            ],
-          },
-          {
-            NOT: { sentBy: userEmail },
-          },
-          {
-            isDeleted: false,
-          },
-        ],
-      };
+import React from "react";
+import { Box, TextField, Button, Typography, InputAdornment, Skeleton } from "@mui/material";
+import { SearchIcon, FilterAltIcon, AddIcon } from "@mui/icons-material";
+import { BsTable } from "react-icons/bs";
 
-    case "sent":
-      return {
-        sentBy: userEmail,
-        isDeleted: false,
-      };
+// Components
+import DataTable from "../examples/Tables/DataTable";
+import IndentFormDialog from "./indentFormDialog";
+import CustomDeleteDialog from "../layouts/resuableComponents/customDeleteDialog";
+import DescriptionDialog from "../layouts/resuableComponents/customDescriptionViewDialog";
+import { AttachmentDrawer } from "../layouts/resuableComponents/attachmentDrawer";
+import EmptyStateBox from "../layouts/resuableComponents/emptyStateBox";
+import PaginationFooter from "../layouts/resuableComponents/PaginationFooter";
 
-    case "thread":
-      return {
-        OR: [
-          { commId: threadId },
-          { parentCommId: threadId },
-        ],
-        isDeleted: false,
-      };
+// Custom hooks and utilities
+import { useIndentManagement } from "../hooks/useIndentManagement";
+import { formatTableData } from "../utils/tableFormatter";
 
-    default:
-      return { isDeleted: false };
-  }
-};
+// Styles
+import { topBarStyle, topBarSearchStyle, animatedButtonStyle, iconButtonStyle } from "../layouts/resuableComponents/styles";
+
+const CreateIndentPage = () => {
+  const {
+    // State
+    data,
+    searchTerm,
+    isModalOpen,
+    setIsModalOpen,
+    editIndentData,
+    setEditIndentData,
+    indentToDelete,
+    setIndentToDelete,
+    isDeleteDialogOpen,
+    setIsDeleteDialogOpen,
+    descriptionDialogOpen,
+    setDescriptionDialogOpen,
+    currentDescription,
+    setCurrentDescription,
+    loading,
+    formData,
+    viewAttachementDialogOpen,
+    setViewAttachementDialogOpen,
+    attachments,
+    setAttachments,
+    indentId,
+    setIndentId,
+    currentPage,
+    rowsPerPage,
+    totalRecords,
+    totalPages,
+    displayData,
+    user,
+
+    // Handlers
+    handleSearch,
+    handleAddIndentClick,
+    handleChange,
+    handleIndentDelete,
+    handleSubmitIndent,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSortByPriority,
+    handlePageChange,
+    handleRowsPerPageChange,
+    fetchData,
+    formatDateTime,
+  } = useIndentManagement('created');
+
+  const tableData = formatTableData(displayData, 'created', {
+    currentPage,
+    rowsPerPage,
+    user,
+    formData,
+    setCurrentDescription,
+    setDescriptionDialogOpen,
+    setEditIndentData,
+    setIsModalOpen,
+    setIndentToDelete,
+    setIsDeleteDialogOpen,
+    setIndentId,
+    setAttachments,
+    setViewAttachementDialogOpen,
+    handleChange,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSubmitIndent,
+    formatDateTime,
+  });
+
+  return (
+    <>
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          position: "relative",
+        }}
+      >
+        <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
+          <TextField
+            fullWidth
+            placeholder="Search Indent Records..."
+            variant="outlined"
+            sx={topBarSearchStyle}
+            value={searchTerm}
+            onChange={handleSearch}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="medium" sx={iconButtonStyle} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          {tableData && tableData?.rows && tableData?.rows.length > 2 && (
+            <>
+              <Button
+                size="small"
+                color="info"
+                sx={animatedButtonStyle}
+                startIcon={<FilterAltIcon />}
+                onClick={handleSortByPriority}
+              >
+                Priority
+              </Button>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: (theme) => theme.palette.custom.text1,
+                  opacity: 0.5,
+                }}
+              >
+                |
+              </Typography>
+            </>
+          )}
+          <Button
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={handleAddIndentClick}
+            color="info"
+            sx={animatedButtonStyle}
+          >
+            Add Indent
+          </Button>
+        </Box>
+
+        {loading ? (
+          <Box>
+            {[...Array(5)].map((_, index) => (
+              <Skeleton
+                key={index}
+                variant="rectangular"
+                animation="wave"
+                height={40}
+                sx={{
+                  mb: 2,
+                  borderRadius: 2,
+                  backgroundColor: (theme) => theme.palette.custom.background1,
+                }}
+              />
+            ))}
+          </Box>
+        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
+          <Box pb={1} sx={{ overflowY: "auto", display: "flex", maxWidth: "100%" }}>
+            <DataTable
+              table={tableData}
+              isSorted={false}
+              entriesPerPage={true}
+              showTotalEntries={true}
+              noEndBorder
+            />
+          </Box>
+        ) : (
+          <EmptyStateBox
+            icon={BsTable}
+            title="Currently there are no created Indents"
+            description="Start a new indent by tapping the 'Add Indent' button "
+          />
+        )}
+
+        {!searchTerm && tableData && tableData?.rows && tableData?.rows.length > 0 && (
+          <PaginationFooter
+            currentPage={currentPage}
+            rowsPerPage={rowsPerPage}
+            totalPages={totalPages}
+            totalRecords={totalRecords}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            loading={loading}
+          />
+        )}
+      </Box>
+
+      <IndentFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editIndentData}
+        onSubmit={fetchData}
+      />
+
+      <CustomDeleteDialog
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleIndentDelete}
+        type="Indent"
+        field={indentToDelete ? indentToDelete.department : ""}
 
 
 
