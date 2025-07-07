@@ -2,7 +2,11 @@ export const getIndentAuditTrail = async (
   user: User,
   indentId?: string,
   page: number = 1,
-  pageSize: number = 10
+  pageSize: number = 10,
+  filters?: {
+    userRole?: string;
+    actionType?: string;
+  }
 ) => {
   try {
     if (
@@ -13,7 +17,18 @@ export const getIndentAuditTrail = async (
     }
 
     const where: any = {};
-    if (indentId) where.indentId = indentId;
+
+    if (indentId) {
+      where.indentId = indentId;
+    }
+
+    if (filters?.userRole?.trim()) {
+      where.role = filters.userRole.trim();
+    }
+
+    if (filters?.actionType?.trim()) {
+      where.actionType = filters.actionType.trim();
+    }
 
     const offset = (page - 1) * pageSize;
 
@@ -49,59 +64,5 @@ export const getIndentAuditTrail = async (
   } catch (error) {
     console.error("Failed to fetch audit trail", error);
     throw new Error("Unable to fetch audit trail");
-  }
-};
-
-
-export const getObligationAuditTrail = async (
-  obligationId?: string,
-  userRole?: string,
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    const whereFilter: any = {};
-
-    // Search by obligation ID (exact match)
-    if (obligationId && obligationId.trim()) {
-      whereFilter.obligationId = obligationId.trim();
-    }
-
-    // Filter by user role
-    if (userRole && userRole.trim()) {
-      whereFilter.actionedByRole = userRole.trim();
-    }
-
-    const offset = (page - 1) * pageSize;
-
-    const [auditEntries, total] = await Promise.all([
-      prisma.obligationAudit.findMany({
-        where: whereFilter,
-        skip: offset,
-        take: pageSize,
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.obligationAudit.count({ where: whereFilter })
-    ]);
-
-    // Enhance audit entries with formatted changes
-    const enhancedEntries = auditEntries.map(entry => ({
-      ...entry,
-      changes: formatAuditChanges(entry.changes),
-      auditTypeDisplay: formatAuditType(entry.auditType)
-    }));
-
-    return {
-      success: true,
-      data: enhancedEntries,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize)
-      }
-    };
-  } catch (error: any) {
-    throw ApiError.internal(`Error retrieving audit trail: ${error.message}`);
   }
 };
