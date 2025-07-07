@@ -1,31 +1,24 @@
-const handleFileView = async (attachmentId) => {
-  try {
-    const response = await apiRequest(
-      "GET",
-      `${process.env.REACT_APP_BACKEND_URL}/api/v1/attachment/fetch-document/${attachmentId}`
-    );
+model Attachment {
+  id             String   @id @default(uuid())
+  fileName       String
+  uploadedBy     String // User email
+  uploadedByRole String
+  uploadedAt     DateTime @default(now())
+  s3Key          String
+  moduleType     Module
+  isDeleted      Boolean  @default(false)
 
-    const signedUrl = response.data?.signedUrl;
+  indentId          String?
+  indent            Indents?           @relation("Attachment_indentId", fields: [indentId], references: [indentId])
+  observationId     String?
+  ISEObservations   ISEObservations?   @relation("Attachment_observationId", fields: [observationId], references: [observationId])
+  incidentId        String?
+  IncidentReporting IncidentReporting? @relation("Attachment_incidentId", fields: [incidentId], references: [incidentId])
+  Obligation        Obligation?        @relation("Attachment_obligationId", fields: [obligationId], references: [id])
+  obligationId      String?
 
-    if (!signedUrl) {
-      toast.error("Failed to fetch this Document");
-      return;
-    }
-
-    const fileExtension = signedUrl.split('.').pop().split(/\#|\?/)[0]?.toLowerCase();
-
-    const isExcel =
-      fileExtension === "xls" ||
-      fileExtension === "xlsx" ||
-      fileExtension === "csv";
-
-    setPreviewUrl(
-      isExcel
-        ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrl)}`
-        : signedUrl
-    );
-  } catch (error) {
-    console.error("Error fetching preview URL:", error);
-    toast.error("Failed to fetch this Document");
-  }
-};
+  @@index([indentId])
+  @@index([observationId])
+  @@index([incidentId])
+  @@index([obligationId])
+}
