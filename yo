@@ -1,33 +1,175 @@
-export const getIndentAuditTrailController = async (
-  req: customRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const getIndentAuditTrail = async (
+  user: User,
+  page: number = 1,
+  pageSize: number = 10,
+  filters?: {
+    userRole?: string;
+    actionType?: string;
+  }
+) => {
   try {
-    const user: any = get(req, "user");
-    const { userRole, actionType, page = "1", limit = "10" } = req.query;
-
-    const pageNumber = parseInt(page as string, 10);
-    const limitNumber = parseInt(limit as string, 10);
-
     if (
-      isNaN(pageNumber) ||
-      isNaN(limitNumber) ||
-      pageNumber < 1 ||
-      limitNumber < 1
+      user.role !== "COMPLIANCE_MAKER" &&
+      user.role !== "COMPLIANCE_CHECKER"
     ) {
-      throw ApiError.badRequest("Invalid pagination parameters");
+      throw new Error("You are not authorized to view audit trails.");
     }
 
-    const filters = {
-      ...(userRole && typeof userRole === "string" && { userRole }),
-      ...(actionType && typeof actionType === "string" && { actionType }),
+    const where: any = {};
+
+    if (filters?.userRole?.trim()) {
+      where.role = filters.userRole.trim();
+    }
+
+    if (filters?.actionType?.trim()) {
+      where.actionType = filters.actionType.trim();
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    const [auditEntries, total] = await Promise.all([
+      prisma.indentAuditTrail.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { timestamp: "desc" },
+        select: {
+          indentId: true,
+          actionType: true,
+          role: true,
+          performedByName: true,
+          performedByEmail: true,
+          timestamp: true,
+          modifications: true,
+        },
+      }),
+      prisma.indentAuditTrail.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: auditEntries,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
     };
-
-    const result = await getIndentAuditTrail(user, undefined, pageNumber, limitNumber, filters);
-
-    res.status(200).json(result);
   } catch (error) {
-    next(error);
+    console.error("Failed to fetch audit trail", error);
+    throw new Error("Unable to fetch audit trail");
   }
 };
+
+
+
+export const getObservationAuditTrail = async (
+  user: User,
+  observationId?: string,
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    if (
+      user.role !== "COMPLIANCE_MAKER" &&
+      user.role !== "COMPLIANCE_CHECKER"
+    ) {
+      throw new Error("You are not authorized to view audit trails.");
+    }
+
+    const where: any = {};
+    if (observationId) where.observationId = observationId;
+
+    const offset = (page - 1) * pageSize;
+
+    const [auditEntries, total] = await Promise.all([
+      prisma.observationAuditTrail.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { timestamp: "desc" },
+        select: {
+          observationId: true,
+          actionType: true,
+          role: true,
+          performedByName: true,
+          performedByEmail: true,
+          timestamp: true,
+          modifications: true,
+        },
+      }),
+      prisma.observationAuditTrail.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: auditEntries,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  } catch (error) {
+    console.error("Failed to fetch audit trail", error);
+    throw new Error("Unable to fetch audit trail");
+  }
+};
+
+
+export const getIncidentAuditTrail = async (
+  user: User,
+  incidentId?: string,
+  page: number = 1,
+  pageSize: number = 10
+) => {
+  try {
+    if (
+      user.role !== "COMPLIANCE_MAKER" &&
+      user.role !== "COMPLIANCE_CHECKER"
+    ) {
+      throw new Error("You are not authorized to view audit trails.");
+    }
+
+    const where: any = {};
+    if (incidentId) where.incidentId = incidentId;
+
+    const offset = (page - 1) * pageSize;
+
+    const [auditEntries, total] = await Promise.all([
+      prisma.incidentAuditTrail.findMany({
+        where,
+        skip: offset,
+        take: pageSize,
+        orderBy: { timestamp: "desc" },
+        select: {
+          incidentId: true,
+          actionType: true,
+          role: true,
+          performedByName: true,
+          performedByEmail: true,
+          timestamp: true,
+          modifications: true,
+        },
+      }),
+      prisma.incidentAuditTrail.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: auditEntries,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
+  } catch (error) {
+    console.error("Failed to fetch audit trail", error);
+    throw new Error("Unable to fetch audit trail");
+  }
+};
+
