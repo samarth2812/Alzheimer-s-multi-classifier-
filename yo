@@ -1,33 +1,41 @@
-const roleDisplayToEnumMap: Record<string, string> = {
-  "Compliance Maker": "COMPLIANCE_MAKER",
-  "Compliance Checker": "COMPLIANCE_CHECKER",
-  "Department Maker": "DEPARTMENT_MAKER",
-  "Department Checker": "DEPARTMENT_CHECKER",
-};
-if (filters?.userRole?.trim()) {
-  const roleEnum = roleDisplayToEnumMap[filters.userRole.trim()];
-  if (roleEnum) {
-    where.AND.push({ role: roleEnum });
-  }
-}
-if (filters?.search?.trim() && filters.search.trim().length >= 2) {
-  const searchTerm = filters.search.trim().toLowerCase();
+prisma.indentAuditTrail.count({
+        select: {
+          _count: {
+            select: {
+              _all: true
+            }
+          }
+        },
+        where: {
+          AND: [
+            {
+              role: "COMPLIANCE_MAKER"
+            },
+            {
+              OR: [
+                {
+                  actionType: {
+                    contains: "cmm",
+                    mode: "insensitive"
+                  }
+                },
+                {
+                  performedByName: {
+                    contains: "cmm",
+                    mode: "insensitive"
+                  }
+                },
+                {
+                  performedByEmail: {
+                    contains: "cmm",
+                    mode: "insensitive"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      })
 
-  // Reverse map: get possible roles from label match
-  const matchingRoles = Object.entries(roleDisplayToEnumMap)
-    .filter(([label]) => label.toLowerCase().includes(searchTerm))
-    .map(([, enumValue]) => enumValue);
+Unknown argument `contains`. Available options are marked with ?.
 
-  const roleConditions = matchingRoles.length
-    ? [{ role: { in: matchingRoles } }]
-    : [];
-
-  where.AND.push({
-    OR: [
-      ...roleConditions,
-      { actionType: { contains: searchTerm, mode: "insensitive" } },
-      { performedByName: { contains: searchTerm, mode: "insensitive" } },
-      { performedByEmail: { contains: searchTerm, mode: "insensitive" } },
-    ],
-  });
-}
