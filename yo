@@ -1,10 +1,96 @@
-const searchTerm = filters.search.trim().toLowerCase();
+import AWS from 'aws-sdk';
+AWS.config.update({
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID! ,
+    secretAccessKey:process.env.AWS_SECRET_ACCESS_KEY! ,
+    region: process.env.AWS_REGION! ,
 
-// this finds matching UI labels like "Consumer Finance - Growth"
-const matchedEnumValues = Object.entries(DEPARTMENT_MAPPING)
-  .filter(([label]) => label.toLowerCase().includes(searchTerm))
-  .map(([, enumValue]) => enumValue);
-
-where.AND.push({
-  OR: matchedEnumValues.map((enumVal) => ({ department: enumVal })),
 });
+
+const s3=new AWS.S3();
+export default s3;
+
+export const uploadToS3 = async (
+  file: Express.Multer.File,
+  options: UploadParams,
+  userName: string
+): Promise<{ attachmentId: string }> => {
+  try {
+    const { moduleName, entityId, uploadedBy, uploadedByRole } = options;
+    const timestamp = Date.now();
+    const cleanFileName = file.originalname.replace(/\s+/g, "_");
+
+    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET!,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    };
+
+    let attachmentData: any = {
+      fileName: cleanFileName,
+      uploadedBy,
+      uploadedByRole,
+      s3Key: key,
+      moduleType: moduleName,
+    };
+
+    if (moduleName === "INDENT") {
+      attachmentData.indentId = entityId;
+    } else if (moduleName === "ISE_OBSERVATION") {
+      attachmentData.observationId = entityId;
+    } else if (moduleName === "INCIDENT") {
+      attachmentData.incidentId = entityId;
+    } else if (moduleName === "OBLIGATION") {
+      attachmentData.obligationId = entityId;
+    } else {
+      throw new Error("Invalid module name provided");
+    }
+
+    // Upload to S3
+    await s3.putObject(params).promise();
+
+    // Create attachment record in DB
+    const attachment = await prisma.attachment.create({
+      data: attachmentData,
+    });
+
+    const baseAuditPayload = {
+      actionType: "CREATE" as AuditAction,
+      step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
+      role: uploadedByRole as StepRoles,
+      performedByName: userName,
+      performedByEmail: uploadedBy,
+      modifications: {
+        attachments: {
+          added: { fileName: cleanFileName, uploadedBy },
+        },
+      },
+    };
+
+    // Audit Trail Logic
+    if (moduleName === "INDENT") {
+      await createIndentAuditTrail({
+        indentId: entityId,
+        ...baseAuditPayload,
+      });
+    } else if (moduleName === "ISE_OBSERVATION") {
+      await createObservationAuditTrail({
+        observationId: entityId,
+        ...baseAuditPayload,
+      });
+    } else if (moduleName === "INCIDENT") {
+      await createIncidentAuditTrail({
+        incidentId: entityId,
+        ...baseAuditPayload,
+      });
+    }
+
+    return {
+      attachmentId: attachment.id,
+    };
+  } catch (error) {
+    console.error("Error during S3 upload or DB insert:", error);
+    throw new Error("Upload failed. Please try again later.");
+  }
+};
