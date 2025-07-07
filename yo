@@ -1,81 +1,47 @@
-export const getObservationAuditTrail = async (
-  user: User,
-  observationId?: string,
-  page: number = 1,
-  pageSize: number = 10,
-  filters?: {
-    userRole?: string;      // acts as exact filter
-    actionType?: string;    // acts as exact filter
-    search?: string;        // acts as keyword search on userRole/actionType
-  }
-) => {
-  try {
-    if (
-      user.role !== "COMPLIANCE_MAKER" &&
-      user.role !== "COMPLIANCE_CHECKER"
-    ) {
-      throw new Error("You are not authorized to view audit trails.");
-    }
+// mapping UI department names to database enum values
+const DEPARTMENT_MAPPING: Record<string, string> = {
+  "Consumer Finance - Analytics": "CONSUMER_FINANCE_ANALYTICS",
+  "Customer Success": "CUSTOMER_SUCCESS",
+  "Dealer Management & Relationship": "DEALER_MANAGEMENT",
+  "Consumer Finance - Growth": "CONSUMER_FINANCE_GROWTH",
+  "Consumer Finance - MSME Product": "CONSUMER_FINANCE_MSME_PRODUCT",
+  "Consumer Finance - MSME Credit": "CONSUMER_FINANCE_MSME_CREDIT",
+  "Consumer Finance - MSME Business Development": "CONSUMER_FINANCE_MSME_BD",
+  "Consumer Finance - Product & Banking Partnerships":
+    "CONSUMER_FINANCE_PRODUCT_PARTNERSHIPS",
+  "Fraud & Collections": "FRAUD_COLLECTIONS",
+  "Business Development (BD)": "BUSINESS_DEVELOPMENT",
+  "Project Management": "PROJECT_MANAGEMENT",
+  "Credit & Policy": "CREDIT_POLICY",
+  "Technology - Consumer Business": "TECHNOLOGY_CONSUMER",
+  Operations: "OPERATIONS",
+  "Investor Relations": "INVESTOR_RELATIONS",
+  HR: "HR",
+  "Data Science": "DATA_SCIENCE",
+  Analytics: "ANALYTICS",
+  Treasury: "TREASURY",
+  Finance: "FINANCE",
+  Compliance: "COMPLIANCE",
+  Secretarial: "SECRETARIAL",
+  Risk: "RISK",
+  Legal: "LEGAL",
+  "Internal Audit": "INTERNAL_AUDIT",
+  Litigation: "LITIGATION",
+  Admin: "ADMIN",
+  "Brand & Communication": "BRAND_COMMUNICATION",
+  "Strategy & Planning": "STRATEGY_PLANNING",
+  "Technology-Infra": "TECHNOLOGY_INFRA",
+  "Information Security": "INFORMATION_SECURITY",
+  Technology: "TECHNOLOGY",
+  "Credit Monitoring": "CREDIT_MONITORING",
+  "Digital Strategy and Platforms": "DIGITAL_STRATEGY_AND_PLATFORMS",
+  "Founders Office": "FOUNDERS_OFFICE",
+  "F & A": " F_AND_A",
+};
 
-    const where: any = { AND: [] };
-
-    if (observationId) {
-      where.AND.push({ observationId });
-    }
-
-    if (filters?.userRole?.trim()) {
-      where.AND.push({ role: filters.userRole.trim() });
-    }
-
-    if (filters?.actionType?.trim()) {
-      where.AND.push({ actionType: filters.actionType.trim() });
-    }
-
-    if (filters?.search?.trim()) {
+    if (filters.search?.trim()) {
       const searchTerm = filters.search.trim();
       where.AND.push({
-        OR: [
-          { role: { contains: searchTerm, mode: "insensitive" } },
-          { actionType: { contains: searchTerm, mode: "insensitive" } },
-          { performedByName: { contains: searchTerm, mode: "insensitive" } },
-          { performedByEmail: { contains: searchTerm, mode: "insensitive" } },
-        ],
+        OR: [{ department: { contains: searchTerm, mode: "insensitive" } }],
       });
     }
-
-    const offset = (page - 1) * pageSize;
-
-    const [auditEntries, total] = await Promise.all([
-      prisma.observationAuditTrail.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: { timestamp: "desc" },
-        select: {
-          observationId: true,
-          actionType: true,
-          role: true,
-          performedByName: true,
-          performedByEmail: true,
-          timestamp: true,
-          modifications: true,
-        },
-      }),
-      prisma.observationAuditTrail.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: auditEntries,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  } catch (error) {
-    console.error("Failed to fetch audit trail", error);
-    throw new Error("Unable to fetch audit trail");
-  }
-};
