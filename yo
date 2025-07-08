@@ -1,16 +1,7 @@
-{
-  "name": "aws-s3-test-auto",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "start": "ts-node upload.ts"
-  },
-  "dependencies": {
-    "aws-sdk": "^2.1516.0",
-    "dotenv": "^16.3.1"
-  },
-  "devDependencies": {
-    "ts-node": "^10.9.1",
-    "typescript": "^5.3.3"
-  }
-}
+TypeError: Unknown file extension ".ts" for C:\Users\samarth.dhawan\OneDrive - Grant Thornton Advisory Private Limited\Desktop\AWS_Test_Upload\upload.ts
+    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:219:9)
+    at defaultGetFormat (node:internal/modules/esm/get_format:245:36)
+    at defaultLoad (node:internal/modules/esm/load:120:22)
+    at async ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:580:32)
+    at async ModuleJob._link (node:internal/modules/esm/module_job:116:19) {
+  code: 'ERR_UNKNOWN_FILE_EXTENSION'
