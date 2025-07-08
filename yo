@@ -1,56 +1,6 @@
-import AWS from "aws-sdk";
-import fs from "fs";
-import path from "path";
-import dotenv from "dotenv";
-
-dotenv.config();
-
-// S3 setup
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  region: process.env.AWS_REGION!,
-});
-
-const uploadAndPreview = async () => {
-  const filePath = path.join("files", "sample.pdf"); // your local file
-  const fileBuffer = fs.readFileSync(filePath);
-  const fileName = "sample.pdf";
-  const cleanFileName = fileName.replace(/\s+/g, "_");
-  const timestamp = Date.now();
-  const s3Key = `test_uploads/${timestamp}_${cleanFileName}`;
-
-  try {
-    // Upload to S3
-    await s3
-      .putObject({
-        Bucket: process.env.AWS_S3_BUCKET!,
-        Key: s3Key,
-        Body: fileBuffer,
-        ContentType: "application/pdf",
-      })
-      .promise();
-
-    console.log(`✅ Uploaded to S3: ${s3Key}`);
-
-    // Generate preview link
-    const signedUrl = s3.getSignedUrl("getObject", {
-      Bucket: process.env.AWS_S3_BUCKET!,
-      Key: s3Key,
-      Expires: 60 * 5, // 5 mins
-    });
-
-    console.log(`🔗 Preview URL (valid for 5 min):\n${signedUrl}`);
-  } catch (err) {
-    console.error("❌ Upload failed:", err);
-  }
-};
-
-uploadAndPreview();
-
-
 {
   "name": "aws-s3-test-auto",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "ts-node upload.ts"
@@ -64,10 +14,3 @@ uploadAndPreview();
     "typescript": "^5.3.3"
   }
 }
-
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_REGION=your-region
-AWS_S3_BUCKET=your-bucket-name
-npm error JSON.parse Failed to parse JSON data.
-npm error JSON.parse Note: package.json must be actual JSON, not just JavaScript.
