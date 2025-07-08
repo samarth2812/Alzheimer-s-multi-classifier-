@@ -1,12 +1,15 @@
-(node:27016) [DEP0180] DeprecationWarning: fs.Stats constructor is deprecated.
-(Use `node --trace-deprecation ...` to show where the warning was created)
-TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" for C:\Users\samarth.dhawan\OneDrive - Grant Thornton Advisory Private Limited\Desktop\AWS_Test_Upload\upload.ts
-    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:219:9)
-    at defaultGetFormat (node:internal/modules/esm/get_format:245:36)
-    at defaultLoad (node:internal/modules/esm/load:120:22)
-    at async nextLoad (node:internal/modules/esm/hooks:748:22)
-    at async nextLoad (node:internal/modules/esm/hooks:748:22)
-    at async Hooks.load (node:internal/modules/esm/hooks:385:20)
-    at async MessagePort.handleMessage (node:internal/modules/esm/worker:199:18) {
-  code: 'ERR_UNKNOWN_FILE_EXTENSION'
+"scripts": {
+  "start": "node --loader ts-node/esm upload.ts"
+}
+npm install --save-dev ts-node typescript @types/node
+npm install aws-sdk dotenv
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ES2020",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true
+  }
 }
