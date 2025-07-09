@@ -1,8 +1,41 @@
-Type '{ OR?: ({ department: { contains: string; mode: string; }; } | { category: { contains: string; mode: string; }; } | { assignedTo: { contains: string | undefined; mode: "insensitive"; }; })[] | undefined; AND: any[]; }' is not assignable to type 'IndentsWhereInput'.
-  Types of property 'OR' are incompatible.
-    Type '({ department: { contains: string; mode: string; }; } | { category: { contains: string; mode: string; }; } | { assignedTo: { contains: string | undefined; mode: "insensitive"; }; })[] | undefined' is not assignable to type 'IndentsWhereInput[] | undefined'.
-      Type '({ department: { contains: string; mode: string; }; } | { category: { contains: string; mode: string; }; } | { assignedTo: { contains: string | undefined; mode: "insensitive"; }; })[]' is not assignable to type 'IndentsWhereInput[]'.
-        Type '{ department: { contains: string; mode: string; }; } | { category: { contains: string; mode: string; }; } | { assignedTo: { contains: string | undefined; mode: "insensitive"; }; }' is not assignable to type 'IndentsWhereInput'.
-          Type '{ department: { contains: string; mode: string; }; }' is not assignable to type 'IndentsWhereInput'.
-            Types of property 'department' are incompatible.
-              Object literal may only specify known properties, and 'contains' does not exist in type 'EnumDepartmentFilter<"Indents">'.
+const normalizedSearch = searchQuery?.trim().toUpperCase().replace(/\s+/g, "_");
+
+const matchingDepartments = Object.values(Department).filter((dept) =>
+  dept.includes(normalizedSearch || "")
+);
+
+const matchingCategories = Object.values(IndentCategory).filter((cat) =>
+  cat.includes(normalizedSearch || "")
+);
+
+const where: Prisma.IndentsWhereInput = {
+  ...generateWhereFilter(role, department, tab, user.email),
+  ...(searchQuery && {
+    OR: [
+      ...(matchingDepartments.length > 0
+        ? [
+            {
+              department: {
+                in: matchingDepartments,
+              },
+            },
+          ]
+        : []),
+      ...(matchingCategories.length > 0
+        ? [
+            {
+              category: {
+                in: matchingCategories,
+              },
+            },
+          ]
+        : []),
+      {
+        assignedTo: {
+          contains: searchQuery,
+          mode: "insensitive",
+        },
+      },
+    ],
+  }),
+};
