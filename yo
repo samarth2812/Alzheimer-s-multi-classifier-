@@ -1,1 +1,6 @@
-A new indent under the {department} department and {category} category has been assigned to you and requires your immediate attention.
+          A new indent under the {{{department}}} department and {{{category}}}
+          category has been assigned to you and requires your immediate
+          attention.
+
+
+Review and update the rejected indent
