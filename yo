@@ -1,241 +1,3 @@
-import React from "react";
-import { Box, TextField, Button, Typography, InputAdornment, Skeleton } from "@mui/material";
-import { BsTable } from "react-icons/bs";
-
-// Components
-import IndentFormDialog from "./indentFormDialog";
-
-
-// Styles
-import { topBarStyle } from "layouts/resuableComponents/styles";
-import { topBarSearchStyle } from "layouts/resuableComponents/styles";
-import { animatedButtonStyle } from "layouts/resuableComponents/styles";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
-import { AttachmentDrawer } from "layouts/resuableComponents/attachmentDrawer";
-import DescriptionDialog from "layouts/resuableComponents/customDescriptionViewDialog";
-import CustomDeleteDialog from "layouts/resuableComponents/customDeleteDialog";
-import { formatTableData } from "./tableFormatter";
-import { useIndentManagement } from "./useIndentManagement";
-import { Add, FilterAlt, Search } from "@mui/icons-material";
-import DataTable from "examples/Tables/DataTable";
-import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
-import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
-
-const CreateIndentPage = () => {
-  const {
-    // State
-    data,
-    searchTerm,
-    isModalOpen,
-    setIsModalOpen,
-    editIndentData,
-    setEditIndentData,
-    indentToDelete,
-    setIndentToDelete,
-    isDeleteDialogOpen,
-    setIsDeleteDialogOpen,
-    descriptionDialogOpen,
-    setDescriptionDialogOpen,
-    currentDescription,
-    setCurrentDescription,
-    loading,
-    formData,
-    viewAttachementDialogOpen,
-    setViewAttachementDialogOpen,
-    attachments,
-    setAttachments,
-    indentId,
-    setIndentId,
-    currentPage,
-    rowsPerPage,
-    totalRecords,
-    totalPages,
-    displayData,
-    user,
-
-    // Handlers
-    handleSearch,
-    handleAddIndentClick,
-    handleChange,
-    handleIndentDelete,
-    handleSubmitIndent,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSortByPriority,
-    handlePageChange,
-    handleRowsPerPageChange,
-    fetchData,
-    formatDateTime,
-  } = useIndentManagement("created");
-
-  const tableData = formatTableData(displayData, "created", {
-    currentPage,
-    rowsPerPage,
-    user,
-    formData,
-    setCurrentDescription,
-    setDescriptionDialogOpen,
-    setEditIndentData,
-    setIsModalOpen,
-    setIndentToDelete,
-    setIsDeleteDialogOpen,
-    setIndentId,
-    setAttachments,
-    setViewAttachementDialogOpen,
-    handleChange,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSubmitIndent,
-    formatDateTime,
-  });
-
-  return (
-    <>
-      <Box
-        sx={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-          position: "relative",
-        }}
-      >
-        <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
-          <TextField
-            fullWidth
-            placeholder="Search Indent Records..."
-            variant="outlined"
-            sx={topBarSearchStyle}
-            value={searchTerm}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search fontSize="medium" sx={iconButtonStyle} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          {tableData && tableData?.rows && tableData?.rows.length > 2 && (
-            <>
-              <Button
-                size="small"
-                color="info"
-                sx={animatedButtonStyle}
-                startIcon={<FilterAlt />}
-                onClick={handleSortByPriority}
-              >
-                Priority
-              </Button>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: (theme) => theme.palette.custom.text1,
-                  opacity: 0.5,
-                }}
-              >
-                |
-              </Typography>
-            </>
-          )}
-          <Button
-            size="small"
-            startIcon={<Add />}
-            onClick={handleAddIndentClick}
-            color="info"
-            sx={animatedButtonStyle}
-          >
-            Add Indent
-          </Button>
-        </Box>
-
-        {loading ? (
-          <Box>
-            {[...Array(5)].map((_, index) => (
-              <Skeleton
-                key={index}
-                variant="rectangular"
-                animation="wave"
-                height={40}
-                sx={{
-                  mb: 2,
-                  borderRadius: 2,
-                  backgroundColor: (theme) => theme.palette.custom.background1,
-                }}
-              />
-            ))}
-          </Box>
-        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
-          <Box pb={1} sx={{ overflowY: "auto", display: "flex", maxWidth: "100%" }}>
-            <DataTable
-              table={tableData}
-              isSorted={false}
-              entriesPerPage={true}
-              showTotalEntries={true}
-              noEndBorder
-            />
-          </Box>
-        ) : (
-          <EmptyStateBox
-            icon={BsTable}
-            title="Currently there are no created Indents"
-            description="Start a new indent by tapping the 'Add Indent' button "
-          />
-        )}
-
-        {tableData && tableData?.rows && tableData?.rows.length > 0 && (
-          <PaginationFooter
-            currentPage={currentPage}
-            rowsPerPage={rowsPerPage}
-            totalPages={totalPages}
-            totalRecords={totalRecords}
-            onPageChange={handlePageChange}
-            onRowsPerPageChange={handleRowsPerPageChange}
-            loading={loading}
-          />
-        )}
-      </Box>
-
-      <IndentFormDialog
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        initialData={editIndentData}
-        onSubmit={fetchData}
-      />
-
-      <CustomDeleteDialog
-        open={isDeleteDialogOpen}
-        onClose={() => setIsDeleteDialogOpen(false)}
-        onConfirm={handleIndentDelete}
-        type="Indent"
-        field={indentToDelete ? indentToDelete.department : ""}
-      />
-      <DescriptionDialog
-        open={descriptionDialogOpen}
-        onClose={() => setDescriptionDialogOpen(false)}
-        description={currentDescription}
-      />
-      <AttachmentDrawer
-        moduleId={indentId}
-        module={"INDENT"}
-        uploadedBy={user.email}
-        uploadedByRole={user.role}
-        attachments={attachments}
-        open={viewAttachementDialogOpen}
-        onClose={() => setViewAttachementDialogOpen(false)}
-        onUploadComplete={fetchData}
-        user={user}
-      />
-    </>
-  );
-};
-
-export default CreateIndentPage;
-
-
-
-
 import { useEffect, useState, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
@@ -247,7 +9,6 @@ export const useIndentManagement = (pageType) => {
   // Common state
   const [data, setData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredData, setFilteredData] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editIndentData, setEditIndentData] = useState(null);
   const [indentToDelete, setIndentToDelete] = useState(null);
@@ -270,37 +31,38 @@ export const useIndentManagement = (pageType) => {
   const dispatch = useDispatch();
 
   // API endpoint configuration based on page type
-  const getApiEndpoint = useCallback(() => {
+  const getApiEndpoint = useCallback((searchQuery = "") => {
     const baseUrl = window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
     const role = user?.role;
     const department = user?.department;
     const pagination = `page=${currentPage}&limit=${rowsPerPage}`;
+    const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : "";
 
     switch (pageType) {
       case "created":
-        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}`;
+        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}${searchParam}`;
       case "latest":
         return role === "COMPLIANCE_CHECKER"
-          ? `${baseUrl}/api/v1/indents/${role}/latest?${pagination}`
-          : `${baseUrl}/api/v1/indents/${role}/latest/${department}?${pagination}`;
+          ? `${baseUrl}/api/v1/indents/${role}/latest?${pagination}${searchParam}`
+          : `${baseUrl}/api/v1/indents/${role}/latest/${department}?${pagination}${searchParam}`;
       case "closure":
-        return `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${role}/closure?${pagination}`;
+        return `${baseUrl}/api/v1/indents/${role}/closure?${pagination}${searchParam}`;
       case "rejected":
-        role === "COMPLIANCE_MAKER"
-          ? `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${role}/rejected?${pagination}`
-          : `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${user}/rejected/${department}?${pagination}`;
+        return role === "COMPLIANCE_MAKER"
+          ? `${baseUrl}/api/v1/indents/${role}/rejected?${pagination}${searchParam}`
+          : `${baseUrl}/api/v1/indents/${role}/rejected/${department}?${pagination}${searchParam}`;
       default:
-        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}`;
+        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}${searchParam}`;
     }
   }, [pageType, user?.role, user?.department, currentPage, rowsPerPage]);
 
   // Fetch data function
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (searchQuery = "") => {
     if (!user?.role) return;
 
     setLoading(true);
     try {
-      const endpoint = getApiEndpoint();
+      const endpoint = getApiEndpoint(searchQuery);
       const response = await apiRequest("GET", endpoint);
 
       setData(response.data.data);
@@ -321,65 +83,43 @@ export const useIndentManagement = (pageType) => {
     }
   }, [getApiEndpoint, indentId, user?.role]);
 
+  // Debounced search function for backend API calls
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((searchQuery) => {
+        // Reset to first page when searching
+        setCurrentPage(1);
+        fetchData(searchQuery);
+      }, 500), // Increased debounce time for API calls
+    [fetchData]
+  );
+
   // Initial data fetch
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Debounced search function
-  const debouncedFilter = useMemo(
-    () =>
-      debounce((term, data) => {
-        if (term) {
-          const lowercasedFilter = term.toLowerCase();
-          const filtered = data.filter((item) =>
-            Object.keys(item).some((key) => {
-              const value = item[key];
-              return value !== null && value.toString().toLowerCase().includes(lowercasedFilter);
-            })
-          );
-          setFilteredData(filtered);
-        } else {
-          setFilteredData(data);
-        }
-      }, 300),
-    []
-  );
-
-  // Search effect with normalization
+  // Search effect - now triggers backend search
   useEffect(() => {
-    const normalizeSearchTerm = (term) => {
-      const mappings = {
-        "in progress": "in_progress",
-        completed: "completed",
-        pending: "pending",
-        low: "low",
-        medium: "medium",
-        high: "high",
-      };
-      const lowerTerm = term.toLowerCase().trim();
-      if (!lowerTerm) return "";
-      if (mappings[lowerTerm]) {
-        return mappings[lowerTerm];
-      }
-      for (const [key, value] of Object.entries(mappings)) {
-        if (key.startsWith(lowerTerm) || lowerTerm.includes(key)) {
-          return value;
-        }
-      }
-      return lowerTerm;
-    };
-
-    const normalizedTerm = normalizeSearchTerm(searchTerm);
-
-    if (!normalizedTerm) {
-      setFilteredData(data);
+    const trimmedSearchTerm = searchTerm.trim();
+    
+    if (trimmedSearchTerm) {
+      debouncedSearch(trimmedSearchTerm);
     } else {
-      debouncedFilter(normalizedTerm, data);
+      // If search is cleared, fetch data without search query
+      debouncedSearch.cancel();
+      setCurrentPage(1);
+      fetchData();
     }
 
-    return () => debouncedFilter.cancel();
-  }, [searchTerm, data, debouncedFilter]);
+    return () => debouncedSearch.cancel();
+  }, [searchTerm, debouncedSearch, fetchData]);
+
+  // Refetch data when pagination changes
+  useEffect(() => {
+    const trimmedSearchTerm = searchTerm.trim();
+    fetchData(trimmedSearchTerm);
+  }, [currentPage, rowsPerPage, fetchData, searchTerm]);
 
   // Common handlers
   const handleSearch = useCallback((event) => {
@@ -411,15 +151,16 @@ export const useIndentManagement = (pageType) => {
 
       if (result.status === 200 || result.status === 204) {
         toast.success("Indent Deleted Successfully");
-        setData((prev) => prev.filter((indent) => indent.indentId !== indentToDelete.indentId));
-        fetchData();
+        // Refetch data after deletion
+        const trimmedSearchTerm = searchTerm.trim();
+        fetchData(trimmedSearchTerm);
       }
     } catch (error) {
       console.error("Error deleting indent:", error);
     } finally {
       setIsDeleteDialogOpen(false);
     }
-  }, [indentToDelete, fetchData]);
+  }, [indentToDelete, fetchData, searchTerm]);
 
   const handleSubmitIndent = useCallback(
     async (indentId, department) => {
@@ -512,13 +253,15 @@ export const useIndentManagement = (pageType) => {
           }
         }
 
-        fetchData();
+        // Refetch data after submit
+        const trimmedSearchTerm = searchTerm.trim();
+        fetchData(trimmedSearchTerm);
         dispatch(fetchNotifications());
       } catch (error) {
         toast.error("An error occurred while submitting the Indent.");
       }
     },
-    [pageType, formData, user.role, fetchData, dispatch]
+    [pageType, formData, user.role, fetchData, dispatch, searchTerm]
   );
 
   const handleSubmitRemark = useCallback(
@@ -533,12 +276,14 @@ export const useIndentManagement = (pageType) => {
         if (result.status === 201 || result.status === 204) {
           toast.success("Indent Remark Added Successfully");
         }
-        fetchData();
+        // Refetch data after remark submission
+        const trimmedSearchTerm = searchTerm.trim();
+        fetchData(trimmedSearchTerm);
       } catch (error) {
         toast.error("An error occurred while submitting the Remark.");
       }
     },
-    [fetchData]
+    [fetchData, searchTerm]
   );
 
   const handleEditRemark = useCallback(
@@ -553,12 +298,14 @@ export const useIndentManagement = (pageType) => {
         if (result.status === 201 || result.status === 204) {
           toast.success("Indent Remark Updated Successfully");
         }
-        fetchData();
+        // Refetch data after remark edit
+        const trimmedSearchTerm = searchTerm.trim();
+        fetchData(trimmedSearchTerm);
       } catch (error) {
         toast.error("An error occurred while submitting the Remark.");
       }
     },
-    [fetchData]
+    [fetchData, searchTerm]
   );
 
   const handleSortByPriority = useCallback(() => {
@@ -593,13 +340,13 @@ export const useIndentManagement = (pageType) => {
     });
   }, []);
 
-  const displayData = searchTerm ? filteredData : data;
+  // Remove filteredData and displayData logic since search is now handled by backend
+  const displayData = data;
 
   return {
     // State
     data,
     searchTerm,
-    filteredData,
     isModalOpen,
     setIsModalOpen,
     editIndentData,
@@ -642,95 +389,4 @@ export const useIndentManagement = (pageType) => {
     fetchData,
     formatDateTime,
   };
-};
-
-export const fetchIndentsList = async (
-  role: StepRoles,
-  department: string | undefined,
-  tab: string,
-  user: User,
-  page: number = 1,
-  pageSize: number = 10
-) => {
-  try {
-    if (!role || !tab) {
-      throw new Error("role & tab is required");
-    }
-
-    if (role !== user.role) {
-      throw new Error("You are not authorized to view indents for this role");
-    }
-
-    const where = generateWhereFilter(role, department, tab, user.email);
-    const offset = (page - 1) * pageSize;
-
-    const [indents, total] = await Promise.all([
-      prisma.indents.findMany({
-        where,
-        skip: offset,
-        take: pageSize,
-        orderBy: {
-          createdAt: "desc",
-        },
-        select: {
-          indentId: true,
-          department: true,
-          status: true,
-          category: true,
-          description: true,
-          priority: true,
-          assignedTo: true,
-          comments: true,
-          dueDate: true,
-          createdAt: true,
-          updatedAt: true,
-          currStep: true,
-          prevStep: true,
-          lastStepChangeTime: true,
-          remarkHistory: {
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              content: true,
-              createdAt: true,
-              updatedAt: true,
-              isEdited: true,
-              role: true,
-              step: true,
-            },
-          },
-          attachments: {
-            where: {
-              isDeleted: false,
-            },
-            orderBy: { uploadedAt: "asc" },
-            select: {
-              id: true,
-              fileName: true,
-              uploadedBy: true,
-              uploadedByRole: true,
-              indentId: true,
-              uploadedAt: true,
-            },
-          },
-        },
-      }),
-
-      prisma.indents.count({ where }),
-    ]);
-
-    return {
-      success: true,
-      data: indents,
-      pagination: {
-        total,
-        page,
-        pageSize,
-        totalPages: Math.ceil(total / pageSize),
-      },
-    };
-  } catch (error) {
-    console.error("Error fetching indents:", error);
-    throw new Error("Failed to fetch indents");
-  }
 };
