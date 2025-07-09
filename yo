@@ -2,5 +2,4 @@
     pageType === "latest" ||
     pageType === "rejected" ||
     (pageType === "closure" &&
-      user.role !== "COMPLIANCE_MAKER" &&
-      user.department !== "COMPLIANCE");
+      !(department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"));
