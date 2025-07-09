@@ -1,46 +1,155 @@
+export const stepBasedUpdateFilter = (
+  currStep: number,
+  rejectedStatus: boolean,
+  role?: string,
+  department?: string
+): { newCurrStep: number; newPrevStep: number } => {
+  const isComplianceFlow = department === "COMPLIANCE";
 
-const getStepAssignees = async (
-  pendingWith: string,
-  indent: { department: string; assignedTo: string },
-  currentStepName: string
-): Promise<{ name: string; email: string; role: string }[]> => {
-  let assignees: { name: string; email: string; role: string }[] = [];
+  // === APPROVAL FLOW ===
+  if (!rejectedStatus) {
+    // Compliance-only closure handling
+    if (isComplianceFlow) {
+      if (currStep === 0 && role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 1, newPrevStep: 0 }; // CM → CC
+      }
+      if (currStep === 1 && role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 0 }; // CC → Closure for CM
+      }
+      if (currStep === 4 && role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 4, newPrevStep: 1 }; // Closure CM → Closure CC
+      }
+      if (currStep === 4 && role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 4 }; // Final closure (mark as closed)
+      }
 
-  const response = await fetchUsersList({
-    ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
-      ? { department: indent.department }
-      : {}),
-    role: pendingWith as Position,
-  });
+      throw new Error("Invalid step-role combo in Compliance workflow");
+    }
 
-  const userList = response || [];
+    // === Default approval flow ===
+    if (currStep === 4) {
+      if (role === "COMPLIANCE_MAKER") {
+        return { newCurrStep: 4, newPrevStep: 1 };
+      } else if (role === "COMPLIANCE_CHECKER") {
+        return { newCurrStep: 4, newPrevStep: 4 };
+      } else {
+        throw new Error("Invalid role for closure step");
+      }
+    }
 
-  if (pendingWith === "DEPARTMENT_MAKER") {
-    const userMatch = userList.find(
-      (user: any) => user.email === indent.assignedTo
-    );
-    if (userMatch) {
-      assignees.push({
-        name: userMatch.name,
-        email: userMatch.email,
-        role: currentStepName,
+    return { newCurrStep: currStep + 1, newPrevStep: currStep };
+  }
+
+  // === REJECTION FLOW ===
+  if (isComplianceFlow) {
+    return { newCurrStep: 0, newPrevStep: currStep };
+  }
+
+  // === Default rejection flow ===
+  switch (currStep) {
+    case 0:
+      return { newCurrStep: 2, newPrevStep: 0 }; // CM Rejects
+    case 1:
+      return { newCurrStep: 0, newPrevStep: 1 }; // CC Rejects
+    case 2:
+      return { newCurrStep: 0, newPrevStep: 2 }; // DM Rejects
+    case 3:
+      return { newCurrStep: 2, newPrevStep: 3 }; // DC Rejects
+    case 4:
+      return { newCurrStep: 2, newPrevStep: 4 }; // Rejection in closure
+    default:
+      throw new Error("Invalid step");
+  }
+};
+
+
+export const generateWhereFilter = (
+  role: Position,
+  department?: string,
+  tab?: string,
+  userEmail?: string
+) => {
+  if (!isWorkflowRole(role)) {
+    throw new Error(`Invalid workflow role: ${role}`);
+  }
+
+  const step = roleStepMap[role];
+
+  const baseConditions: any[] = [{ isDeleted: false }];
+
+  if (tab === "latest" || tab === "created") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: false });
+
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
       });
     }
-  } else {
-    if (userList.length > 1) {
-      assignees = userList.map((user: any) => ({
-        name: user.name,
-        email: user.email,
-        role: currentStepName,
-      }));
-    } else if (userList[0]) {
-      assignees.push({
-        name: userList[0].name,
-        email: userList[0].email,
-        role: currentStepName,
+  } else if (tab === "rejected") {
+    baseConditions.push({ currStep: step }, { rejectedStatus: true });
+    if (role === "DEPARTMENT_MAKER" && userEmail) {
+      baseConditions.push({
+        OR: [{ assignedTo: userEmail }],
       });
+    }
+  } else if (tab === "closure") {
+    baseConditions.push({ currStep: 4 });
+
+    if (role === "COMPLIANCE_MAKER") {
+      baseConditions.push({
+        OR: [{ prevStep: 0 }, { prevStep: 3 }],
+      });
+    } else if (role === "COMPLIANCE_CHECKER") {
+      baseConditions.push({ prevStep: 1 });
     }
   }
 
-  return assignees;
+  if (
+    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
+    department
+  ) {
+    baseConditions.push({ department });
+  }
+  return {
+    AND: baseConditions,
+  };
+};
+
+const getEmailTemplateType = (fromStep: number, toStep: number, rejectedStatus: boolean): 'rejected' | 'closure' | 'latest' => {
+  if (!isApproved) {
+    // All rejections use rejected template
+    return 'rejected';
+  }
+
+  // Approved transitions
+  if (toStep === 4 || toStep === 5) {
+    // Closure steps
+    return 'closure';
+  }
+
+  // All other forward movements use latest template
+  return 'latest';
+};
+
+
+const getActionText = (stepId: number, templateType: string): string => {
+  const stepName = workflowHelper.getStepName(stepId);
+  
+  switch (templateType) {
+    case 'rejected':
+      return `Review and update the rejected obligation`;
+    case 'closure':
+      return `Review for closure approval`;
+    case 'latest':
+    default:
+      if (stepId === 0 || stepId === 1) {
+        return `Review and process the obligation`;
+      } else if (stepId === 2) {
+        return `Complete testing and evidence submission`;
+      } else if (stepId === 3) {
+        return `Review testing results and approve`;
+      } else {
+        return `Take necessary action on the obligation`;
+      }
+  }
 };
