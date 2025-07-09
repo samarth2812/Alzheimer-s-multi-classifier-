@@ -1,14 +1,17 @@
-    if (
-      toStep === 4 &&
-      user.role === "COMPLIANCE_CHECKER" &&
-      !rejectedStatus &&
-      (department === "COMPLIANCE" || ![0, 1].includes(fromStep))
-    ) {
-      console.log(
-        `Indent completed - no email notification needed`,
-        department,
-        fromStep,
-        toStep
-      );
-      return;
-    }
+if (
+  toStep === 4 &&
+  user.role === "COMPLIANCE_CHECKER" &&
+  !rejectedStatus &&
+  (
+    (department === "COMPLIANCE" && ![0, 1].includes(fromStep)) ||
+    (department !== "COMPLIANCE")
+  )
+) {
+  console.log(
+    "Indent completed - no email notification needed",
+    department,
+    fromStep,
+    toStep
+  );
+  return;
+}
