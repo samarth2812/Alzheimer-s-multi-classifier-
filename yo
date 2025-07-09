@@ -1,2 +1,6 @@
-user.role !== "COMPLIANCE_MAKER" &&
+  const showApproval =
+    pageType === "latest" ||
+    pageType === "rejected" ||
+    (pageType === "closure" &&
+      user.role !== "COMPLIANCE_MAKER" &&
       user.department !== "COMPLIANCE");
