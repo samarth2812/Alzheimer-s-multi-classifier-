@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
@@ -87,47 +88,66 @@ export const useIndentManagement = (pageType) => {
   const debouncedSearch = useMemo(
     () =>
       debounce((searchQuery) => {
-        // Only reset to first page if we're not already on first page
-        if (currentPage !== 1) {
-          setCurrentPage(1);
-        } else {
-          fetchData(searchQuery);
-        }
-      }, 500), // Increased debounce time for API calls
-    [fetchData, currentPage]
+        setCurrentPage(1);
+        fetchDataWithSearch(searchQuery);
+      }, 500),
+    []
   );
 
-  // Initial data fetch
-  useEffect(() => {
-    if (user?.role) {
-      fetchData();
-    }
-  }, [user?.role]);
+  // Separate function for fetching with search to avoid circular dependencies
+  const fetchDataWithSearch = useCallback(async (searchQuery = "") => {
+    if (!user?.role) return;
 
-  // Search effect - now triggers backend search
+    setLoading(true);
+    try {
+      const endpoint = getApiEndpoint(searchQuery);
+      const response = await apiRequest("GET", endpoint);
+
+      setData(response.data.data);
+      setTotalRecords(response.data.pagination.total);
+      setTotalPages(response.data.pagination.totalPages);
+
+      // Update attachments if indentId exists
+      if (indentId) {
+        const updatedIndent = response.data.data.find((indent) => indent.indentId === indentId);
+        if (updatedIndent) {
+          setAttachments(updatedIndent.attachments || []);
+        }
+      }
+    } catch (error) {
+      toast.error("Failed to fetch Indent");
+    } finally {
+      setLoading(false);
+    }
+  }, [getApiEndpoint, indentId, user?.role]);
+
+  // Effect for initial load and pagination changes
   useEffect(() => {
+    if (!user?.role) return;
+    
+    const trimmedSearchTerm = searchTerm.trim();
+    fetchDataWithSearch(trimmedSearchTerm);
+  }, [user?.role, currentPage, rowsPerPage, fetchDataWithSearch]);
+
+  // Effect only for search term changes
+  useEffect(() => {
+    if (!user?.role) return;
+    
     const trimmedSearchTerm = searchTerm.trim();
     
     if (trimmedSearchTerm) {
       debouncedSearch(trimmedSearchTerm);
     } else {
-      // If search is cleared, fetch data without search query
       debouncedSearch.cancel();
       if (currentPage !== 1) {
         setCurrentPage(1);
       } else {
-        fetchData();
+        fetchDataWithSearch();
       }
     }
 
     return () => debouncedSearch.cancel();
-  }, [searchTerm, debouncedSearch, fetchData, currentPage]);
-
-  // Refetch data when pagination changes (but not when search term changes)
-  useEffect(() => {
-    const trimmedSearchTerm = searchTerm.trim();
-    fetchData(trimmedSearchTerm);
-  }, [currentPage, rowsPerPage]);
+  }, [searchTerm, user?.role, currentPage, debouncedSearch, fetchDataWithSearch]);
 
   // Separate effect for initial data fetch
   useEffect(() => {
@@ -168,7 +188,7 @@ export const useIndentManagement = (pageType) => {
         toast.success("Indent Deleted Successfully");
         // Refetch data after deletion
         const trimmedSearchTerm = searchTerm.trim();
-        fetchData(trimmedSearchTerm);
+        fetchDataWithSearch(trimmedSearchTerm);
       }
     } catch (error) {
       console.error("Error deleting indent:", error);
@@ -270,7 +290,7 @@ export const useIndentManagement = (pageType) => {
 
         // Refetch data after submit
         const trimmedSearchTerm = searchTerm.trim();
-        fetchData(trimmedSearchTerm);
+        fetchDataWithSearch(trimmedSearchTerm);
         dispatch(fetchNotifications());
       } catch (error) {
         toast.error("An error occurred while submitting the Indent.");
@@ -293,7 +313,7 @@ export const useIndentManagement = (pageType) => {
         }
         // Refetch data after remark submission
         const trimmedSearchTerm = searchTerm.trim();
-        fetchData(trimmedSearchTerm);
+        fetchDataWithSearch(trimmedSearchTerm);
       } catch (error) {
         toast.error("An error occurred while submitting the Remark.");
       }
@@ -315,7 +335,7 @@ export const useIndentManagement = (pageType) => {
         }
         // Refetch data after remark edit
         const trimmedSearchTerm = searchTerm.trim();
-        fetchData(trimmedSearchTerm);
+        fetchDataWithSearch(trimmedSearchTerm);
       } catch (error) {
         toast.error("An error occurred while submitting the Remark.");
       }
@@ -402,5 +422,7 @@ export const useIndentManagement = (pageType) => {
     handlePageChange,
     handleRowsPerPageChange,
     fetchData,
+    fetchDataWithSearch,
     formatDateTime,
   };
+};
