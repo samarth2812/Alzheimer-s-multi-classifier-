@@ -1,35 +1,46 @@
-            const response = await fetchUsersList({
-              ...(pendingWith === "DEPARTMENT_MAKER" ||
-              pendingWith === "DEPARTMENT_CHECKER"
-                ? { department: indent.department }
-                : {}),
-              role: pendingWith as Position,
-            });
-            const userList = response || [];
 
-            if (pendingWith === "DEPARTMENT_MAKER") {
-              const userMatch = userList.find(
-                (user: any) => user.email === indent.assignedTo
-              );
-              if (userMatch) {
-                assignees.push({
-                  name: userMatch.name,
-                  email: userMatch.email,
-                  role: currentStepName,
-                });
-              }
-            } else {
-              if (userList.length > 1) {
-                assignees = userList.map((user: any) => ({
-                  name: user.name,
-                  email: user.email,
-                  role: currentStepName,
-                }));
-              } else if (userList[0]) {
-                assignees.push({
-                  name: userList[0].name,
-                  email: userList[0].email,
-                  role: currentStepName,
-                });
-              }
-            }
+const getStepAssignees = async (
+  pendingWith: string,
+  indent: { department: string; assignedTo: string },
+  currentStepName: string
+): Promise<{ name: string; email: string; role: string }[]> => {
+  let assignees: { name: string; email: string; role: string }[] = [];
+
+  const response = await fetchUsersList({
+    ...(pendingWith === "DEPARTMENT_MAKER" || pendingWith === "DEPARTMENT_CHECKER"
+      ? { department: indent.department }
+      : {}),
+    role: pendingWith as Position,
+  });
+
+  const userList = response || [];
+
+  if (pendingWith === "DEPARTMENT_MAKER") {
+    const userMatch = userList.find(
+      (user: any) => user.email === indent.assignedTo
+    );
+    if (userMatch) {
+      assignees.push({
+        name: userMatch.name,
+        email: userMatch.email,
+        role: currentStepName,
+      });
+    }
+  } else {
+    if (userList.length > 1) {
+      assignees = userList.map((user: any) => ({
+        name: user.name,
+        email: user.email,
+        role: currentStepName,
+      }));
+    } else if (userList[0]) {
+      assignees.push({
+        name: userList[0].name,
+        email: userList[0].email,
+        role: currentStepName,
+      });
+    }
+  }
+
+  return assignees;
+};
