@@ -1,5 +1,4 @@
-
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
 import { useSelector, useDispatch } from "react-redux";
 import debounce from "lodash.debounce";
@@ -31,12 +30,15 @@ export const useIndentManagement = (pageType) => {
   const user = useSelector((state) => state.user.user);
   const dispatch = useDispatch();
 
+  // Ref to track if we're in the middle of a pagination change
+  const paginationChangeRef = useRef(false);
+
   // API endpoint configuration based on page type
-  const getApiEndpoint = useCallback((searchQuery = "") => {
+  const getApiEndpoint = useCallback((searchQuery = "", page = currentPage, limit = rowsPerPage) => {
     const baseUrl = window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
     const role = user?.role;
     const department = user?.department;
-    const pagination = `page=${currentPage}&limit=${rowsPerPage}`;
+    const pagination = `page=${page}&limit=${limit}`;
     const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : "";
 
     switch (pageType) {
@@ -55,15 +57,15 @@ export const useIndentManagement = (pageType) => {
       default:
         return `${baseUrl}/api/v1/indents/${role}/created?${pagination}${searchParam}`;
     }
-  }, [pageType, user?.role, user?.department, currentPage, rowsPerPage]);
+  }, [pageType, user?.role, user?.department]);
 
-  // Fetch data function
-  const fetchData = useCallback(async (searchQuery = "") => {
+  // Main fetch function that accepts all parameters
+  const fetchDataWithParams = useCallback(async (searchQuery = "", page = 1, limit = 5) => {
     if (!user?.role) return;
 
     setLoading(true);
     try {
-      const endpoint = getApiEndpoint(searchQuery);
+      const endpoint = getApiEndpoint(searchQuery, page, limit);
       const response = await apiRequest("GET", endpoint);
 
       setData(response.data.data);
@@ -83,51 +85,44 @@ export const useIndentManagement = (pageType) => {
       setLoading(false);
     }
   }, [getApiEndpoint, indentId, user?.role]);
+
+  // Fetch data function using current state
+  const fetchData = useCallback(async (searchQuery = "") => {
+    await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
+  }, [fetchDataWithParams, currentPage, rowsPerPage]);
+
+  // Separate function for fetching with search
+  const fetchDataWithSearch = useCallback(async (searchQuery = "") => {
+    await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
+  }, [fetchDataWithParams, currentPage, rowsPerPage]);
 
   // Debounced search function for backend API calls
   const debouncedSearch = useMemo(
     () =>
-      debounce((searchQuery) => {
+      debounce(async (searchQuery) => {
         setCurrentPage(1);
-        fetchDataWithSearch(searchQuery);
+        // Wait for next tick to ensure currentPage state is updated
+        setTimeout(() => {
+          fetchDataWithParams(searchQuery, 1, rowsPerPage);
+        }, 0);
       }, 500),
-    []
+    [fetchDataWithParams, rowsPerPage]
   );
-
-  // Separate function for fetching with search to avoid circular dependencies
-  const fetchDataWithSearch = useCallback(async (searchQuery = "") => {
-    if (!user?.role) return;
-
-    setLoading(true);
-    try {
-      const endpoint = getApiEndpoint(searchQuery);
-      const response = await apiRequest("GET", endpoint);
-
-      setData(response.data.data);
-      setTotalRecords(response.data.pagination.total);
-      setTotalPages(response.data.pagination.totalPages);
-
-      // Update attachments if indentId exists
-      if (indentId) {
-        const updatedIndent = response.data.data.find((indent) => indent.indentId === indentId);
-        if (updatedIndent) {
-          setAttachments(updatedIndent.attachments || []);
-        }
-      }
-    } catch (error) {
-      toast.error("Failed to fetch Indent");
-    } finally {
-      setLoading(false);
-    }
-  }, [getApiEndpoint, indentId, user?.role]);
 
   // Effect for initial load and pagination changes
   useEffect(() => {
     if (!user?.role) return;
     
     const trimmedSearchTerm = searchTerm.trim();
-    fetchDataWithSearch(trimmedSearchTerm);
-  }, [user?.role, currentPage, rowsPerPage, fetchDataWithSearch]);
+    
+    // Only fetch if not in the middle of a pagination change
+    if (!paginationChangeRef.current) {
+      fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+    }
+    
+    // Reset the pagination change flag
+    paginationChangeRef.current = false;
+  }, [user?.role, currentPage, rowsPerPage, fetchDataWithParams]);
 
   // Effect only for search term changes
   useEffect(() => {
@@ -142,19 +137,12 @@ export const useIndentManagement = (pageType) => {
       if (currentPage !== 1) {
         setCurrentPage(1);
       } else {
-        fetchDataWithSearch();
+        fetchDataWithParams('', 1, rowsPerPage);
       }
     }
 
     return () => debouncedSearch.cancel();
-  }, [searchTerm, user?.role, currentPage, debouncedSearch, fetchDataWithSearch]);
-
-  // Separate effect for initial data fetch
-  useEffect(() => {
-    if (user?.role) {
-      fetchData();
-    }
-  }, [user?.role]);
+  }, [searchTerm, user?.role, debouncedSearch, currentPage, rowsPerPage, fetchDataWithParams]);
 
   // Common handlers
   const handleSearch = useCallback((event) => {
@@ -188,14 +176,14 @@ export const useIndentManagement = (pageType) => {
         toast.success("Indent Deleted Successfully");
         // Refetch data after deletion
         const trimmedSearchTerm = searchTerm.trim();
-        fetchDataWithSearch(trimmedSearchTerm);
+        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
       }
     } catch (error) {
       console.error("Error deleting indent:", error);
     } finally {
       setIsDeleteDialogOpen(false);
     }
-  }, [indentToDelete, fetchData, searchTerm]);
+  }, [indentToDelete, fetchDataWithParams, searchTerm, currentPage, rowsPerPage]);
 
   const handleSubmitIndent = useCallback(
     async (indentId, department) => {
@@ -290,13 +278,13 @@ export const useIndentManagement = (pageType) => {
 
         // Refetch data after submit
         const trimmedSearchTerm = searchTerm.trim();
-        fetchDataWithSearch(trimmedSearchTerm);
+        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
         dispatch(fetchNotifications());
       } catch (error) {
         toast.error("An error occurred while submitting the Indent.");
       }
     },
-    [pageType, formData, user.role, fetchData, dispatch, searchTerm]
+    [pageType, formData, user.role, fetchDataWithParams, dispatch, searchTerm, currentPage, rowsPerPage]
   );
 
   const handleSubmitRemark = useCallback(
@@ -313,12 +301,12 @@ export const useIndentManagement = (pageType) => {
         }
         // Refetch data after remark submission
         const trimmedSearchTerm = searchTerm.trim();
-        fetchDataWithSearch(trimmedSearchTerm);
+        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
       } catch (error) {
         toast.error("An error occurred while submitting the Remark.");
       }
     },
-    [fetchData, searchTerm]
+    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage]
   );
 
   const handleEditRemark = useCallback(
@@ -335,12 +323,12 @@ export const useIndentManagement = (pageType) => {
         }
         // Refetch data after remark edit
         const trimmedSearchTerm = searchTerm.trim();
-        fetchDataWithSearch(trimmedSearchTerm);
+        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
       } catch (error) {
         toast.error("An error occurred while submitting the Remark.");
       }
     },
-    [fetchData, searchTerm]
+    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage]
   );
 
   const handleSortByPriority = useCallback(() => {
@@ -352,16 +340,25 @@ export const useIndentManagement = (pageType) => {
   }, [data]);
 
   const handlePageChange = useCallback((event, newPage) => {
+    paginationChangeRef.current = true;
     setCurrentPage(newPage);
   }, []);
 
-  const handleRowsPerPageChange = useCallback((event) => {
+  const handleRowsPerPageChange = useCallback(async (event) => {
     const { numericValue, resetToFirstPage } = event;
+    
+    paginationChangeRef.current = true;
     setRowsPerPage(numericValue);
+    
+    const newPage = resetToFirstPage ? 1 : currentPage;
     if (resetToFirstPage) {
       setCurrentPage(1);
     }
-  }, []);
+    
+    // Immediately fetch data with new parameters
+    const trimmedSearchTerm = searchTerm.trim();
+    await fetchDataWithParams(trimmedSearchTerm, newPage, numericValue);
+  }, [currentPage, searchTerm, fetchDataWithParams]);
 
   // Utility functions
   const formatDateTime = useCallback((dateString) => {
