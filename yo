@@ -30,9 +30,6 @@ export const useIndentManagement = (pageType) => {
   const user = useSelector((state) => state.user.user);
   const dispatch = useDispatch();
 
-  // Ref to track if we're in the middle of a pagination change
-  const paginationChangeRef = useRef(false);
-
   // API endpoint configuration based on page type
   const getApiEndpoint = useCallback((searchQuery = "", page = currentPage, limit = rowsPerPage) => {
     const baseUrl = window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
@@ -101,34 +98,20 @@ export const useIndentManagement = (pageType) => {
     () =>
       debounce(async (searchQuery) => {
         setCurrentPage(1);
-        // Wait for next tick to ensure currentPage state is updated
-        setTimeout(() => {
-          fetchDataWithParams(searchQuery, 1, rowsPerPage);
-        }, 0);
+        await fetchDataWithParams(searchQuery, 1, rowsPerPage);
       }, 500),
     [fetchDataWithParams, rowsPerPage]
   );
 
-  // Effect for initial load and pagination changes
+  // Effect for initial load only
   useEffect(() => {
     if (!user?.role) return;
     
-    // Only fetch on initial load or when dependencies change naturally
-    // Skip if we're handling pagination changes manually
-    if (!paginationChangeRef.current) {
-      const trimmedSearchTerm = searchTerm.trim();
-      fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-    }
-    
-    // Reset the pagination change flag after a short delay
-    if (paginationChangeRef.current) {
-      setTimeout(() => {
-        paginationChangeRef.current = false;
-      }, 100);
-    }
-  }, [user?.role, currentPage, rowsPerPage, fetchDataWithParams]);
+    const trimmedSearchTerm = searchTerm.trim();
+    fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+  }, [user?.role]); // Only depend on user role for initial load
 
-  // Effect only for search term changes
+  // Effect for search term changes only
   useEffect(() => {
     if (!user?.role) return;
     
@@ -138,15 +121,12 @@ export const useIndentManagement = (pageType) => {
       debouncedSearch(trimmedSearchTerm);
     } else {
       debouncedSearch.cancel();
-      if (currentPage !== 1) {
-        setCurrentPage(1);
-      } else {
-        fetchDataWithParams('', 1, rowsPerPage);
-      }
+      setCurrentPage(1);
+      fetchDataWithParams('', 1, rowsPerPage);
     }
 
     return () => debouncedSearch.cancel();
-  }, [searchTerm, user?.role, debouncedSearch, currentPage, rowsPerPage, fetchDataWithParams]);
+  }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams]);
 
   // Common handlers
   const handleSearch = useCallback((event) => {
@@ -344,7 +324,6 @@ export const useIndentManagement = (pageType) => {
   }, [data]);
 
   const handlePageChange = useCallback(async (event, newPage) => {
-    paginationChangeRef.current = true;
     setCurrentPage(newPage);
     
     // Immediately fetch data for the new page
@@ -355,7 +334,6 @@ export const useIndentManagement = (pageType) => {
   const handleRowsPerPageChange = useCallback(async (event) => {
     const { numericValue, resetToFirstPage } = event;
     
-    paginationChangeRef.current = true;
     setRowsPerPage(numericValue);
     
     const newPage = resetToFirstPage ? 1 : currentPage;
