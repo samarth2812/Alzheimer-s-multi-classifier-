@@ -1,41 +1,4 @@
-const normalizedSearch = searchQuery?.trim().toUpperCase().replace(/\s+/g, "_");
+Review and respond to the communication.
 
-const matchingDepartments = Object.values(Department).filter((dept) =>
-  dept.includes(normalizedSearch || "")
-);
 
-const matchingCategories = Object.values(IndentCategory).filter((cat) =>
-  cat.includes(normalizedSearch || "")
-);
-
-const where: Prisma.IndentsWhereInput = {
-  ...generateWhereFilter(role, department, tab, user.email),
-  ...(searchQuery && {
-    OR: [
-      ...(matchingDepartments.length > 0
-        ? [
-            {
-              department: {
-                in: matchingDepartments,
-              },
-            },
-          ]
-        : []),
-      ...(matchingCategories.length > 0
-        ? [
-            {
-              category: {
-                in: matchingCategories,
-              },
-            },
-          ]
-        : []),
-      {
-        assignedTo: {
-          contains: searchQuery,
-          mode: "insensitive",
-        },
-      },
-    ],
-  }),
-};
+You have received a new communication titled "{{{subject}}}" in your inbox that requires your attention.
