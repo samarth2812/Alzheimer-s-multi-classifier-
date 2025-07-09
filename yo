@@ -1,40 +1,66 @@
-import nodemailer from "nodemailer";
-
-export const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false, // true for 465, false for 587
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-export async function sendEmail(to: string, subject: string, body: string) {
-  await transporter.sendMail({
-    from: '"Your App Name" <noreply@yourdomain.com>',
-    to,
-    subject,
-    html: body,
-  });
-}
-
-
-// /routes/email.ts (add to the same router)
-import { sendEmail } from "../smtpHelper";
-
-router.post("/send", async (req, res) => {
-  const { to, subject, body } = req.body;
-
-  if (!to || !subject || !body) {
-    return res.status(400).json({ error: "Missing fields" });
-  }
-
-  try {
-    await sendEmail(to, subject, body);
-    res.json({ success: true, message: "Email sent immediately" });
-  } catch (err) {
-    console.error("Send error:", err);
-    res.status(500).json({ error: "Failed to send email" });
-  }
-});
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{{subject}}}</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      padding: 10px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background-color: #4f2d7f;
+      color: #ffffff;
+      padding: 3px 0;
+      text-align: center;
+    }
+    .content {
+      padding: 20px;
+      text-align: left;
+    }
+    .button {
+      display: inline-block;
+      padding: 5px 10px;
+      margin: 10px 0;
+      background-color: #4f2d7f;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .footer {
+      text-align: center;
+      padding: 10px;
+      font-size: 12px;
+      color: #777777;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Action Required</h1>
+    </div>
+    <div class="content">
+      <p>Dear {{{name}}},</p>
+      <p>You have received an oblgaition <b>{{{obligationId}}}</b> of ciruclar <b>{{{circularId}}} - {{{circularTitle}}}</b> .</p>
+      <p> Please take necessary action</p>
+      <p>Click the button below to log in:</p>
+      <a href="{{{url}}}" class="button">Login</a>
+      <p>Kindly ignore this reminder, If you have taken action</p>
+      <p>Note :- This is a System Generated Mail. Please do not reply to this mail.</p>
+    </div>
+   
+  </div>
+</body>
+</html>
