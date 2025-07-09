@@ -1,155 +1,44 @@
-export const stepBasedUpdateFilter = (
-  currStep: number,
-  rejectedStatus: boolean,
-  role?: string,
-  department?: string
-): { newCurrStep: number; newPrevStep: number } => {
-  const isComplianceFlow = department === "COMPLIANCE";
+type TemplateType = 'rejected' | 'closure' | 'latest';
 
-  // === APPROVAL FLOW ===
-  if (!rejectedStatus) {
-    // Compliance-only closure handling
-    if (isComplianceFlow) {
-      if (currStep === 0 && role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 1, newPrevStep: 0 }; // CM → CC
-      }
-      if (currStep === 1 && role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 0 }; // CC → Closure for CM
-      }
-      if (currStep === 4 && role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 4, newPrevStep: 1 }; // Closure CM → Closure CC
-      }
-      if (currStep === 4 && role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 4 }; // Final closure (mark as closed)
-      }
+export const getStepTemplateMetaForIndent = (
+  fromStep: number,
+  toStep: number,
+  rejectedStatus: boolean
+): { templateType: TemplateType; actionText: string } => {
+  let templateType: TemplateType;
 
-      throw new Error("Invalid step-role combo in Compliance workflow");
-    }
-
-    // === Default approval flow ===
-    if (currStep === 4) {
-      if (role === "COMPLIANCE_MAKER") {
-        return { newCurrStep: 4, newPrevStep: 1 };
-      } else if (role === "COMPLIANCE_CHECKER") {
-        return { newCurrStep: 4, newPrevStep: 4 };
-      } else {
-        throw new Error("Invalid role for closure step");
-      }
-    }
-
-    return { newCurrStep: currStep + 1, newPrevStep: currStep };
+  if (rejectedStatus) {
+    templateType = 'rejected';
+  } else if (toStep === 4) {
+    templateType = 'closure';
+  } else {
+    templateType = 'latest';
   }
 
-  // === REJECTION FLOW ===
-  if (isComplianceFlow) {
-    return { newCurrStep: 0, newPrevStep: currStep };
-  }
+  let actionText = '';
 
-  // === Default rejection flow ===
-  switch (currStep) {
-    case 0:
-      return { newCurrStep: 2, newPrevStep: 0 }; // CM Rejects
-    case 1:
-      return { newCurrStep: 0, newPrevStep: 1 }; // CC Rejects
-    case 2:
-      return { newCurrStep: 0, newPrevStep: 2 }; // DM Rejects
-    case 3:
-      return { newCurrStep: 2, newPrevStep: 3 }; // DC Rejects
-    case 4:
-      return { newCurrStep: 2, newPrevStep: 4 }; // Rejection in closure
-    default:
-      throw new Error("Invalid step");
-  }
-};
-
-
-export const generateWhereFilter = (
-  role: Position,
-  department?: string,
-  tab?: string,
-  userEmail?: string
-) => {
-  if (!isWorkflowRole(role)) {
-    throw new Error(`Invalid workflow role: ${role}`);
-  }
-
-  const step = roleStepMap[role];
-
-  const baseConditions: any[] = [{ isDeleted: false }];
-
-  if (tab === "latest" || tab === "created") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: false });
-
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
-    }
-  } else if (tab === "rejected") {
-    baseConditions.push({ currStep: step }, { rejectedStatus: true });
-    if (role === "DEPARTMENT_MAKER" && userEmail) {
-      baseConditions.push({
-        OR: [{ assignedTo: userEmail }],
-      });
-    }
-  } else if (tab === "closure") {
-    baseConditions.push({ currStep: 4 });
-
-    if (role === "COMPLIANCE_MAKER") {
-      baseConditions.push({
-        OR: [{ prevStep: 0 }, { prevStep: 3 }],
-      });
-    } else if (role === "COMPLIANCE_CHECKER") {
-      baseConditions.push({ prevStep: 1 });
-    }
-  }
-
-  if (
-    (role === "DEPARTMENT_MAKER" || role === "DEPARTMENT_CHECKER") &&
-    department
-  ) {
-    baseConditions.push({ department });
-  }
-  return {
-    AND: baseConditions,
-  };
-};
-
-const getEmailTemplateType = (fromStep: number, toStep: number, rejectedStatus: boolean): 'rejected' | 'closure' | 'latest' => {
-  if (!isApproved) {
-    // All rejections use rejected template
-    return 'rejected';
-  }
-
-  // Approved transitions
-  if (toStep === 4 || toStep === 5) {
-    // Closure steps
-    return 'closure';
-  }
-
-  // All other forward movements use latest template
-  return 'latest';
-};
-
-
-const getActionText = (stepId: number, templateType: string): string => {
-  const stepName = workflowHelper.getStepName(stepId);
-  
   switch (templateType) {
     case 'rejected':
-      return `Review and update the rejected obligation`;
+      actionText = 'Review and update the rejected indent';
+      break;
+
     case 'closure':
-      return `Review for closure approval`;
+      actionText = 'Review for closure approval';
+      break;
+
     case 'latest':
     default:
-      if (stepId === 0 || stepId === 1) {
-        return `Review and process the obligation`;
-      } else if (stepId === 2) {
-        return `Complete testing and evidence submission`;
-      } else if (stepId === 3) {
-        return `Review testing results and approve`;
+      if (toStep === 0 || toStep === 1) {
+        actionText = 'Review and process the indent';
+      } else if (toStep === 2) {
+        actionText = 'Complete testing and evidence submission';
+      } else if (toStep === 3) {
+        actionText = 'Review testing results and approve';
       } else {
-        return `Take necessary action on the obligation`;
+        actionText = 'Take necessary action on the indent';
       }
+      break;
   }
+
+  return { templateType, actionText };
 };
