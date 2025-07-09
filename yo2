@@ -1,24 +1,46 @@
-model Attachment {
-  id             String   @id @default(uuid())
-  fileName       String
-  uploadedBy     String // User email
-  uploadedByRole String
-  uploadedAt     DateTime @default(now())
-  s3Key          String
-  moduleType     Module
-  isDeleted      Boolean  @default(false)
+enum Department {
+  CONSUMER_FINANCE_ANALYTICS
+  CUSTOMER_SUCCESS
+  DEALER_MANAGEMENT
+  CONSUMER_FINANCE_GROWTH
+  CONSUMER_FINANCE_MSME_PRODUCT
+  CONSUMER_FINANCE_MSME_CREDIT
+  CONSUMER_FINANCE_MSME_BD
+  CONSUMER_FINANCE_PRODUCT_PARTNERSHIPS
+  FRAUD_COLLECTIONS
+  BUSINESS_DEVELOPMENT
+  PROJECT_MANAGEMENT
+  CREDIT_POLICY
+  TECHNOLOGY_CONSUMER
+  OPERATIONS
+  INVESTOR_RELATIONS
+  HR
+  DATA_SCIENCE
+  ANALYTICS
+  TREASURY
+  FINANCE
+  COMPLIANCE
+  SECRETARIAL
+  RISK
+  LEGAL
+  INTERNAL_AUDIT
+  LITIGATION
+  ADMIN
+  BRAND_COMMUNICATION
+  STRATEGY_PLANNING
+  TECHNOLOGY_INFRA
+  INFORMATION_SECURITY
+  TECHNOLOGY
+  CREDIT_MONITORING
+  DIGITAL_STRATEGY_AND_PLATFORMS
+  FOUNDERS_OFFICE
+  F_AND_A
+}
 
-  indentId          String?
-  indent            Indents?           @relation("Attachment_indentId", fields: [indentId], references: [indentId])
-  observationId     String?
-  ISEObservations   ISEObservations?   @relation("Attachment_observationId", fields: [observationId], references: [observationId])
-  incidentId        String?
-  IncidentReporting IncidentReporting? @relation("Attachment_incidentId", fields: [incidentId], references: [incidentId])
-  Obligation        Obligation?        @relation("Attachment_obligationId", fields: [obligationId], references: [id])
-  obligationId      String?
-
-  @@index([indentId])
-  @@index([observationId])
-  @@index([incidentId])
-  @@index([obligationId])
+enum IndentCategory {
+  DATA_REQUEST
+  COMPLIANCE_QUERY
+  AUDIT_FINDING
+  OPERATIONAL_ISSUE
+  OTHER
 }
