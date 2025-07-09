@@ -1,12 +1,4 @@
-const shouldShowApproval = (
-  pageType: string,
-  department: string,
-  user: { role: string }
-): boolean => {
-  return (
-    pageType === "latest" ||
-    pageType === "rejected" ||
-    (pageType === "closure" &&
-      !(department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"))
-  );
-};
+formData[indentId]?.approvalStatus === "approve"
+                  ? false
+                  : true
+                : false,
