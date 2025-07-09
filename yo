@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{{{subject}}}</title>
   <style>
     body {
@@ -53,14 +53,13 @@
     </div>
     <div class="content">
       <p>Dear {{{name}}},</p>
-      <p>You have received an oblgaition <b>{{{obligationId}}}</b> of ciruclar <b>{{{circularId}}} - {{{circularTitle}}}</b> .</p>
-      <p> Please take necessary action</p>
+      <p>You have received a new <b>{{{moduleType}}}</b> for your action.</p>
+      <p>Please take the necessary steps as per your role.</p>
       <p>Click the button below to log in:</p>
       <a href="{{{url}}}" class="button">Login</a>
-      <p>Kindly ignore this reminder, If you have taken action</p>
-      <p>Note :- This is a System Generated Mail. Please do not reply to this mail.</p>
+      <p>If you've already taken action, kindly ignore this reminder.</p>
+      <p><i>Note: This is a system-generated email. Please do not reply.</i></p>
     </div>
-   
   </div>
 </body>
 </html>
