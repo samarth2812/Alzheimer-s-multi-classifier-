@@ -1,10 +1,23 @@
-//Fetch all indents
+      switch (pageType) {
+        case "created":
+          return `${baseUrl}/api/v1/indents/${role}/created/${searchParam}?${pagination}`;
+        case "latest":
+          return role === "COMPLIANCE_CHECKER"
+            ? `${baseUrl}/api/v1/indents/${role}/latest/${searchParam}?${pagination}`
+            : `${baseUrl}/api/v1/indents/${role}/latest/${searchParam}/${department}?${pagination}`;
+        case "closure":
+          return `${baseUrl}/api/v1/indents/${role}/closure/${searchParam}?${pagination}`;
+        case "rejected":
+          return role === "COMPLIANCE_MAKER"
+            ? `${baseUrl}/api/v1/indents/${role}/rejected/${searchParam}?${pagination}`
+            : `${baseUrl}/api/v1/indents/${role}/rejected/${department}/${searchParam}?${pagination}`;
+        default:
+          return `${baseUrl}/api/v1/indents/${role}/created/${searchParam}?${pagination}`;
+      }
+
 indentRouter.get(
-  "/:role/:tab/:department?",
+  "/:role/:tab/:search/:department?",
   requireUser,
   authorize([PERMISSIONS.IBA]),
   getIndents
 );
-
-          return `${baseUrl}/api/v1/indents/${role}/created/${searchParam}?${pagination}`;
-        case "latest":
