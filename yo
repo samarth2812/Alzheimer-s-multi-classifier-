@@ -1,65 +1,234 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{{{subject}}}</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      margin: 0;
-      padding: 0;
-    }
-    .container {
-      width: 100%;
-      max-width: 600px;
-      margin: 0 auto;
-      background-color: #ffffff;
-      padding: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
-    .header {
-      background-color: #4f2d7f;
-      color: #ffffff;
-      padding: 3px 0;
-      text-align: center;
-    }
-    .content {
-      padding: 20px;
-      text-align: left;
-    }
-    .button {
-      display: inline-block;
-      padding: 5px 10px;
-      margin: 10px 0;
-      background-color: #4f2d7f;
-      color: #ffffff;
-      text-decoration: none;
-      border-radius: 5px;
-    }
-    .footer {
-      text-align: center;
-      padding: 10px;
-      font-size: 12px;
-      color: #777777;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>Action Required</h1>
-    </div>
-    <div class="content">
-      <p>Dear {{{name}}},</p>
-      <p>You have received a new <b>{{{moduleType}}}</b> for your action.</p>
-      <p>Please take the necessary steps as per your role.</p>
-      <p>Click the button below to log in:</p>
-      <a href="{{{url}}}" class="button">Login</a>
-      <p>If you've already taken action, kindly ignore this reminder.</p>
-      <p><i>Note: This is a system-generated email. Please do not reply.</i></p>
-    </div>
-  </div>
-</body>
-</html>
+import React from "react";
+import { Box, TextField, Button, Typography, InputAdornment, Skeleton } from "@mui/material";
+import { BsTable } from "react-icons/bs";
+
+// Components
+import IndentFormDialog from "./indentFormDialog";
+
+
+// Styles
+import { topBarStyle } from "layouts/resuableComponents/styles";
+import { topBarSearchStyle } from "layouts/resuableComponents/styles";
+import { animatedButtonStyle } from "layouts/resuableComponents/styles";
+import { iconButtonStyle } from "layouts/resuableComponents/styles";
+import { AttachmentDrawer } from "layouts/resuableComponents/attachmentDrawer";
+import DescriptionDialog from "layouts/resuableComponents/customDescriptionViewDialog";
+import CustomDeleteDialog from "layouts/resuableComponents/customDeleteDialog";
+import { formatTableData } from "./tableFormatter";
+import { useIndentManagement } from "./useIndentManagement";
+import { Add, FilterAlt, Search } from "@mui/icons-material";
+import DataTable from "examples/Tables/DataTable";
+import EmptyStateBox from "layouts/resuableComponents/emptyStateBox";
+import PaginationFooter from "layouts/resuableComponents/PaginationFooter";
+
+const CreateIndentPage = () => {
+  const {
+    // State
+    data,
+    searchTerm,
+    isModalOpen,
+    setIsModalOpen,
+    editIndentData,
+    setEditIndentData,
+    indentToDelete,
+    setIndentToDelete,
+    isDeleteDialogOpen,
+    setIsDeleteDialogOpen,
+    descriptionDialogOpen,
+    setDescriptionDialogOpen,
+    currentDescription,
+    setCurrentDescription,
+    loading,
+    formData,
+    viewAttachementDialogOpen,
+    setViewAttachementDialogOpen,
+    attachments,
+    setAttachments,
+    indentId,
+    setIndentId,
+    currentPage,
+    rowsPerPage,
+    totalRecords,
+    totalPages,
+    displayData,
+    user,
+
+    // Handlers
+    handleSearch,
+    handleAddIndentClick,
+    handleChange,
+    handleIndentDelete,
+    handleSubmitIndent,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSortByPriority,
+    handlePageChange,
+    handleRowsPerPageChange,
+    fetchData,
+    formatDateTime,
+  } = useIndentManagement("created");
+
+  const tableData = formatTableData(displayData, "created", {
+    currentPage,
+    rowsPerPage,
+    user,
+    formData,
+    setCurrentDescription,
+    setDescriptionDialogOpen,
+    setEditIndentData,
+    setIsModalOpen,
+    setIndentToDelete,
+    setIsDeleteDialogOpen,
+    setIndentId,
+    setAttachments,
+    setViewAttachementDialogOpen,
+    handleChange,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSubmitIndent,
+    formatDateTime,
+  });
+
+  return (
+    <>
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          position: "relative",
+        }}
+      >
+        <Box sx={{ ...topBarStyle, mb: 1, gap: 2 }}>
+          <TextField
+            fullWidth
+            placeholder="Search Indent Records..."
+            variant="outlined"
+            sx={topBarSearchStyle}
+            value={searchTerm}
+            onChange={handleSearch}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search fontSize="medium" sx={iconButtonStyle} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          {tableData && tableData?.rows && tableData?.rows.length > 2 && (
+            <>
+              <Button
+                size="small"
+                color="info"
+                sx={animatedButtonStyle}
+                startIcon={<FilterAlt />}
+                onClick={handleSortByPriority}
+              >
+                Priority
+              </Button>
+              <Typography
+                variant="body2"
+                sx={{
+                  color: (theme) => theme.palette.custom.text1,
+                  opacity: 0.5,
+                }}
+              >
+                |
+              </Typography>
+            </>
+          )}
+          <Button
+            size="small"
+            startIcon={<Add />}
+            onClick={handleAddIndentClick}
+            color="info"
+            sx={animatedButtonStyle}
+          >
+            Add Indent
+          </Button>
+        </Box>
+
+        {loading ? (
+          <Box>
+            {[...Array(5)].map((_, index) => (
+              <Skeleton
+                key={index}
+                variant="rectangular"
+                animation="wave"
+                height={40}
+                sx={{
+                  mb: 2,
+                  borderRadius: 2,
+                  backgroundColor: (theme) => theme.palette.custom.background1,
+                }}
+              />
+            ))}
+          </Box>
+        ) : tableData && tableData?.rows && tableData?.rows.length > 0 ? (
+          <Box pb={1} sx={{ overflowY: "auto", display: "flex", maxWidth: "100%" }}>
+            <DataTable
+              table={tableData}
+              isSorted={false}
+              entriesPerPage={true}
+              showTotalEntries={true}
+              noEndBorder
+            />
+          </Box>
+        ) : (
+          <EmptyStateBox
+            icon={BsTable}
+            title="Currently there are no created Indents"
+            description="Start a new indent by tapping the 'Add Indent' button "
+          />
+        )}
+
+        {tableData && tableData?.rows && tableData?.rows.length > 0 && (
+          <PaginationFooter
+            currentPage={currentPage}
+            rowsPerPage={rowsPerPage}
+            totalPages={totalPages}
+            totalRecords={totalRecords}
+            onPageChange={handlePageChange}
+            onRowsPerPageChange={handleRowsPerPageChange}
+            loading={loading}
+          />
+        )}
+      </Box>
+
+      <IndentFormDialog
+        open={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        initialData={editIndentData}
+        onSubmit={fetchData}
+      />
+
+      <CustomDeleteDialog
+        open={isDeleteDialogOpen}
+        onClose={() => setIsDeleteDialogOpen(false)}
+        onConfirm={handleIndentDelete}
+        type="Indent"
+        field={indentToDelete ? indentToDelete.department : ""}
+      />
+      <DescriptionDialog
+        open={descriptionDialogOpen}
+        onClose={() => setDescriptionDialogOpen(false)}
+        description={currentDescription}
+      />
+      <AttachmentDrawer
+        moduleId={indentId}
+        module={"INDENT"}
+        uploadedBy={user.email}
+        uploadedByRole={user.role}
+        attachments={attachments}
+        open={viewAttachementDialogOpen}
+        onClose={() => setViewAttachementDialogOpen(false)}
+        onUploadComplete={fetchData}
+        user={user}
+      />
+    </>
+  );
+};
+
+export default CreateIndentPage;
