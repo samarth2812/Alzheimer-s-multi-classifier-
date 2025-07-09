@@ -1,4 +1,4 @@
-formData[indentId]?.approvalStatus === "approve"
-                  ? false
-                  : true
-                : false,
+      toStep === 4 &&
+      user.role === "COMPLIANCE_CHECKER" &&
+      !rejectedStatus &&
+      !(department === "COMPLIANCE" || [0, 1].includes(fromStep))
