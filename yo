@@ -113,15 +113,19 @@ export const useIndentManagement = (pageType) => {
   useEffect(() => {
     if (!user?.role) return;
     
-    const trimmedSearchTerm = searchTerm.trim();
-    
-    // Only fetch if not in the middle of a pagination change
+    // Only fetch on initial load or when dependencies change naturally
+    // Skip if we're handling pagination changes manually
     if (!paginationChangeRef.current) {
+      const trimmedSearchTerm = searchTerm.trim();
       fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
     }
     
-    // Reset the pagination change flag
-    paginationChangeRef.current = false;
+    // Reset the pagination change flag after a short delay
+    if (paginationChangeRef.current) {
+      setTimeout(() => {
+        paginationChangeRef.current = false;
+      }, 100);
+    }
   }, [user?.role, currentPage, rowsPerPage, fetchDataWithParams]);
 
   // Effect only for search term changes
@@ -339,10 +343,14 @@ export const useIndentManagement = (pageType) => {
     setData(sortedData);
   }, [data]);
 
-  const handlePageChange = useCallback((event, newPage) => {
+  const handlePageChange = useCallback(async (event, newPage) => {
     paginationChangeRef.current = true;
     setCurrentPage(newPage);
-  }, []);
+    
+    // Immediately fetch data for the new page
+    const trimmedSearchTerm = searchTerm.trim();
+    await fetchDataWithParams(trimmedSearchTerm, newPage, rowsPerPage);
+  }, [searchTerm, fetchDataWithParams, rowsPerPage]);
 
   const handleRowsPerPageChange = useCallback(async (event) => {
     const { numericValue, resetToFirstPage } = event;
