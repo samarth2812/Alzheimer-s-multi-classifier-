@@ -1,411 +1,410 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  InputAdornment,
+} from "@mui/material";
+import { CustomSmartPasteField } from "layouts/resuableComponents/customSmartPasteField";
+import { CustomTextField } from "layouts/resuableComponents/customTextField";
+import { SearchableDropdown } from "layouts/resuableComponents/searchableDropdown";
+import { dialogButtonStyle, dialogCancelButtonStyle } from "layouts/resuableComponents/styles";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { useSelector, useDispatch } from "react-redux";
-import debounce from "lodash.debounce";
+import { z } from "zod";
 import { apiRequest } from "../../axios/apiRequest";
-import { fetchNotifications } from "features/notificationSlice";
+import { formSchema } from "./formSchema";
+import { dialogStyle } from "layouts/resuableComponents/styles";
+import { CalendarToday } from "@mui/icons-material";
+import { useSelector } from "react-redux";
+import { AssignedToSelector } from "layouts/resuableComponents/assignedToSelectorField";
+import { departments } from "layouts/authentication/sign-up/metadata";
+import { departmentLabels } from "layouts/constants";
 
-export const useIndentManagement = (pageType) => {
-  // Common state
-  const [data, setData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editIndentData, setEditIndentData] = useState(null);
-  const [indentToDelete, setIndentToDelete] = useState(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
-  const [currentDescription, setCurrentDescription] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({});
-  const [viewAttachementDialogOpen, setViewAttachementDialogOpen] = useState(false);
-  const [attachments, setAttachments] = useState([]);
-  const [indentId, setIndentId] = useState("");
+export const statusLabels = [
+  { id: 1, name: "Pending", value: "PENDING" },
+  { id: 2, name: "In Progress", value: "IN_PROGRESS" },
+  { id: 3, name: "Completed", value: "COMPLETED" },
+];
+export const priorityLabels = [
+  { id: 1, name: "High", value: "HIGH" },
+  { id: 2, name: "Low", value: "LOW" },
+  { id: 3, name: "Medium", value: "MEDIUM" },
+];
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [totalRecords, setTotalRecords] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+export const categoryLabels = [
+  { id: 1, name: "Data Request", value: "DATA_REQUEST" },
+  { id: 2, name: "Compliance Query", value: "COMPLIANCE_QUERY" },
+  { id: 3, name: "Audit Finding", value: "AUDIT_FINDING" },
+  { id: 4, name: "Operational Issue", value: "OPERATIONAL_ISSUE" },
+  { id: 5, name: "Other", value: "OTHER" },
+];
+
+const formatDatetimeLocal = (isoString) => {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  const tzOffset = date.getTimezoneOffset() * 60000;
+  const localISO = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+  return localISO;
+};
+
+const addIndentRecordUrl = `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/`;
+
+export default function IndentFormDialog({ open, onClose, onSubmit, initialData }) {
+  const [formData, setFormData] = useState({
+    indentId: "",
+    department: "",
+    description: "",
+    category: "",
+    status: "",
+    priority: "",
+    assignedTo: "",
+    dueDate: "",
+    comments: "",
+  });
 
   const user = useSelector((state) => state.user.user);
-  const dispatch = useDispatch();
 
-  // API endpoint configuration based on page type
-  const getApiEndpoint = useCallback((searchQuery = "", page = currentPage, limit = rowsPerPage) => {
-    const baseUrl = window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
-    const role = user?.role;
-    const department = user?.department;
-    const pagination = `page=${page}&limit=${limit}`;
-    const searchParam = searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : "";
+  const isComplianceMaker = user.role === "COMPLIANCE_MAKER";
 
-    switch (pageType) {
-      case "created":
-        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}${searchParam}`;
-      case "latest":
-        return role === "COMPLIANCE_CHECKER"
-          ? `${baseUrl}/api/v1/indents/${role}/latest?${pagination}${searchParam}`
-          : `${baseUrl}/api/v1/indents/${role}/latest/${department}?${pagination}${searchParam}`;
-      case "closure":
-        return `${baseUrl}/api/v1/indents/${role}/closure?${pagination}${searchParam}`;
-      case "rejected":
-        return role === "COMPLIANCE_MAKER"
-          ? `${baseUrl}/api/v1/indents/${role}/rejected?${pagination}${searchParam}`
-          : `${baseUrl}/api/v1/indents/${role}/rejected/${department}?${pagination}${searchParam}`;
-      default:
-        return `${baseUrl}/api/v1/indents/${role}/created?${pagination}${searchParam}`;
-    }
-  }, [pageType, user?.role, user?.department]);
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
+  const [availableUsers, setAvailableUsers] = useState([]);
 
-  // Main fetch function that accepts all parameters
-  const fetchDataWithParams = useCallback(async (searchQuery = "", page = 1, limit = 5) => {
-    if (!user?.role) return;
-
-    setLoading(true);
-    try {
-      const endpoint = getApiEndpoint(searchQuery, page, limit);
-      const response = await apiRequest("GET", endpoint);
-
-      setData(response.data.data);
-      setTotalRecords(response.data.pagination.total);
-      setTotalPages(response.data.pagination.totalPages);
-
-      // Update attachments if indentId exists
-      if (indentId) {
-        const updatedIndent = response.data.data.find((indent) => indent.indentId === indentId);
-        if (updatedIndent) {
-          setAttachments(updatedIndent.attachments || []);
-        }
-      }
-    } catch (error) {
-      toast.error("Failed to fetch Indent");
-    } finally {
-      setLoading(false);
-    }
-  }, [getApiEndpoint, indentId, user?.role]);
-
-  // Fetch data function using current state
-  const fetchData = useCallback(async (searchQuery = "") => {
-    await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
-  }, [fetchDataWithParams, currentPage, rowsPerPage]);
-
-  // Separate function for fetching with search
-  const fetchDataWithSearch = useCallback(async (searchQuery = "") => {
-    await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
-  }, [fetchDataWithParams, currentPage, rowsPerPage]);
-
-  // Debounced search function for backend API calls
-  const debouncedSearch = useMemo(
-    () =>
-      debounce(async (searchQuery) => {
-        setCurrentPage(1);
-        await fetchDataWithParams(searchQuery, 1, rowsPerPage);
-      }, 500),
-    [fetchDataWithParams, rowsPerPage]
-  );
-
-  // Effect for initial load only
   useEffect(() => {
-    if (!user?.role) return;
-    
-    const trimmedSearchTerm = searchTerm.trim();
-    fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-  }, [user?.role]); // Only depend on user role for initial load
-
-  // Effect for search term changes only
-  useEffect(() => {
-    if (!user?.role) return;
-    
-    const trimmedSearchTerm = searchTerm.trim();
-    
-    if (trimmedSearchTerm) {
-      debouncedSearch(trimmedSearchTerm);
-    } else {
-      debouncedSearch.cancel();
-      setCurrentPage(1);
-      fetchDataWithParams('', 1, rowsPerPage);
-    }
-
-    return () => debouncedSearch.cancel();
-  }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams]);
-
-  // Common handlers
-  const handleSearch = useCallback((event) => {
-    setSearchTerm(event.target.value);
-  }, []);
-
-  const handleAddIndentClick = useCallback(() => {
-    setEditIndentData(null);
-    setIsModalOpen(true);
-  }, []);
-
-  const handleChange = useCallback((e, indentId) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [indentId]: {
-        ...prev[indentId],
-        [name]: value,
-      },
-    }));
-  }, []);
-
-  const handleIndentDelete = useCallback(async () => {
-    if (!indentToDelete) return;
-
-    try {
-      const deleteIndentUrl = `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${indentToDelete.indentId}`;
-      const result = await apiRequest("DELETE", deleteIndentUrl);
-
-      if (result.status === 200 || result.status === 204) {
-        toast.success("Indent Deleted Successfully");
-        // Refetch data after deletion
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+    if (open) {
+      if (initialData) {
+        setFormData({
+          ...initialData,
+          dueDate: initialData?.dueDate ? formatDatetimeLocal(initialData?.dueDate) : "",
+          department:
+            departmentLabels.find((s) => s.value === initialData.department)?.name ||
+            initialData.department,
+          status: statusLabels.find((s) => s.value === initialData.status)?.name || value,
+          priority: priorityLabels.find((s) => s.value === initialData.priority)?.name || value,
+          category: categoryLabels.find((s) => s.value === initialData.category)?.name || value,
+        });
+      } else {
+        setFormData({
+          department: "",
+          description: "",
+          status: "",
+          category: "",
+          priority: "",
+          assignedTo: "",
+          dueDate: "",
+          comments: "",
+        });
       }
-    } catch (error) {
-      console.error("Error deleting indent:", error);
-    } finally {
-      setIsDeleteDialogOpen(false);
+      setErrors({});
+      setFormErrors({});
     }
-  }, [indentToDelete, fetchDataWithParams, searchTerm, currentPage, rowsPerPage]);
+  }, [initialData, open]);
 
-  const handleSubmitIndent = useCallback(
-    async (indentId, department) => {
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const isComplianceDepartment = formData.department === "Compliance";
+
+      const getDepartmentMappedValue = (name) =>
+        departmentLabels.find((d) => d.name === name)?.value || "";
+      if (!getDepartmentMappedValue(formData.department)) return;
       try {
-        const isComplianceDepartment = department === "COMPLIANCE";
-        const payload = {
-          updatedFields: {
-            type: "WORKFLOW_UPDATE",
-            rejectedStatus:
-              pageType === "latest" || pageType === "rejected" || pageType === "closure"
-                ? formData[indentId]?.approvalStatus === "approve"
-                  ? false
-                  : true
-                : false,
-          },
-        };
+        const response = await apiRequest(
+          "GET",
+          isComplianceDepartment
+            ? `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/admin/v1/users?role=COMPLIANCE_CHECKER`
+            : `${
+                window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
+              }/api/admin/v1/users?department=${getDepartmentMappedValue(
+                formData.department
+              )}&role=DEPARTMENT_MAKER`
+        );
 
+        setAvailableUsers(response.data);
+        setFormData((prev) => ({ ...prev, assignedTo: "" }));
+        if (response.data.length === 0) {
+          isComplianceDepartment
+            ? toast.error("No Complaice Checker found for this Compliance")
+            : toast.error("No Department Maker found for this department");
+        } else if (response.data.length === 1) {
+          setFormData((prev) => ({ ...prev, assignedTo: response.data[0].email }));
+        }
+      } catch (error) {
+        isComplianceDepartment
+          ? toast.error("No Complaice Checker found for this Compliance")
+          : toast.error("No Department Maker found for this department");
+        setAvailableUsers([]);
+        setFormData((prev) => ({ ...prev, assignedTo: "" }));
+      }
+    };
+
+    fetchUsers();
+  }, [formData.department]);
+
+  const handleDialogClose = (event, reason) => {
+    // Reset form only if dialog is being dismissed (not submitted)
+    if (!initialData) {
+      setFormData({
+        indentId: "",
+        department: "",
+        description: "",
+        category: "",
+        status: "",
+        priority: "",
+        assignedTo: "",
+        dueDate: "",
+        comments: "",
+      });
+    }
+
+    setErrors({});
+    setFormErrors({});
+
+    // Let the parent know to close the modal
+    onClose();
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (errors[name]) {
+      setErrors({
+        ...errors,
+        [name]: undefined,
+      });
+    }
+  };
+
+  const handleDescriptionChange = (htmlContent) => {
+    setFormData((prev) => ({ ...prev, description: htmlContent }));
+  };
+
+  const handleValidationError = (error) => {
+    if (error instanceof z.ZodError) {
+      const formattedErrors = {};
+      error.errors.forEach((err) => {
+        const path = err.path[0];
+        formattedErrors[path] = err.message;
+      });
+      setErrors(formattedErrors);
+    } else {
+      toast.error("An error occurred while submitting the form.");
+    }
+  };
+
+  const handleAddIndentRecord = async () => {
+    try {
+      let result;
+      setIsSubmitting(true);
+      const validatedData = formSchema.parse(formData);
+      if (!formData.assignedTo) {
+        toast.error("Please assign a person before submitting the indent.");
+        return;
+      }
+      const payload = {
+        ...validatedData,
+        assignedTo: formData.assignedTo,
+      };
+      result = await apiRequest("POST", addIndentRecordUrl, payload);
+      if (result.status === 201 || result.status === 204) {
+        toast.success("Indent Added Successfully");
+      }
+      onSubmit();
+      onClose();
+    } catch (error) {
+      handleValidationError(error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateIndentRecord = async () => {
+    try {
+      setIsSubmitting(true);
+      //validate with Zod before proceding
+      let validatedData = formSchema.parse(formData);
+      validatedData = { ...validatedData, assignedTo: formData.assignedTo };
+      if (!formData.assignedTo) {
+        toast.error("Please assign a person before submitting the indent.");
+        return;
+      }
+      let updatedFields = {};
+      const updatableFields = [
+        "role",
+        "department",
+        "description",
+        "status",
+        "category",
+        "priority",
+        "assignedTo",
+        "dueDate",
+        "comments",
+      ];
+
+      updatableFields.forEach((field) => {
+        let newValue = validatedData[field];
+        let initialValue = initialData[field];
+
+        if (field === "dueDate") {
+          newValue = new Date(validatedData[field]).toISOString();
+          initialValue = new Date(initialData[field]).toISOString();
+        }
+
+        if (field === "status") {
+          newValue = statusLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
+
+        if (field === "priority") {
+          newValue = priorityLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
+
+        if (field === "department") {
+          newValue = departmentLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
+        if (field === "category") {
+          newValue = categoryLabels.find((item) => item.name === newValue)?.value || newValue;
+        }
+
+        if (newValue !== initialValue) {
+          updatedFields[field] = validatedData[field];
+        }
+      });
+
+      if (Object.keys(updatedFields).length > 0) {
+        updatedFields = { ...updatedFields, type: "FIELD_UPDATE" };
+        const payload = {
+          updatedFields,
+        };
         const result = await apiRequest(
           "PUT",
-          `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${user.role}/${department}/${indentId}`,
+          `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/${user.role}/${user.department}/${formData.indentId}`,
           payload
         );
 
         if (result.status === 200 || result.status === 204) {
-          // Success message logic based on page type and approval status
-          if (pageType === "created") {
-            toast.success("Indent Sent to Compliance Checker Successfully");
-          } else if (pageType === "latest") {
-            const approvalStatus = formData[indentId]?.approvalStatus;
-            // Add specific success messages based on role and approval status
-            if (isComplianceDepartment) {
-              if (approvalStatus === "approve") {
-                toast.success("Indent Sent to back to Compliance Maker for Closure Successfully");
-              } else {
-                toast.success("Indent Sent to back to Compliance Maker Successfully");
-              }
-            } else {
-              if (approvalStatus === "approve") {
-                if (user.role === "COMPLIANCE_CHECKER") {
-                  toast.success("Indent Sent to Department Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Indent Sent to Department Checker Successfully");
-                } else {
-                  toast.success("Indent Sent to Compliance Maker Successfully");
-                }
-              } else {
-                if (user.role === "COMPLIANCE_CHECKER") {
-                  toast.success("Indent Sent to back to Compliance Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Indent Sent to back to Compliance Maker Successfully");
-                } else {
-                  toast.success("Indent Sent to back to Department Maker Successfully");
-                }
-              }
-            }
-          } else if (pageType === "rejected") {
-            if (formData[indentId]?.approvalStatus === "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent to Compliance Checker Successfully");
-              } else if (user.role === "DEPARTMENT_MAKER") {
-                toast.success("Indent Sent to Department Checker Successfully");
-              } else {
-                toast.success("Indent Sent Successfully");
-              }
-            } else {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent to back to Department Maker Successfully");
-              } else if (user.role === "DEPARTMENT_MAKER") {
-                toast.success("Indent Sent to back to Compliance Maker Successfully");
-              } else {
-                toast.success("Indent Sent Successfully");
-              }
-            }
-          } else if (pageType === "closure") {
-            if (formData[indentId]?.approvalStatus === "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent For Closure to Compliance Checker Successfully");
-              } else if (user.role === "COMPLIANCE_CHECKER") {
-                toast.success("Indent Closed Successfully");
-              }
-            } else if (formData[indentId]?.approvalStatus !== "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Indent Sent Back to Department Maker Successfully");
-              } else if (user.role === "COMPLIANCE_CHECKER") {
-                toast.success("Indent Sent Back to Compliance Maker Successfully");
-              }
-            } else {
-              toast.success("Indent Sent to back to Compliance Checker Successfully");
-            }
-          }
+          toast.success("Indent updated successfully!");
         }
-
-        // Refetch data after submit
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-        dispatch(fetchNotifications());
-      } catch (error) {
-        toast.error("An error occurred while submitting the Indent.");
+      } else {
+        toast.error("Looks like you haven't made any changes yet!");
       }
-    },
-    [pageType, formData, user.role, fetchDataWithParams, dispatch, searchTerm, currentPage, rowsPerPage]
-  );
-
-  const handleSubmitRemark = useCallback(
-    async (indentId, remarkData) => {
-      try {
-        const result = await apiRequest(
-          "POST",
-          `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/remarks/${indentId}`,
-          remarkData
-        );
-
-        if (result.status === 201 || result.status === 204) {
-          toast.success("Indent Remark Added Successfully");
-        }
-        // Refetch data after remark submission
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-      } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
-      }
-    },
-    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage]
-  );
-
-  const handleEditRemark = useCallback(
-    async (remarkId, remarkContent) => {
-      try {
-        const result = await apiRequest(
-          "PUT",
-          `${window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL}/api/v1/indents/remarks/${remarkId}`,
-          { remarkContent }
-        );
-
-        if (result.status === 201 || result.status === 204) {
-          toast.success("Indent Remark Updated Successfully");
-        }
-        // Refetch data after remark edit
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-      } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
-      }
-    },
-    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage]
-  );
-
-  const handleSortByPriority = useCallback(() => {
-    const priorityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-    const sortedData = [...data].sort((a, b) => {
-      return priorityOrder[b.priority] - priorityOrder[a.priority];
-    });
-    setData(sortedData);
-  }, [data]);
-
-  const handlePageChange = useCallback(async (event, newPage) => {
-    setCurrentPage(newPage);
-    
-    // Immediately fetch data for the new page
-    const trimmedSearchTerm = searchTerm.trim();
-    await fetchDataWithParams(trimmedSearchTerm, newPage, rowsPerPage);
-  }, [searchTerm, fetchDataWithParams, rowsPerPage]);
-
-  const handleRowsPerPageChange = useCallback(async (event) => {
-    const { numericValue, resetToFirstPage } = event;
-    
-    setRowsPerPage(numericValue);
-    
-    const newPage = resetToFirstPage ? 1 : currentPage;
-    if (resetToFirstPage) {
-      setCurrentPage(1);
+      onSubmit();
+      onClose();
+    } catch (error) {
+      handleValidationError(error);
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    // Immediately fetch data with new parameters
-    const trimmedSearchTerm = searchTerm.trim();
-    await fetchDataWithParams(trimmedSearchTerm, newPage, numericValue);
-  }, [currentPage, searchTerm, fetchDataWithParams]);
-
-  // Utility functions
-  const formatDateTime = useCallback((dateString) => {
-    return new Date(dateString).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  }, []);
-
-  // Remove filteredData and displayData logic since search is now handled by backend
-  const displayData = data;
-
-  return {
-    // State
-    data,
-    searchTerm,
-    isModalOpen,
-    setIsModalOpen,
-    editIndentData,
-    setEditIndentData,
-    indentToDelete,
-    setIndentToDelete,
-    isDeleteDialogOpen,
-    setIsDeleteDialogOpen,
-    descriptionDialogOpen,
-    setDescriptionDialogOpen,
-    currentDescription,
-    setCurrentDescription,
-    loading,
-    formData,
-    setFormData,
-    viewAttachementDialogOpen,
-    setViewAttachementDialogOpen,
-    attachments,
-    setAttachments,
-    indentId,
-    setIndentId,
-    currentPage,
-    rowsPerPage,
-    totalRecords,
-    totalPages,
-    displayData,
-    user,
-
-    // Handlers
-    handleSearch,
-    handleAddIndentClick,
-    handleChange,
-    handleIndentDelete,
-    handleSubmitIndent,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSortByPriority,
-    handlePageChange,
-    handleRowsPerPageChange,
-    fetchData,
-    fetchDataWithSearch,
-    formatDateTime,
   };
-};
+
+  const handleSubmit = async () => {
+    if (initialData) {
+      handleUpdateIndentRecord();
+    } else {
+      handleAddIndentRecord();
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleDialogClose} fullWidth maxWidth="md" sx={dialogStyle}>
+      <DialogTitle
+        sx={{ color: (theme) => theme.palette.custom.two, fontSize: "0.9rem !important" }}
+      >
+        {initialData ? "Edit Indent" : "Add New Indent"}
+      </DialogTitle>
+
+      <DialogContent>
+        <Box display="flex" flexDirection="column" gap={3} mt={2}>
+          <SearchableDropdown
+            label="Department"
+            placeholder="Enter Department"
+            name="department"
+            options={departments}
+            disabled={!isComplianceMaker}
+            value={formData.department}
+            onChange={handleChange}
+            error={errors.department}
+          />
+          <CustomSmartPasteField
+            value={formData.description}
+            label="Description"
+            placeholder="enter description"
+            disabled={!isComplianceMaker}
+            onChange={handleDescriptionChange}
+            error={errors.description}
+          />
+          <Box display="flex" gap={2}>
+            <SearchableDropdown
+              label="Category"
+              placeholder="Enter Category"
+              name="category"
+              options={categoryLabels}
+              disabled={!isComplianceMaker}
+              value={formData.category}
+              onChange={handleChange}
+              error={errors.category}
+            />
+            <SearchableDropdown
+              label="Priority"
+              placeholder="Enter Priority"
+              name="priority"
+              options={priorityLabels}
+              disabled={!isComplianceMaker}
+              value={formData.priority}
+              onChange={handleChange}
+              error={errors.priority}
+            />
+          </Box>
+          {formData.department && (
+            <AssignedToSelector
+              availableUsers={availableUsers}
+              value={formData.assignedTo}
+              disabled={!isComplianceMaker}
+              onChange={(val) => setFormData((prev) => ({ ...prev, assignedTo: val }))}
+              error={errors.assignedTo}
+            />
+          )}
+          <CustomTextField
+            label="Due Date"
+            name="dueDate"
+            type="datetime-local"
+            value={formData.dueDate}
+            onChange={handleChange}
+            InputLabelProps={{ shrink: true }}
+            error={errors.dueDate}
+            endAdornment={
+              <InputAdornment position="end">
+                <CalendarToday
+                  sx={{ color: (theme) => theme.palette.custom.two, fontSize: "1.2rem" }}
+                />
+              </InputAdornment>
+            }
+          />
+          <CustomTextField
+            label="Comments"
+            placeholder="Enter Comments"
+            name="comments"
+            disabled={!isComplianceMaker}
+            multiline
+            rows={2}
+            value={formData.comments}
+            onChange={handleChange}
+            error={errors.comments}
+          />
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleDialogClose} size="small" sx={dialogCancelButtonStyle}>
+          Cancel
+        </Button>
+
+        <Button onClick={handleSubmit} disabled={isSubmitting} size="small" sx={dialogButtonStyle}>
+          {initialData ? "Update" : "Add"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
