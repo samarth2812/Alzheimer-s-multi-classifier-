@@ -1,148 +1,92 @@
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
-
-export const attachmentRoutes = Router();
-
-attachmentRoutes.post(
-  "/upload-document",
-  requireUser,
-  authorize([
-    PERMISSIONS.IBA,
-    PERMISSIONS.OBLIGATION_ACCESS,
-    PERMISSIONS.ADMIN_GT,
-  ]),
-  upload.single("file"),
-  uploadDocumentToS3
-);
-
-
-export const uploadDocumentToS3 = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const user: any = get(req, "user");
-    if (!req.file) {
-      res.status(400).json({ message: "No file uploaded" });
-      return;
-    }
-    if (
-      !req.body.module ||
-      !req.body.entityId ||
-      !req.body.uploadedBy ||
-      !req.body.uploadedByRole
-    ) {
-      res.status(400).json({
-        message:
-          "module, entityId, uploadedBy and uploadedByRole are required.",
-      });
-      return;
-    }
-    const result = await uploadToS3(
-      req.file,
-      {
-        environment: process.env.NODE_ENV || "dev",
-        moduleName: req.body.module,
-        entityId: req.body.entityId,
-        uploadedBy: req.body.uploadedBy,
-        uploadedByRole: req.body.uploadedByRole,
-      },
-      user.name
-    );
-
-    res.status(200).json({
-      message: "File uploaded successfully",
-      attachmentId: result.attachmentId,
-    });
-  } catch (err) {
-    console.error("S3 Upload Error:", err);
-    next(err);
+export const formatIBAAuditTrailTableData = (rawData, actions = {}) => {
+  if (!Array.isArray(rawData)) {
+    return { columns: [], rows: [] };
   }
-};
 
-export const uploadToS3 = async (
-  file: Express.Multer.File,
-  options: UploadParams,
-  userName: string
-): Promise<{ attachmentId: string }> => {
-  try {
-    const { moduleName, entityId, uploadedBy, uploadedByRole } = options;
-    const timestamp = Date.now();
-    const cleanFileName = file.originalname.replace(/\s+/g, "_");
+  const columns = [
+    { Header: "S. No.", accessor: "serialNumber", width: "5%", align: "center" },
+    { Header: "Action Type", accessor: "actionType", width: "15%", align: "left" },
+    { Header: "Role", accessor: "role", width: "15%", align: "left" },
+    { Header: "Performed By", accessor: "performedBy", width: "20%", align: "left" },
+    { Header: "Fields Changed", accessor: "fieldsChanged", width: "40%", align: "left" },
+    { Header: "Date", accessor: "date", width: "5%", align: "left" },
+  ];
 
-    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
-    const params = {
-      Bucket: process.env.AWS_S3_BUCKET!,
-      Key: key,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    };
+  const rows = rawData.map((item, index) => ({
+    serialNumber: (
+      <Typography
+        variant="body2"
+        sx={{
+          color: (theme) => theme.palette.custom.text1,
+          fontSize: "11.2px",
+          fontWeight: 500,
+        }}
+      >
+        {index + 1}
+      </Typography>
+    ),
+    actionType: (
+      <Chip
+        label={item.actionType || "N/A"}
+        size="small"
+        sx={{
+          backgroundColor: (theme) => theme.palette.custom.background1,
+          color: (theme) => theme.palette.custom.text2,
+          fontSize: "0.6rem",
+          height: "18px",
+          textTransform: "capitalize !important",
+        }}
+      />
+    ),
+    role: (
+      <Chip
+        label={item.role?.replace(/_/g, " ") || "N/A"}
+        size="small"
+        sx={{
+          backgroundColor: (theme) => theme.palette.custom.approve,
+          color: (theme) => theme.palette.custom.approveText,
+          fontSize: "0.6rem",
+          height: "18px",
+          textTransform: "capitalize !important",
+        }}
+      />
+    ),
+    performedBy: (
+      <Box>
+        <Typography
+          variant="body2"
+          sx={{
+            color: (theme) => theme.palette.custom.text1,
+            fontSize: "11.2px",
+            fontWeight: 500,
+          }}
+        >
+          {item.performedByName || "N/A"}
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{
+            color: (theme) => theme.palette.custom.text3,
+            fontSize: "10px",
+          }}
+        >
+          {item.performedByEmail || ""}
+        </Typography>
+      </Box>
+    ),
+    fieldsChanged: <ChangesDisplay changes={item.modifications} moduleId="iba" compact={true} />,
+    date: (
+      <Typography
+        variant="body2"
+        sx={{
+          color: (theme) => theme.palette.custom.text2,
+          fontSize: "0.6rem",
+        }}
+      >
+        {formatDate(item.timestamp)}
+      </Typography>
+    ),
+  }));
 
-    let attachmentData: any = {
-      fileName: cleanFileName,
-      uploadedBy,
-      uploadedByRole,
-      s3Key: key,
-      moduleType: moduleName,
-    };
-
-    if (moduleName === "INDENT") {
-      attachmentData.indentId = entityId;
-    } else if (moduleName === "ISE_OBSERVATION") {
-      attachmentData.observationId = entityId;
-    } else if (moduleName === "INCIDENT") {
-      attachmentData.incidentId = entityId;
-    } else if (moduleName === "OBLIGATION") {
-      attachmentData.obligationId = entityId;
-    } else {
-      throw new Error("Invalid module name provided");
-    }
-
-    // Upload to S3
-    await s3.putObject(params).promise();
-
-    // Create attachment record in DB
-    const attachment = await prisma.attachment.create({
-      data: attachmentData,
-    });
-
-    const baseAuditPayload = {
-      actionType: "CREATE" as AuditAction,
-      step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
-      role: uploadedByRole as StepRoles,
-      performedByName: userName,
-      performedByEmail: uploadedBy,
-      modifications: {
-        attachments: {
-          added: { fileName: cleanFileName, uploadedBy },
-        },
-      },
-    };
-
-    // Audit Trail Logic
-    if (moduleName === "INDENT") {
-      await createIndentAuditTrail({
-        indentId: entityId,
-        ...baseAuditPayload,
-      });
-    } else if (moduleName === "ISE_OBSERVATION") {
-      await createObservationAuditTrail({
-        observationId: entityId,
-        ...baseAuditPayload,
-      });
-    } else if (moduleName === "INCIDENT") {
-      await createIncidentAuditTrail({
-        incidentId: entityId,
-        ...baseAuditPayload,
-      });
-    }
-
-    return {
-      attachmentId: attachment.id,
-    };
-  } catch (error) {
-    console.error("Error during S3 upload or DB insert:", error);
-    throw new Error("Upload failed. Please try again later.");
-  }
+  return { columns, rows };
 };
