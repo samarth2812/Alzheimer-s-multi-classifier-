@@ -12,7 +12,23 @@ export const formatIBAAuditTrailTableData = (rawData, actions = {}) => {
     { Header: "Date", accessor: "date", width: "5%", align: "left" },
   ];
 
-  const rows = rawData.map((item, index) => ({
+  const filteredData = rawData.filter((item) => {
+    const mods = item.modifications || {};
+    const keys = Object.keys(mods);
+
+    // Skip if the only key is 'workflow' and it's an empty object
+    if (
+      keys.length === 1 &&
+      keys[0] === "workflow" &&
+      Object.keys(mods.workflow || {}).length === 0
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const rows = filteredData.map((item, index) => ({
     serialNumber: (
       <Typography
         variant="body2"
