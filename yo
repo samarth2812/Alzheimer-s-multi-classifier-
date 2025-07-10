@@ -1,27 +1,148 @@
-import { prisma } from "./path-to-your-prisma-instance"; // adjust path accordingly
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
-// Reuse your existing searchUsers logic in a new util
-export const getAssigneesFromEmails = async (
-  sentTo: string[],
-  cc: string[]
-): Promise<{ name: string; email: string }[]> => {
+export const attachmentRoutes = Router();
+
+attachmentRoutes.post(
+  "/upload-document",
+  requireUser,
+  authorize([
+    PERMISSIONS.IBA,
+    PERMISSIONS.OBLIGATION_ACCESS,
+    PERMISSIONS.ADMIN_GT,
+  ]),
+  upload.single("file"),
+  uploadDocumentToS3
+);
+
+
+export const uploadDocumentToS3 = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const allEmails = Array.from(new Set([...sentTo, ...cc])); // merge & remove duplicates
+    const user: any = get(req, "user");
+    if (!req.file) {
+      res.status(400).json({ message: "No file uploaded" });
+      return;
+    }
+    if (
+      !req.body.module ||
+      !req.body.entityId ||
+      !req.body.uploadedBy ||
+      !req.body.uploadedByRole
+    ) {
+      res.status(400).json({
+        message:
+          "module, entityId, uploadedBy and uploadedByRole are required.",
+      });
+      return;
+    }
+    const result = await uploadToS3(
+      req.file,
+      {
+        environment: process.env.NODE_ENV || "dev",
+        moduleName: req.body.module,
+        entityId: req.body.entityId,
+        uploadedBy: req.body.uploadedBy,
+        uploadedByRole: req.body.uploadedByRole,
+      },
+      user.name
+    );
 
-    const users = await prisma.user.findMany({
-      where: {
-        email: {
-          in: allEmails,
-        },
-      },
-      select: {
-        name: true,
-        email: true,
-      },
+    res.status(200).json({
+      message: "File uploaded successfully",
+      attachmentId: result.attachmentId,
+    });
+  } catch (err) {
+    console.error("S3 Upload Error:", err);
+    next(err);
+  }
+};
+
+export const uploadToS3 = async (
+  file: Express.Multer.File,
+  options: UploadParams,
+  userName: string
+): Promise<{ attachmentId: string }> => {
+  try {
+    const { moduleName, entityId, uploadedBy, uploadedByRole } = options;
+    const timestamp = Date.now();
+    const cleanFileName = file.originalname.replace(/\s+/g, "_");
+
+    const key = `${moduleName}/${entityId}/${uploadedByRole}/${timestamp}_${cleanFileName}`;
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET!,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+    };
+
+    let attachmentData: any = {
+      fileName: cleanFileName,
+      uploadedBy,
+      uploadedByRole,
+      s3Key: key,
+      moduleType: moduleName,
+    };
+
+    if (moduleName === "INDENT") {
+      attachmentData.indentId = entityId;
+    } else if (moduleName === "ISE_OBSERVATION") {
+      attachmentData.observationId = entityId;
+    } else if (moduleName === "INCIDENT") {
+      attachmentData.incidentId = entityId;
+    } else if (moduleName === "OBLIGATION") {
+      attachmentData.obligationId = entityId;
+    } else {
+      throw new Error("Invalid module name provided");
+    }
+
+    // Upload to S3
+    await s3.putObject(params).promise();
+
+    // Create attachment record in DB
+    const attachment = await prisma.attachment.create({
+      data: attachmentData,
     });
 
-    return users;
-  } catch (error: any) {
-    throw new Error(`Failed to get assignees: ${error.message}`);
+    const baseAuditPayload = {
+      actionType: "CREATE" as AuditAction,
+      step: roleStepMap[uploadedByRole as keyof typeof roleStepMap],
+      role: uploadedByRole as StepRoles,
+      performedByName: userName,
+      performedByEmail: uploadedBy,
+      modifications: {
+        attachments: {
+          added: { fileName: cleanFileName, uploadedBy },
+        },
+      },
+    };
+
+    // Audit Trail Logic
+    if (moduleName === "INDENT") {
+      await createIndentAuditTrail({
+        indentId: entityId,
+        ...baseAuditPayload,
+      });
+    } else if (moduleName === "ISE_OBSERVATION") {
+      await createObservationAuditTrail({
+        observationId: entityId,
+        ...baseAuditPayload,
+      });
+    } else if (moduleName === "INCIDENT") {
+      await createIncidentAuditTrail({
+        incidentId: entityId,
+        ...baseAuditPayload,
+      });
+    }
+
+    return {
+      attachmentId: attachment.id,
+    };
+  } catch (error) {
+    console.error("Error during S3 upload or DB insert:", error);
+    throw new Error("Upload failed. Please try again later.");
   }
 };
