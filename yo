@@ -1,24 +1,27 @@
-export const searchUsers = async (query: string) => {
+import { prisma } from "./path-to-your-prisma-instance"; // adjust path accordingly
+
+// Reuse your existing searchUsers logic in a new util
+export const getAssigneesFromEmails = async (
+  sentTo: string[],
+  cc: string[]
+): Promise<{ name: string; email: string }[]> => {
   try {
-    if (!query || typeof query !== "string") {
-      throw ApiError.badRequest("Query is required.");
-    }
-    return await prisma.user.findMany({
+    const allEmails = Array.from(new Set([...sentTo, ...cc])); // merge & remove duplicates
+
+    const users = await prisma.user.findMany({
       where: {
-        OR: [
-          { name: { contains: query, mode: "insensitive" } },
-          { email: { contains: query, mode: "insensitive" } },
-        ],
+        email: {
+          in: allEmails,
+        },
       },
       select: {
-        id: true,
         name: true,
         email: true,
       },
-      take: 10,
     });
+
+    return users;
   } catch (error: any) {
-    throw ApiError.internal(`Error retrieving Users: ${error.message}`);
+    throw new Error(`Failed to get assignees: ${error.message}`);
   }
 };
-
