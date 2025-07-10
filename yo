@@ -1,17 +1,24 @@
-if (
-  toStep === 4 &&
-  user.role === "COMPLIANCE_CHECKER" &&
-  !rejectedStatus &&
-  (
-    (department === "COMPLIANCE" && ![0, 1].includes(fromStep)) ||
-    (department !== "COMPLIANCE")
-  )
-) {
-  console.log(
-    "Indent completed - no email notification needed",
-    department,
-    fromStep,
-    toStep
-  );
-  return;
-}
+export const searchUsers = async (query: string) => {
+  try {
+    if (!query || typeof query !== "string") {
+      throw ApiError.badRequest("Query is required.");
+    }
+    return await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { contains: query, mode: "insensitive" } },
+          { email: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+      take: 10,
+    });
+  } catch (error: any) {
+    throw ApiError.internal(`Error retrieving Users: ${error.message}`);
+  }
+};
+
