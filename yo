@@ -1,123 +1,89 @@
-// services/passwordService.ts
-import crypto from "crypto";
-import dayjs from "dayjs";
-import bcrypt from "bcrypt";
-import prisma from "../../db/connection";
-import { ApiError } from "../../utils/ApiError";
-import { User } from "@prisma/client";
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Action Required | Communication</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        background-color: #4f2d7f;
+        color: #ffffff;
+        padding: 10px 0;
+        text-align: center;
+      }
+      .content {
+        padding: 20px;
+        text-align: left;
+      }
+      .button {
+        display: inline-block;
+        padding: 10px 20px;
+        margin: 20px 0;
+        background-color: #4f2d7f;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 5px;
+      }
+      .footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 12px;
+        color: #777777;
+      }
+      .communication-details {
+        background-color: #f9f9f9;
+        padding: 15px;
+        border-left: 4px solid #4f2d7f;
+        margin: 15px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Action Required</h1>
+      </div>
+      <div class="content">
+        <p>Dear {{{recipientName}}},</p>
+        <p>
+          You have received a new communication in your inbox that requires your
+          attention.
+        </p>
 
-export const sendResetTokenService = async (userId: number) => {
-  try {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw ApiError.notFound(`User Not Found`);
+        <div class="communication-details">
+          <h3>Communication Details:</h3>
+          <p><strong>Communication Type:</strong> {{{commType}}}</p>
+          <p><strong>Subject:</strong> {{{commsubject}}}</p>
+          <p><strong>Communication Category:</strong> {{{category}}}</p>
+          <p><strong>Action Required:</strong> {{{action}}}</p>
+        </div>
 
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+        <p>Click the button below to log in and take the necessary action:</p>
+        <a href="{{{frontendUrl}}}" class="button">Log In</a>
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        resetPasswordToken: hashedToken,
-        resetPasswordTokenExpiry: dayjs().add(1, "hour").toDate(),
-      },
-    });
-
-    const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
-
-    // Optionally send email here
-
-    return { success: true, resetLink };
-  } catch (error) {
-    console.error("Error in sendResetTokenService:", error);
-    throw ApiError.internal("Failed to send password reset token");
-  }
-};
-
-export const validateResetTokenService = async (rawToken: string) => {
-  try {
-    const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
-
-    const user = await prisma.user.findFirst({
-      where: {
-        resetPasswordToken: hashed,
-        resetPasswordTokenExpiry: { gte: new Date() },
-      },
-    });
-
-    if (!user) throw ApiError.notFound(`Invalid or Expired Token`);
-    return user;
-  } catch (error) {
-    console.error("Error in validateResetTokenService:", error);
-    throw ApiError.internal("Failed to validate reset token");
-  }
-};
-
-export const setNewPasswordService = async (token: string, newPassword: string) => {
-  try {
-    const hashed = crypto.createHash("sha256").update(token).digest("hex");
-
-    const user = await prisma.user.findFirst({
-      where: {
-        resetPasswordToken: hashed,
-        resetPasswordTokenExpiry: { gte: new Date() },
-      },
-    });
-
-    if (!user) throw ApiError.badRequest("Invalid or expired token");
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-        resetPasswordTokenExpiry: null,
-      },
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error in setNewPasswordService:", error);
-    throw ApiError.internal("Failed to set new password");
-  }
-};
-
-
-// controllers/passwordController.ts
-import { Request, Response, NextFunction } from "express";
-import {
-  sendResetTokenService,
-  validateResetTokenService,
-  setNewPasswordService,
-} from "../services/passwordService";
-
-export const sendResetToken = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const userId = parseInt(req.params.id); // /auth/send-reset-token/:id
-    const result = await sendResetTokenService(userId);
-    res.status(200).json(result); // { success: true, resetLink: "..." }
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const validateResetToken = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const token = req.query.token as string;
-    await validateResetTokenService(token);
-    res.status(200).json({ success: true });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const setNewPassword = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { token, newPassword } = req.body;
-    const result = await setNewPasswordService(token, newPassword);
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
+        <p>If you have any questions, feel free to contact our support team.</p>
+        <p>
+          Note: This is a System Generated E-Mail. Please do not reply to this
+          mail.
+        </p>
+      </div>
+      <div class="footer">
+        <p>&copy; 2025 RegTech. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
