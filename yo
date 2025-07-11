@@ -1,16 +1,63 @@
+export const createCommunication = async (data: CommunicationInput) => {
+  try {
+    const payload = buildCreatePayload(data);
+    const newComm = await prisma.communication.create({ data: payload });
+
+    // EMAIL NOTIFICATION: Send notification after successful workflow transition
+    try {
+      await sendCommNotification({
+        commType: payload.commType,
+        commsubject: payload.subject,
+        sentTo: payload.sentTo,
+        cc: payload?.cc,
+        category: payload.category,
+      });
+    } catch (emailError: any) {
+      // Email failure should not break the workflow
+      console.error(`Email notification failed for Communication`, emailError);
+    }
+
+    return newComm;
+  } catch (error) {
+    console.error("Error creating communication:", error);
+    throw new Error("Failed to create communication");
+  }
+};
+
+
+export const addCommunication = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const communicationData = req.body;
+    const communication = await createCommunication(communicationData);
+    res.status(201).json(communication);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
 import crypto from "crypto";
 import dayjs from "dayjs";
-import { prisma } from "../lib/prisma";
-import { sendEmail } from "../lib/email";
+import bcrypt from "bcrypt";
+import prisma from "../../db/connection";
+import { ApiError } from "../../utils/ApiError";
+import { User } from "@prisma/client";
 
-export const sendResetToken = async (req, res) => {
-  const userId = parseInt(req.params.id);
-
+export const sendResetToken = async (userId: number) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return res.status(404).json({ message: "User not found" });
+
+  if (!user) throw ApiError.notFound(`User Not Found`);
 
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
 
   await prisma.user.update({
     where: { id: userId },
@@ -20,28 +67,20 @@ export const sendResetToken = async (req, res) => {
     },
   });
 
-  const resetLink = `https://yourapp.com/set-password?token=${rawToken}`;
+  const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
 
-  await sendEmail(
-    user.email,
-    "Set Your Password",
-    `<p>Click below to set your password:</p><a href="${resetLink}">${resetLink}</a>`
-  );
+  //   await sendEmail(
+  //     user.email,
+  //     "Set Your Password",
+  //     `<p>Click below to set your password:</p><a href="${resetLink}">${resetLink}</a>`
+  //   );
 
-  return res.status(200).json({ success: true });
+  return {
+    success: true,
+  };
 };
 
-/api/users/:id/send-reset-token
-
-
-
-import crypto from "crypto";
-import { prisma } from "../lib/prisma";
-
-export const validateResetToken = async (req, res) => {
-  const rawToken = req.query.token;
-  if (!rawToken) return res.status(400).json({ message: "Token is required" });
-
+export const validateResetToken = async (rawToken: string) => {
   const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
 
   const user = await prisma.user.findFirst({
@@ -51,27 +90,10 @@ export const validateResetToken = async (req, res) => {
     },
   });
 
-  if (!user) return res.status(400).json({ message: "Invalid or expired token" });
-
-  return res.status(200).json({ success: true, userId: user.id, email: user.email });
+  if (!user) throw ApiError.notFound(`Invalid or Expired Token`);
 };
-/api/users/validate-reset-token?token=xyz
 
-
-
-
-
-
-import crypto from "crypto";
-import bcrypt from "bcrypt";
-import { prisma } from "../lib/prisma";
-
-export const setNewPassword = async (req, res) => {
-  const { token, newPassword } = req.body;
-
-  if (!token || !newPassword) {
-    return res.status(400).json({ message: "Token and new password are required" });
-  }
+export const setNewPassword = async (token: string, newPassword: string, user: User) => {
 
   const hashed = crypto.createHash("sha256").update(token).digest("hex");
 
@@ -82,7 +104,8 @@ export const setNewPassword = async (req, res) => {
     },
   });
 
-  if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+  if (!user)
+    return res.status(400).json({ message: "Invalid or expired token" });
 
   const hashedPassword = await bcrypt.hash(newPassword, 10);
 
@@ -97,5 +120,3 @@ export const setNewPassword = async (req, res) => {
 
   return res.status(200).json({ success: true });
 };
-
-/api/users/set-password
