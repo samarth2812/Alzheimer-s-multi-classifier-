@@ -1,46 +1,4 @@
-export const createCommunication = async (data: CommunicationInput) => {
-  try {
-    const payload = buildCreatePayload(data);
-    const newComm = await prisma.communication.create({ data: payload });
-
-    // EMAIL NOTIFICATION: Send notification after successful workflow transition
-    try {
-      await sendCommNotification({
-        commType: payload.commType,
-        commsubject: payload.subject,
-        sentTo: payload.sentTo,
-        cc: payload?.cc,
-        category: payload.category,
-      });
-    } catch (emailError: any) {
-      // Email failure should not break the workflow
-      console.error(`Email notification failed for Communication`, emailError);
-    }
-
-    return newComm;
-  } catch (error) {
-    console.error("Error creating communication:", error);
-    throw new Error("Failed to create communication");
-  }
-};
-
-
-export const addCommunication = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const communicationData = req.body;
-    const communication = await createCommunication(communicationData);
-    res.status(201).json(communication);
-  } catch (error) {
-    next(error);
-  }
-};
-
-
-
+// services/passwordService.ts
 import crypto from "crypto";
 import dayjs from "dayjs";
 import bcrypt from "bcrypt";
@@ -48,75 +6,118 @@ import prisma from "../../db/connection";
 import { ApiError } from "../../utils/ApiError";
 import { User } from "@prisma/client";
 
-export const sendResetToken = async (userId: number) => {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+export const sendResetTokenService = async (userId: number) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw ApiError.notFound(`User Not Found`);
 
-  if (!user) throw ApiError.notFound(`User Not Found`);
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const hashedToken = crypto
-    .createHash("sha256")
-    .update(rawToken)
-    .digest("hex");
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        resetPasswordToken: hashedToken,
+        resetPasswordTokenExpiry: dayjs().add(1, "hour").toDate(),
+      },
+    });
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      resetPasswordToken: hashedToken,
-      resetPasswordTokenExpiry: dayjs().add(1, "hour").toDate(),
-    },
-  });
+    const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
 
-  const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
+    // Optionally send email here
 
-  //   await sendEmail(
-  //     user.email,
-  //     "Set Your Password",
-  //     `<p>Click below to set your password:</p><a href="${resetLink}">${resetLink}</a>`
-  //   );
-
-  return {
-    success: true,
-  };
+    return { success: true, resetLink };
+  } catch (error) {
+    console.error("Error in sendResetTokenService:", error);
+    throw ApiError.internal("Failed to send password reset token");
+  }
 };
 
-export const validateResetToken = async (rawToken: string) => {
-  const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
+export const validateResetTokenService = async (rawToken: string) => {
+  try {
+    const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-  const user = await prisma.user.findFirst({
-    where: {
-      resetPasswordToken: hashed,
-      resetPasswordTokenExpiry: { gte: new Date() },
-    },
-  });
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: hashed,
+        resetPasswordTokenExpiry: { gte: new Date() },
+      },
+    });
 
-  if (!user) throw ApiError.notFound(`Invalid or Expired Token`);
+    if (!user) throw ApiError.notFound(`Invalid or Expired Token`);
+    return user;
+  } catch (error) {
+    console.error("Error in validateResetTokenService:", error);
+    throw ApiError.internal("Failed to validate reset token");
+  }
 };
 
-export const setNewPassword = async (token: string, newPassword: string, user: User) => {
+export const setNewPasswordService = async (token: string, newPassword: string) => {
+  try {
+    const hashed = crypto.createHash("sha256").update(token).digest("hex");
 
-  const hashed = crypto.createHash("sha256").update(token).digest("hex");
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: hashed,
+        resetPasswordTokenExpiry: { gte: new Date() },
+      },
+    });
 
-  const user = await prisma.user.findFirst({
-    where: {
-      resetPasswordToken: hashed,
-      resetPasswordTokenExpiry: { gte: new Date() },
-    },
-  });
+    if (!user) throw ApiError.badRequest("Invalid or expired token");
 
-  if (!user)
-    return res.status(400).json({ message: "Invalid or expired token" });
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordTokenExpiry: null,
+      },
+    });
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      password: hashedPassword,
-      resetPasswordToken: null,
-      resetPasswordTokenExpiry: null,
-    },
-  });
+    return { success: true };
+  } catch (error) {
+    console.error("Error in setNewPasswordService:", error);
+    throw ApiError.internal("Failed to set new password");
+  }
+};
 
-  return res.status(200).json({ success: true });
+
+// controllers/passwordController.ts
+import { Request, Response, NextFunction } from "express";
+import {
+  sendResetTokenService,
+  validateResetTokenService,
+  setNewPasswordService,
+} from "../services/passwordService";
+
+export const sendResetToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = parseInt(req.params.id); // /auth/send-reset-token/:id
+    const result = await sendResetTokenService(userId);
+    res.status(200).json(result); // { success: true, resetLink: "..." }
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const validateResetToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = req.query.token as string;
+    await validateResetTokenService(token);
+    res.status(200).json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const setNewPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { token, newPassword } = req.body;
+    const result = await setNewPasswordService(token, newPassword);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
