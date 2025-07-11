@@ -1,117 +1,30 @@
-import crypto from "crypto";
-import dayjs from "dayjs";
-import prisma from "../../db/connection";
-import { ApiError } from "../../utils/ApiError";
-import { sendEmail } from "../email/emailService";
-import { renderModuleEmailTemplate } from "../email/emailTemplateService";
-import { encryptSync } from "../../utils/encrypt";
+const updatedUserDetails = await prisma.user.update({
+  where: { email },
+  data: {
+    resetPasswordToken: hashedToken,
+    resetPasswordTokenExpiry: dayjs().add(7, "day").toDate(),
+  },
+});
 
-export const sendResetTokenService = async (email: string) => {
-  try {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) throw ApiError.notFound(`User Not Found`);
+const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
 
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
-
-    const updatedUserDetails = prisma.user.update({
-      where: { email },
-      data: {
-        resetPasswordToken: hashedToken,
-        resetPasswordTokenExpiry: dayjs().add(7, "day").toDate(),
-      },
-    });
-
-    const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
-
-    const emailData = {
-      name: updatedUserDetails.name,
-      resetLink,
-    };
-    const templateType = "resetPassword";
-    const emailBody = await renderModuleEmailTemplate(
-      "resetPassword",
-      templateType,
-      emailData
-    );
-    await sendEmail({
-      to: email,
-      subject: `Set Your Password to Access DMI - Action Required`,
-      htmlBody: emailBody,
-    });
-
-    return { success: true, resetLink };
-  } catch (error) {
-    console.error("Error in sendResetTokenService:", error);
-    throw ApiError.internal("Failed to send password reset token");
-  }
+const emailData = {
+  name: updatedUserDetails.name,
+  resetLink,
 };
 
-export const validateResetTokenService = async (rawToken: string) => {
-  try {
-    const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
+const templateType = "resetPassword";
+const emailBody = await renderModuleEmailTemplate(
+  "resetPassword",
+  templateType,
+  emailData
+);
 
-    const user = await prisma.user.findFirst({
-      where: {
-        resetPasswordToken: hashed,
-        resetPasswordTokenExpiry: { gte: new Date() },
-      },
-    });
+await sendEmail({
+  to: updatedUserDetails.email,
+  subject: `Set Your Password to Access DMI - Action Required`,
+  htmlBody: emailBody,
+});
 
-    if (!user) throw ApiError.notFound(`Invalid or Expired Token`);
-    return user;
-  } catch (error) {
-    console.error("Error in validateResetTokenService:", error);
-    throw ApiError.internal("Failed to validate reset token");
-  }
-};
 
-export const setNewPasswordService = async (
-  token: string,
-  decryptedPassword: string
-) => {
-  try {
-    const hashed = crypto.createHash("sha256").update(token).digest("hex");
-    const user = await prisma.user.findFirst({
-      where: {
-        resetPasswordToken: hashed,
-        resetPasswordTokenExpiry: { gte: new Date() },
-      },
-    });
-    if (!user) throw ApiError.badRequest("Invalid or expired token");
 
-    const hashedPassword = encryptSync(decryptedPassword);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        password: hashedPassword,
-        resetPasswordToken: null,
-        resetPasswordTokenExpiry: null,
-      },
-    });
-
-    const emailData = {
-      name: updatedUserDetails.name,
-    };
-    const templateType = "resetPassword";
-    const emailBody = await renderModuleEmailTemplate(
-      "resetPassword",
-      templateType,
-      emailData
-    );
-    await sendEmail({
-      to: email,
-      subject: `Set Your Password to Access DMI - Action Required`,
-      htmlBody: emailBody,
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error in setNewPasswordService:", error);
-    throw ApiError.internal("Failed to set new password");
-  }
-};
