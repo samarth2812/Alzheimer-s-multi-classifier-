@@ -1,108 +1,15 @@
-export const formatIBAAuditTrailTableData = (rawData, actions = {}) => {
-  if (!Array.isArray(rawData)) {
-    return { columns: [], rows: [] };
-  }
+model User {
+  id           Int        @id @default(autoincrement())
+  name         String
+  email        String     @unique
+  password     String
+  mobile       String?    @unique
+  refreshToken String?
+  role         Position
+  department   Department
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+}
 
-  const columns = [
-    { Header: "S. No.", accessor: "serialNumber", width: "5%", align: "center" },
-    { Header: "Action Type", accessor: "actionType", width: "15%", align: "left" },
-    { Header: "Role", accessor: "role", width: "15%", align: "left" },
-    { Header: "Performed By", accessor: "performedBy", width: "20%", align: "left" },
-    { Header: "Fields Changed", accessor: "fieldsChanged", width: "40%", align: "left" },
-    { Header: "Date", accessor: "date", width: "5%", align: "left" },
-  ];
 
-  const filteredData = rawData.filter((item) => {
-    const mods = item.modifications || {};
-    const keys = Object.keys(mods);
-
-    // Skip if the only key is 'workflow' and it's an empty object
-    if (
-      keys.length === 1 &&
-      keys[0] === "workflow" &&
-      Object.keys(mods.workflow || {}).length === 0
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-
-  const rows = filteredData.map((item, index) => ({
-    serialNumber: (
-      <Typography
-        variant="body2"
-        sx={{
-          color: (theme) => theme.palette.custom.text1,
-          fontSize: "11.2px",
-          fontWeight: 500,
-        }}
-      >
-        {index + 1}
-      </Typography>
-    ),
-    actionType: (
-      <Chip
-        label={item.actionType || "N/A"}
-        size="small"
-        sx={{
-          backgroundColor: (theme) => theme.palette.custom.background1,
-          color: (theme) => theme.palette.custom.text2,
-          fontSize: "0.6rem",
-          height: "18px",
-          textTransform: "capitalize !important",
-        }}
-      />
-    ),
-    role: (
-      <Chip
-        label={item.role?.replace(/_/g, " ") || "N/A"}
-        size="small"
-        sx={{
-          backgroundColor: (theme) => theme.palette.custom.approve,
-          color: (theme) => theme.palette.custom.approveText,
-          fontSize: "0.6rem",
-          height: "18px",
-          textTransform: "capitalize !important",
-        }}
-      />
-    ),
-    performedBy: (
-      <Box>
-        <Typography
-          variant="body2"
-          sx={{
-            color: (theme) => theme.palette.custom.text1,
-            fontSize: "11.2px",
-            fontWeight: 500,
-          }}
-        >
-          {item.performedByName || "N/A"}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            color: (theme) => theme.palette.custom.text3,
-            fontSize: "10px",
-          }}
-        >
-          {item.performedByEmail || ""}
-        </Typography>
-      </Box>
-    ),
-    fieldsChanged: <ChangesDisplay changes={item.modifications} moduleId="iba" compact={true} />,
-    date: (
-      <Typography
-        variant="body2"
-        sx={{
-          color: (theme) => theme.palette.custom.text2,
-          fontSize: "0.6rem",
-        }}
-      >
-        {formatDate(item.timestamp)}
-      </Typography>
-    ),
-  }));
-
-  return { columns, rows };
-};
+const generatePassword = (length = 8) => Math.random().toString(36).slice(-length);
