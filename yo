@@ -1,15 +1,101 @@
-model User {
-  id           Int        @id @default(autoincrement())
-  name         String
-  email        String     @unique
-  password     String
-  mobile       String?    @unique
-  refreshToken String?
-  role         Position
-  department   Department
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @default(now()) @updatedAt
-}
+import crypto from "crypto";
+import dayjs from "dayjs";
+import { prisma } from "../lib/prisma";
+import { sendEmail } from "../lib/email";
+
+export const sendResetToken = async (req, res) => {
+  const userId = parseInt(req.params.id);
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      resetPasswordToken: hashedToken,
+      resetPasswordTokenExpiry: dayjs().add(1, "hour").toDate(),
+    },
+  });
+
+  const resetLink = `https://yourapp.com/set-password?token=${rawToken}`;
+
+  await sendEmail(
+    user.email,
+    "Set Your Password",
+    `<p>Click below to set your password:</p><a href="${resetLink}">${resetLink}</a>`
+  );
+
+  return res.status(200).json({ success: true });
+};
+
+/api/users/:id/send-reset-token
 
 
-const generatePassword = (length = 8) => Math.random().toString(36).slice(-length);
+
+import crypto from "crypto";
+import { prisma } from "../lib/prisma";
+
+export const validateResetToken = async (req, res) => {
+  const rawToken = req.query.token;
+  if (!rawToken) return res.status(400).json({ message: "Token is required" });
+
+  const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+  const user = await prisma.user.findFirst({
+    where: {
+      resetPasswordToken: hashed,
+      resetPasswordTokenExpiry: { gte: new Date() },
+    },
+  });
+
+  if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+  return res.status(200).json({ success: true, userId: user.id, email: user.email });
+};
+/api/users/validate-reset-token?token=xyz
+
+
+
+
+
+
+import crypto from "crypto";
+import bcrypt from "bcrypt";
+import { prisma } from "../lib/prisma";
+
+export const setNewPassword = async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: "Token and new password are required" });
+  }
+
+  const hashed = crypto.createHash("sha256").update(token).digest("hex");
+
+  const user = await prisma.user.findFirst({
+    where: {
+      resetPasswordToken: hashed,
+      resetPasswordTokenExpiry: { gte: new Date() },
+    },
+  });
+
+  if (!user) return res.status(400).json({ message: "Invalid or expired token" });
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordTokenExpiry: null,
+    },
+  });
+
+  return res.status(200).json({ success: true });
+};
+
+/api/users/set-password
