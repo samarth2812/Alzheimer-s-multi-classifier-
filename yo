@@ -1,30 +1,9 @@
-const updatedUserDetails = await prisma.user.update({
-  where: { email },
-  data: {
-    resetPasswordToken: hashedToken,
-    resetPasswordTokenExpiry: dayjs().add(7, "day").toDate(),
-  },
-});
-
-const resetLink = `https://yourapp.com/create-password?token=${rawToken}`;
-
-const emailData = {
-  name: updatedUserDetails.name,
-  resetLink,
-};
-
-const templateType = "resetPassword";
-const emailBody = await renderModuleEmailTemplate(
-  "resetPassword",
-  templateType,
-  emailData
-);
-
-await sendEmail({
-  to: updatedUserDetails.email,
-  subject: `Set Your Password to Access DMI - Action Required`,
-  htmlBody: emailBody,
-});
-
-
-
+Error in sendResetTokenService: ApiError: Failed to send email: read ECONNRESET
+    at Function.internal (C:\Users\samarth.dhawan\OneDrive - Grant Thornton Advisory Private Limited\Desktop\DMI Finance\ag-dmi-finance-app\backend\src\utils\ApiError.ts:39:12)     
+    at C:\Users\samarth.dhawan\OneDrive - Grant Thornton Advisory Private Limited\Desktop\DMI Finance\ag-dmi-finance-app\backend\src\services\email\emailService.ts:96:20
+    at Generator.throw (<anonymous>)
+    at rejected (C:\Users\samarth.dhawan\OneDrive - Grant Thornton Advisory Private Limited\Desktop\DMI Finance\ag-dmi-finance-app\backend\src\services\email\emailService.ts:6:65)  
+    at processTicksAndRejections (node:internal/process/task_queues:105:5) {
+  statusCode: 500,
+  isOperational: true
+}
