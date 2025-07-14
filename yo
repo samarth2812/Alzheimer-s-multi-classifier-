@@ -1,26 +1,278 @@
-model Indents {
-  indentId           String         @id @default(uuid())
-  department         Department
-  description        String
-  status             IndentStatus   @default(PENDING)
-  priority           IndentPriority
-  assignedTo         String
-  dueDate            DateTime
-  closedDate         DateTime?
-  assignedDate       DateTime?
-  category           IndentCategory
-  comments           String
-  file               String?
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
-  isDeleted          Boolean        @default(false)
-  currStep           Int            @default(0)
-  prevStep           Int            @default(0)
-  lastStepChangeTime DateTime?
-  openStatus         Boolean        @default(false)
-  rejectedStatus     Boolean        @default(false)
-  remarkHistory      IndentRemark[] @relation("IndentRemarks")
-  attachments        Attachment[]   @relation("Attachment_indentId")
+import crypto from "crypto";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import prisma from "../../db/connection";
+import { ApiError } from "../../utils/ApiError";
+import { sendTestEmail } from "../email/emailService";
+import { renderModuleEmailTemplate } from "../email/emailTemplateService";
+import { encryptSync } from "../../utils/encrypt";
 
-  auditTrail IndentAuditTrail[] @relation("IndentAuditRelation")
-}
+// Configure dayjs plugins for proper timezone handling
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+export const sendResetTokenService = async (email: string) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) throw ApiError.notFound("User Not Found");
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    // Create expiry date - 7 days from now in UTC
+    const expiryDate = dayjs().utc().add(7, "day").toDate();
+
+    console.log("Token creation details:", {
+      email,
+      rawToken,
+      hashedToken,
+      currentTime: dayjs().utc().toISOString(),
+      expiryTime: dayjs(expiryDate).utc().toISOString(),
+      expiryInMilliseconds: expiryDate.getTime(),
+    });
+
+    const updatedUserDetails = await prisma.user.update({
+      where: { email },
+      data: {
+        resetPasswordToken: hashedToken,
+        resetPasswordTokenExpiry: expiryDate,
+      },
+    });
+
+    // Include email in the reset link as query parameter for better user experience
+    const resetLink = `${
+      process.env.FRONTEND_URL
+    }/create-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+
+    console.log(56, resetLink);
+    const emailData = {
+      name: updatedUserDetails.name,
+      resetLink,
+    };
+
+    const templateType = "resetPassword";
+    const emailBody = await renderModuleEmailTemplate(
+      "resetPassword",
+      templateType,
+      emailData
+    );
+
+    console.log("Email data and body prepared:", emailData);
+
+    // This is testing email setup. Change this after testing
+    // await sendTestEmail({
+    //   to: updatedUserDetails.email,
+    //   subject: "Set Your Password to Access DMI - Action Required",
+    //   htmlBody: emailBody,
+    // });
+
+    return {
+      success: true,
+      resetLink,
+      message: "Password reset link sent successfully to your email",
+    };
+  } catch (error) {
+    console.error("Error in sendResetTokenService:", error);
+    throw ApiError.internal("Failed to send password reset token");
+  }
+};
+
+export const validateResetTokenService = async (rawToken: string) => {
+  try {
+    if (!rawToken) {
+      throw ApiError.badRequest("Token is required");
+    }
+
+    const hashed = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const currentTime = dayjs().utc().toDate();
+
+    console.log("Token validation details:", {
+      rawToken,
+      hashedToken: hashed,
+      currentTime: dayjs(currentTime).utc().toISOString(),
+      currentTimeMilliseconds: currentTime.getTime(),
+    });
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: hashed,
+        resetPasswordTokenExpiry: { gte: currentTime },
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        resetPasswordToken: true,
+        resetPasswordTokenExpiry: true,
+      },
+    });
+
+    if (!user) {
+      // Additional debugging: check if token exists but is expired
+      const expiredUser = await prisma.user.findFirst({
+        where: {
+          resetPasswordToken: hashed,
+        },
+        select: {
+          email: true,
+          resetPasswordTokenExpiry: true,
+        },
+      });
+
+      if (expiredUser) {
+        console.log("Token found but expired:", {
+          email: expiredUser.email,
+          tokenExpiry: dayjs(expiredUser.resetPasswordTokenExpiry)
+            .utc()
+            .toISOString(),
+          currentTime: dayjs(currentTime).utc().toISOString(),
+          isExpired: dayjs(expiredUser.resetPasswordTokenExpiry).isBefore(
+            currentTime
+          ),
+        });
+        throw ApiError.badRequest(
+          "Reset token has expired. Please request a new password reset link."
+        );
+      }
+
+      throw ApiError.notFound(
+        "Invalid reset token. Please request a new password reset link."
+      );
+    }
+
+    console.log("Token validation successful:", {
+      email: user.email,
+      tokenExpiry: dayjs(user.resetPasswordTokenExpiry).utc().toISOString(),
+      timeRemaining:
+        dayjs(user.resetPasswordTokenExpiry).diff(currentTime, "hours") +
+        " hours",
+    });
+
+    return user;
+  } catch (error) {
+    console.error("Error in validateResetTokenService:", error);
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw ApiError.internal("Failed to validate reset token");
+  }
+};
+
+export const setNewPasswordService = async (
+  token: string,
+  decryptedPassword: string,
+  email: string
+) => {
+  try {
+    if (!token) {
+      throw ApiError.badRequest("Token is required");
+    }
+
+    if (!decryptedPassword) {
+      throw ApiError.badRequest("Password is required");
+    }
+
+    if (!email) {
+      throw ApiError.badRequest("Email is required");
+    }
+
+    // Hash the token to match with database
+    const hashed = crypto.createHash("sha256").update(token).digest("hex");
+    const currentTime = dayjs().utc().toDate();
+
+    console.log("Password reset attempt:", {
+      email,
+      hashedToken: hashed,
+      currentTime: dayjs(currentTime).utc().toISOString(),
+    });
+
+    // Find user with matching token, email, and valid expiry
+    const tokenUser = await prisma.user.findFirst({
+      where: {
+        email: email,
+        resetPasswordToken: hashed,
+        resetPasswordTokenExpiry: { gte: currentTime },
+      },
+    });
+
+    if (!tokenUser) {
+      // Check if user exists with this email and token but expired
+      const expiredTokenUser = await prisma.user.findFirst({
+        where: {
+          email: email,
+          resetPasswordToken: hashed,
+        },
+        select: {
+          resetPasswordTokenExpiry: true,
+        },
+      });
+
+      if (expiredTokenUser) {
+        console.log("Password reset failed - token expired:", {
+          email,
+          tokenExpiry: dayjs(expiredTokenUser.resetPasswordTokenExpiry)
+            .utc()
+            .toISOString(),
+          currentTime: dayjs(currentTime).utc().toISOString(),
+        });
+        throw ApiError.badRequest(
+          "Reset token has expired. Please request a new password reset link."
+        );
+      }
+
+      throw ApiError.badRequest(
+        "Invalid token or email mismatch. Please request a new password reset link."
+      );
+    }
+
+    // Hash the new password
+    const hashedPassword = encryptSync(decryptedPassword);
+
+    // Update the user's password and clear reset token
+    const updatedUser = await prisma.user.update({
+      where: { email: email },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordTokenExpiry: null,
+      },
+    });
+
+    console.log("Password reset successful for:", email, updatedUser);
+
+    // Send confirmation email
+    // const emailData = {
+    //   name: updatedUser.name,
+    // };
+
+    // const templateType = "confirmationPassword";
+    // const emailBody = await renderModuleEmailTemplate(
+    //   "resetPassword",
+    //   templateType,
+    //   emailData
+    // );
+
+    // Send confirmation email (use sendEmail instead of sendTestEmail for production)
+    // await sendTestEmail({
+    //   to: updatedUser.email,
+    //   subject: "Password Set Successfully - DMI Finance",
+    //   htmlBody: emailBody,
+    // });
+
+    return {
+      success: true,
+      message:
+        "Password set successfully! You can now login with your new password.",
+    };
+  } catch (error) {
+    console.error("Error in setNewPasswordService:", error);
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw ApiError.internal("Failed to set new password");
+  }
+};
