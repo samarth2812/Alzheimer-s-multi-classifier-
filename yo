@@ -1,171 +1,25 @@
-          <CustomTextField
-            label="Due Date"
-            name="dueDate"
-            type="datetime-local"
-            value={formData.dueDate}
-            onChange={handleChange}
-            InputLabelProps={{ shrink: true }}
-            error={errors.dueDate}
-            endAdornment={
-              <InputAdornment position="end">
-                <CalendarToday
-                  sx={{ color: (theme) => theme.palette.custom.two, fontSize: "1.2rem" }}
-                />
-              </InputAdornment>
-            }
-          />
+const handleChange = (e) => {
+  const { name, value } = e.target;
 
-// Custom text field component
+  if (name === "dueDate") {
+    const selectedDate = new Date(value);
+    const now = new Date();
 
-// @mui material components
-import Box from "@mui/material/Box";
-import InputBase from "@mui/material/InputBase";
-import Typography from "@mui/material/Typography";
-import React, { useRef } from "react";
+    if (selectedDate < now) {
+      setErrors((prev) => ({
+        ...prev,
+        dueDate: "Due date cannot be in the past",
+      }));
 
-const getMinDateTime = () => {
-  const now = new Date();
-  now.setDate(now.getDate());
-  return now.toISOString().slice(0, 16); // format: yyyy-MM-ddTHH:mm
-};
-export const CustomTextField = ({
-  label,
-  placeholder,
-  value,
-  onChange,
-  name,
-  type = "text",
-  error,
-  endAdornment,
-  disabled,
-  autoComplete = "off",
-  showDateafterToday = "true",
-}) => {
-  const inputRef = useRef(null);
-  const openDatePicker = () => {
-    if (type === "datetime-local" && inputRef.current) {
-      inputRef.current.showPicker && inputRef.current.showPicker();
+      // Optional: clear the input or block it
+      return;
+    } else {
+      setErrors((prev) => ({ ...prev, dueDate: null }));
     }
-  };
+  }
 
-  return (
-    <Box sx={{ width: "100%", opacity: disabled ? "0.5" : "1" }}>
-      <Typography
-        component="label"
-        sx={{
-          fontSize: "0.75rem",
-          fontWeight: 500,
-          color: (theme) => theme.palette.custom.text2,
-          mb: 0.5,
-          ml: 1.6,
-          display: "block",
-        }}
-      >
-        {label}
-      </Typography>
-      <Box
-        sx={{
-          border: "2px solid",
-          borderColor: (theme) => theme.palette.custom.background1,
-          borderRadius: 3,
-          display: "flex",
-          alignItems: "center",
-          backgroundColor: "white",
-          "&:hover": {
-            borderColor: "#5a3d83",
-          },
-          "&:focus": {
-            borderColor: "#5a3d83",
-          },
-          "&:active": {
-            borderColor: "#5a3d83",
-          },
-          transition: "border-color 0.2s",
-        }}
-      >
-        <InputBase
-          inputRef={inputRef}
-          fullWidth
-          name={name}
-          type={type}
-          value={value}
-          onChange={onChange}
-          placeholder={placeholder}
-          autoComplete={autoComplete}
-          inputProps={
-            type === "datetime-local" && showDateafterToday ? { min: getMinDateTime() } : {}
-          }
-          endAdornment={
-            type === "datetime-local"
-              ? React.cloneElement(endAdornment, {
-                  onClick: openDatePicker,
-                  style: { cursor: "pointer" },
-                })
-              : endAdornment
-          }
-          disabled={disabled}
-          sx={{
-            p: 1.5,
-            fontSize: "0.7rem",
-            height: "35px",
-            "& .MuiInputBase-input": {
-              padding: 0,
-              color: (theme) => theme.palette.custom.text2,
-            },
-
-            "& .Mui-disabled": {
-              color: "#636363",
-              WebkitTextFillColor: "#636363", // for Safari
-            },
-
-            "&::placeholder": {
-              color: (theme) => theme.palette.custom.text2,
-            },
-
-            "& .MuiInputAdornment-root": {
-              color: (theme) => theme.palette.custom.text2,
-            },
-            "&::-ms-reveal, &::-ms-clear": {
-              display: "none",
-            },
-            // For Chrome/Safari
-            "&::-webkit-contacts-auto-fill-button, &::-webkit-credentials-auto-fill-button": {
-              visibility: "hidden",
-              display: "none !important",
-              pointerEvents: "none",
-              height: "0",
-              width: "0",
-              margin: "0",
-            },
-            "& input[type='datetime-local']::-webkit-calendar-picker-indicator": {
-              display: "none",
-              opacity: 0,
-            },
-            "& input[type='datetime-local']::-webkit-inner-spin-button": {
-              display: "none",
-              opacity: 0,
-            },
-            "& input[type='password']::-webkit-calendar-picker-indicator": {
-              display: "none",
-              opacity: 0,
-            },
-            "& input[type='password']::-webkit-inner-spin-button": {
-              display: "none",
-              opacity: 0,
-            },
-            color: (theme) => theme.palette.custom.two,
-          }}
-        />
-      </Box>
-      {error && (
-        <Typography
-          variant="h6"
-          color="error"
-          sx={{ mt: 1, fontSize: "0.6rem", textAlign: "center", fontWeight: 400 }}
-        >
-          {error}
-        </Typography>
-      )}
-    </Box>
-  );
+  setFormData((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
 };
