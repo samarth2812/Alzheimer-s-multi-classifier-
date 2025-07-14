@@ -1,5 +1,7 @@
-SMTP_USER=briana42@ethereal.email
-SMTP_PASSWORD=9sYvJkDsmZJejzN9VR
-SMTP_HOST=smtp.ethereal.email
-SMTP_PORT=587
-SMTP_FROM="Samarth <briana42@ethereal.email>"
+❌ Error: Error: read ECONNRESET
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:216:20) {
+  errno: -4077,
+  code: 'ESOCKET',
+  syscall: 'read',
+  command: 'CONN'
+}
