@@ -1,38 +1,7 @@
-import nodemailer from "nodemailer";
-
-export const createTestTransporter = async () => {
-  const testAccount = await nodemailer.createTestAccount();
-
-  const transporter = nodemailer.createTransport({
-    host: testAccount.smtp.host,
-    port: testAccount.smtp.port,
-    secure: testAccount.smtp.secure,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
-
-  return transporter;
-};
-
-export const sendEmail = async (params: { to: string; subject: string; htmlBody: string }) => {
-  try {
-    const transporter = await createTestTransporter();
-
-    const info = await transporter.sendMail({
-      from: '"Samarth" <samarth@example.com>', // doesn't matter, it's mock
-      to: params.to,
-      subject: params.subject,
-      html: params.htmlBody,
-    });
-
-    console.log("✅ Email sent (test)");
-    console.log("📬 Preview URL:", nodemailer.getTestMessageUrl(info));
-
-    return true;
-  } catch (error: any) {
-    console.error("❌ Failed to send test email:", error.message);
-    return false;
-  }
-};
+6 Error: read ECONNRESET
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:216:20) {
+  errno: -4077,
+  code: 'ESOCKET',
+  syscall: 'read',
+  command: 'CONN'
+}
