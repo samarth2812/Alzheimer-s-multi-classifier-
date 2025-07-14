@@ -1,3 +1,22 @@
+model User {
+  id           Int        @id @default(autoincrement())
+  name         String
+  email        String     @unique
+  password     String
+  mobile       String?    @unique
+  refreshToken String?
+  role         Position
+  department   Department
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now()) @updatedAt
+
+  //Password Reset Fields
+  resetPasswordToken       String?
+  resetPasswordTokenExpiry DateTime?
+}
+
+
+
 import crypto from "crypto";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
