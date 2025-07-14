@@ -7,3 +7,57 @@ Error in sendResetTokenService: ApiError: Failed to send email: read ECONNRESET
   statusCode: 500,
   isOperational: true
 }
+export const sendEmail = async (params: SendEmailParams): Promise<boolean> => {
+  try {
+    if (!emailConfig.smtpUser || !emailConfig.smtpPassword) {
+      throw ApiError.internal('SMTP credentials not configured');
+    }
+
+    const transporter = createTransporter();
+    
+    const mailOptions = {
+      from: emailConfig.smtpFrom,
+      to: params.to,
+      subject: params.subject,
+      html: params.htmlBody
+    };
+    console.log(0, mailOptions);
+
+    await transporter.sendMail(mailOptions);
+    return true;
+  } catch (error: any) {
+    throw ApiError.internal(`Failed to send email: ${error.message}`);
+  }
+};
+const emailConfig = {
+  service: process.env.EMAIL_SERVICE ||'gmail',
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPassword: process.env.SMTP_PASSWORD || '',
+  smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || '',
+  adminEmail: process.env.ADMIN_EMAIL || process.env.SMTP_USER || '', //needed
+  retryLimit: parseInt(process.env.EMAIL_RETRY_LIMIT || '5'),
+};
+
+const validateEmailConfig = () => {
+  if (!emailConfig.smtpUser || !emailConfig.smtpPassword) {
+    console.warn('⚠️  SMTP credentials not configured - emails will fail!');
+    console.warn('⚠️  Please set SMTP_USER and SMTP_PASSWORD in .env file');
+  } else {
+    console.log(`✓ SMTP configured: ${emailConfig.smtpUser}`);
+  }
+};
+
+// Validate on module load
+validateEmailConfig();
+
+// Create nodemailer transporter
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    service: emailConfig.service,
+    auth: {
+      user: emailConfig.smtpUser,
+      pass: emailConfig.smtpPassword
+    }
+  });
+};
+
