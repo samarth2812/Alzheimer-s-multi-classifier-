@@ -1,7 +1,1 @@
-❌ Error: Error: read ECONNRESET
-    at TLSWrap.onStreamRead (node:internal/stream_base_commons:216:20) {
-  errno: -4077,
-  code: 'ESOCKET',
-  syscall: 'read',
-  command: 'CONN'
-}
+curl: (56) Recv failure: Connection was reset
