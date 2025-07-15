@@ -41,3 +41,8 @@ export const sendManualReminderEmail = async (
     next(error);
   }
 };
+
+
+
+
+POST /api/email/reminder/:emailType
