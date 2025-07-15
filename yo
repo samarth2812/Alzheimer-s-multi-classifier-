@@ -1,41 +1,103 @@
-export const triggerReminderJob = async (type: "2_days" | "1_day" | "same_day"): Promise<any> => {
-  try {
-    console.log(`Manually triggering ${type} reminder job...`);
-
-    let daysBefore: number;
-    switch (type) {
-      case "2_days":
-        daysBefore = 2;
-        break;
-      case "1_day":
-        daysBefore = 1;
-        break;
-      case "same_day":
-        daysBefore = 0;
-        break;
-      default:
-        throw new Error("Invalid reminder type");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indent Reminder | Action Required</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
     }
-
-    // Call all 4 functions in parallel (or sequentially, depending on need)
-    const [regulatory, followUp, escalation, summary] = await Promise.all([
-      sendRegulatoryTimelineReminders(daysBefore),
-      sendFollowUpReminders(daysBefore),
-      sendEscalationReminders(daysBefore),
-      sendSummaryNotifications(daysBefore),
-    ]);
-
-    const result = {
-      regulatory,
-      followUp,
-      escalation,
-      summary,
-    };
-
-    console.log(`Manual ${type} reminder job completed:`, result);
-    return result;
-  } catch (error: any) {
-    console.error(`Manual ${type} reminder job failed:`, error);
-    throw error;
-  }
-};
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background-color: #4f2d7f;
+      color: #ffffff;
+      padding: 10px 0;
+      text-align: center;
+    }
+    .content {
+      padding: 20px;
+      text-align: left;
+    }
+    .button {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 20px 0;
+      background-color: #4f2d7f;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .footer {
+      text-align: center;
+      padding: 10px;
+      font-size: 12px;
+      color: #777777;
+    }
+    .indent-details {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-left: 4px solid #4f2d7f;
+      margin: 15px 0;
+    }
+    .timeline-warning {
+      background-color: #fff3cd;
+      border: 1px solid #ffeaa7;
+      padding: 15px;
+      margin: 15px 0;
+      text-align: center;
+      border-radius: 5px;
+    }
+    .days-left {
+      font-size: 20px;
+      font-weight: bold;
+      color: #856404;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Indent Reminder</h1>
+    </div>
+    <div class="content">
+      <p>Dear {{{recipientName}}},</p>
+      <p>This is a reminder that an indent under your responsibility is approaching its due date deadline.</p>
+      
+      <div class="timeline-warning">
+        <div class="days-left">{{{daysLeft}}} Day(s) Remaining</div>
+        <p><strong>Due Date : {{{dueDate}}}</strong></p>
+        <p><strong>Category: {{{category}}}</strong></p>
+      </div>
+      
+      <div class="indent-details">
+        <h3>Indent Details:</h3>
+        <p><strong>Department:</strong> {{{department}}}</p>
+        <p><strong>Action Required:</strong> {{{action}}}</p>
+      </div>
+      
+      <p>Please ensure all necessary actions are completed before the due date.</p>
+      
+      <p>Click the button below to log in and take action:</p>
+      <a href="{{{frontendUrl}}}" class="button">Log In</a>
+      
+      <p>If you have any questions, feel free to contact our support team.</p>
+      <p>Note: This is a System Generated E-Mail. Please do not reply to this mail.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; 2025 RegTech. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
