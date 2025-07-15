@@ -39,3 +39,12 @@
         // Continue with other assignees even if one fails
       }
     }
+
+    // Send queued emails immediately
+    try {
+      await processPendingEmails();
+      console.log("📧 Immediate email processing completed for indent");
+    } catch (error: any) {
+      console.error("⚠️ Immediate email processing failed for indent", error);
+      // Don't throw error - emails will be retried by cron job
+    }
