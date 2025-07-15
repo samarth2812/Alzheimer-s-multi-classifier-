@@ -1,50 +1,109 @@
-    for (const assignee of assignees) {
-      try {
-        const emailData: EmailTemplateData = {
-          recipientName: assignee.name,
-          department,
-          category: category.replace(/_/g, " ") as IndentCategory,
-          action: actionText,
-          frontendUrl: process.env.FRONTEND_URL || "https://your-app.com",
-        };
+import { renderModuleEmailTemplate } from "../email/emailTemplateService";
+import { addEmailToQueue, processPendingEmails } from "../email/emailQueueService";
+import { generateEmailSubject } from "../email/subjectGenerator";
+import { Module } from "@prisma/client"; // Assuming you have a Module enum
 
-        // Generate email subject
-        const subject = generateEmailSubject(templateType);
+type EmailType = "OBLIGATION" | "INDENT" | "INCIDENT" | "OBSERVATION";
 
-        console.log(3, subject);
-        // Render email template
-        const emailBody = await renderModuleEmailTemplate(
-          "indent",
-          templateType,
-          emailData
-        );
+interface Assignee {
+  name: string;
+  email: string;
+}
 
-        console.log(4, emailBody);
-        // Add to email queue
-        await addEmailToQueue({
-          to: assignee.email,
-          subject,
-          body: emailBody,
-          moduleType: Module.INDENT,
-        });
+type EmailBaseData = {
+  department: string;
+  dueDate?: string;
+};
 
-        console.log(
-          `Email queued for ${assignee.name} (${assignee.email}) - Template: ${templateType}`
-        );
-      } catch (error: any) {
-        console.error(
-          `Failed to queue email for ${assignee.name} (${assignee.email}):`,
-          error
-        );
-        // Continue with other assignees even if one fails
-      }
-    }
+type ObligationEmailData = EmailBaseData & {
+  obligationId: string;
+  obligationTitle: string;
+};
 
-    // Send queued emails immediately
+type IndentEmailData = EmailBaseData & {
+  category: string;
+};
+
+type IncidentEmailData = EmailBaseData & {
+  type: string;
+};
+
+type ObservationEmailData = EmailBaseData & {
+  theme: string;
+};
+
+type ModuleEmailData =
+  | { emailType: "OBLIGATION"; data: ObligationEmailData }
+  | { emailType: "INDENT"; data: IndentEmailData }
+  | { emailType: "INCIDENT"; data: IncidentEmailData }
+  | { emailType: "OBSERVATION"; data: ObservationEmailData };
+
+export const triggerReminderEmails = async (
+  emailType: EmailType,
+  reminderFromUserData: { name: string; email: string },
+  emailData: ObligationEmailData | IndentEmailData | IncidentEmailData | ObservationEmailData,
+  assignees: Assignee[]
+) => {
+  const frontendUrl = process.env.FRONTEND_URL || "https://your-app.com";
+
+  const moduleTypeMap: Record<EmailType, Module> = {
+    OBLIGATION: Module.OBLIGATION,
+    INDENT: Module.INDENT,
+    INCIDENT: Module.INCIDENT,
+    OBSERVATION: Module.OBSERVATION,
+  };
+
+  const templateType = "reminder";
+
+  for (const assignee of assignees) {
     try {
-      await processPendingEmails();
-      console.log("📧 Immediate email processing completed for indent");
-    } catch (error: any) {
-      console.error("⚠️ Immediate email processing failed for indent", error);
-      // Don't throw error - emails will be retried by cron job
+      const commonFields = {
+        recipientName: assignee.name,
+        action: "Reminder: Action Required",
+        department: emailData.department,
+        dueDate: emailData.dueDate,
+        frontendUrl,
+        fromUser: reminderFromUserData.name,
+      };
+
+      const mergedEmailData = {
+        ...commonFields,
+        ...(emailType === "OBLIGATION" ? { obligationId: (emailData as ObligationEmailData).obligationId, obligationTitle: (emailData as ObligationEmailData).obligationTitle } :
+        emailType === "INDENT" ? { category: (emailData as IndentEmailData).category.replace(/_/g, " ") } :
+        emailType === "INCIDENT" ? { type: (emailData as IncidentEmailData).type } :
+        { theme: (emailData as ObservationEmailData).theme }),
+      };
+
+      const subject = generateEmailSubject(templateType);
+
+      const emailBody = await renderModuleEmailTemplate(
+        emailType.toLowerCase(), // should match template folder name
+        templateType,
+        mergedEmailData
+      );
+
+      await addEmailToQueue({
+        to: assignee.email,
+        subject,
+        body: emailBody,
+        moduleType: moduleTypeMap[emailType],
+      });
+
+      console.log(
+        `✅ Email queued for ${assignee.name} (${assignee.email}) - ${emailType}`
+      );
+    } catch (error) {
+      console.error(
+        `❌ Failed to queue email for ${assignee.name} (${assignee.email}) - ${emailType}`,
+        error
+      );
     }
+  }
+
+  try {
+    await processPendingEmails();
+    console.log(`📬 Immediate email processing completed for ${emailType}`);
+  } catch (error) {
+    console.error(`⚠️ Email processing failed for ${emailType}`, error);
+  }
+};
