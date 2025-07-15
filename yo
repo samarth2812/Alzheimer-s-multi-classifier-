@@ -2,20 +2,35 @@ export const triggerReminderJob = async (type: "2_days" | "1_day" | "same_day"):
   try {
     console.log(`Manually triggering ${type} reminder job...`);
 
-    let result;
+    let daysBefore: number;
     switch (type) {
       case "2_days":
-        result = await sendRegulatoryTimelineReminders(2);
+        daysBefore = 2;
         break;
       case "1_day":
-        result = await sendRegulatoryTimelineReminders(1);
+        daysBefore = 1;
         break;
       case "same_day":
-        result = await sendRegulatoryTimelineReminders(0);
+        daysBefore = 0;
         break;
       default:
         throw new Error("Invalid reminder type");
     }
+
+    // Call all 4 functions in parallel (or sequentially, depending on need)
+    const [regulatory, followUp, escalation, summary] = await Promise.all([
+      sendRegulatoryTimelineReminders(daysBefore),
+      sendFollowUpReminders(daysBefore),
+      sendEscalationReminders(daysBefore),
+      sendSummaryNotifications(daysBefore),
+    ]);
+
+    const result = {
+      regulatory,
+      followUp,
+      escalation,
+      summary,
+    };
 
     console.log(`Manual ${type} reminder job completed:`, result);
     return result;
