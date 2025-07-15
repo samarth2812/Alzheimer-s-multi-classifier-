@@ -3,6 +3,49 @@ export const formatAssignees = (assignees, onSendMail) => {
 };
 
 
+export const formatObligationTableData = (rawData, actions = {}) => {
+  if (!Array.isArray(rawData)) {
+    return { columns: [], rows: [] };
+  }
+
+  const columns = [
+    { Header: "ID", accessor: "id", width: "60px", align: "left" }, // Fixed width instead of percentage
+    { Header: "Current Step", accessor: "currentStepName", width: "20%", align: "left" },
+    { Header: "Assignees", accessor: "assignees", width: "40%", align: "left" },
+    { Header: "Actions", accessor: "actions", width: "10%", align: "center" },
+  ];
+
+  const rows = rawData.map((item) => ({
+    id: (
+      <Typography
+        sx={{
+          color: (theme) => theme.palette.custom.text2,
+          fontSize: "11.2px !important",
+          fontWeight: 500,
+          minWidth: "40px",
+          maxWidth: "60px",
+        }}
+      >
+        {item.id || "N/A"}
+      </Typography>
+    ),
+    currentStepName: formatCurrentStep(item.currentStepName),
+    assignees: formatAssignees(item.assignees, actions.onSendMail),
+    actions: (
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <CustomIconButton
+          icon={Visibility}
+          label="View More"
+          onClick={() => actions.onViewMore && actions.onViewMore(item)}
+          size="small"
+        />
+      </Box>
+    ),
+  }));
+
+  return { columns, rows };
+};
+
 const AssigneesDisplay = ({ assignees, showEmailIcon = true, onSendMail }) => {
   if (!assignees || assignees.length === 0) {
     return (
