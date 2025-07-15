@@ -1,41 +1,43 @@
-export const addObligationRemark = async (
+import { Request, Response, NextFunction } from "express";
+import { triggerManualReminderEmails } from "../services/reminderEmailService";
+import { ApiError } from "../utils/ApiError";
+import { EmailType } from "../types/emailTypes"; // optional: extract type if needed
+import { customRequest } from "../types/customRequest";
+
+export const sendManualReminderEmail = async (
   req: customRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
     const user = req.user!;
-    const { obligationId } = req.params;
-    const remarkData = req.body;
+    const { emailType } = req.params; // expected to be: OBLIGATION, INDENT, etc.
+    const { emailData, assignees } = req.body;
 
-    if (!obligationId) {
-      throw ApiError.badRequest("Obligation ID is required");
+    if (!emailType || !["OBLIGATION", "INDENT", "INCIDENT", "OBSERVATION"].includes(emailType)) {
+      throw ApiError.badRequest("Valid emailType is required");
     }
 
-    if (!remarkData.content) {
-      throw ApiError.badRequest("Remark content is required");
+    if (!emailData || typeof emailData !== "object") {
+      throw ApiError.badRequest("Valid emailData is required");
     }
 
-    // FIXED: Convert database enum to UI string format for ROLE_MAPPING
-    const uiRoleFormat = mapEnumToUIRole(user.role);
+    if (!Array.isArray(assignees) || assignees.length === 0) {
+      throw ApiError.badRequest("At least one assignee is required");
+    }
 
-    // Validate and set user info with correct role format
-    const completeRemarkData = {
-      ...remarkData,
-      author: remarkData.author || uiRoleFormat, // FIXED: Use UI format
-      userId: remarkData.userId || user.id.toString(),
-      timestamp: remarkData.timestamp || new Date().toISOString()
-    };
+    await triggerManualReminderEmails(
+      emailType as EmailType,
+      user,
+      emailData,
+      assignees
+    );
 
-   
-
-    await createObligationRemark(obligationId, completeRemarkData);
-    
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      message: "Obligation remark added successfully"
+      message: "Reminder email(s) triggered successfully",
     });
-  } catch (error: any) {
+  } catch (error) {
     next(error);
   }
 };
