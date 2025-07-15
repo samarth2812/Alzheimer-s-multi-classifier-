@@ -1,23 +1,98 @@
-<p>Dear {{{recipientName}}},</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Indent Action Required</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      background-color: #4f2d7f;
+      color: #ffffff;
+      padding: 10px 0;
+      text-align: center;
+    }
+    .content {
+      padding: 20px;
+      text-align: left;
+    }
+    .button {
+      display: inline-block;
+      padding: 10px 20px;
+      margin: 20px 0;
+      background-color: #4f2d7f;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    .footer {
+      text-align: center;
+      padding: 10px;
+      font-size: 12px;
+      color: #777777;
+    }
+    .indent-details {
+      background-color: #f9f9f9;
+      padding: 15px;
+      border-left: 4px solid #4f2d7f;
+      margin: 15px 0;
+    }
+    .sender-info {
+      background-color: #e9ecef;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Indent Action Required</h1>
+    </div>
+    <div class="content">
+      <p>Dear {{{recipientName}}},</p>
+      
+      <p>You are requested to take action on an indent assigned to you.</p>
 
-<p>You are requested to take action on an indent assigned to you.</p>
+      <div class="sender-info">
+        <p><strong>Reminder From:</strong></p>
+        <p>Name: {{{senderName}}}</p>
+        <p>Email: {{{senderEmail}}}</p>
+        <p>Role: {{{senderRole}}}</p>
+      </div>
 
-<p style="margin-top: 24px;">
-  <strong>Requested by:</strong><br/>
-  {{{senderName}}}<br/>
-  <a href="mailto:{{{senderEmail}}}" style="color: #4f2d7f; text-decoration: none;">{{{senderEmail}}}</a><br/>
-  <span style="color: #666;">{{{senderRole}}}</span>
-</p>
+      <div class="indent-details">
+        <h3>Indent Details:</h3>
+        <p><strong>Department:</strong> {{{department}}}</p>
+        <p><strong>Category:</strong> {{{category}}}</p>
+        <p><strong>Due Date:</strong> {{{dueDate}}}</p>
+        <p><strong>Action Required:</strong> {{{action}}}</p>
+      </div>
 
-<div style="background-color: #f1f1f1; padding: 10px 15px; font-size: 14px; color: #555; border-bottom: 1px solid #ddd;">
-  <strong>From:</strong> {{{senderName}}} &lt;{{{senderEmail}}}&gt;<br/>
-  <strong>Role:</strong> {{{senderRole}}}
-</div>
+      <p>Please log in to the system and complete the necessary actions at your earliest convenience.</p>
+      
+      <a href="{{{frontendUrl}}}" class="button">Log In to View Indent</a>
 
-
-<p style="margin-top: 30px;">
-  Best regards,<br/>
-  <strong>{{{senderName}}}</strong><br/>
-  {{{senderRole}}}<br/>
-  <a href="mailto:{{{senderEmail}}}" style="color: #4f2d7f; text-decoration: none;">{{{senderEmail}}}</a>
-</p>
+      <p>If you have any questions, please reach out to the person who sent this reminder.</p>
+      <p>Note: This is a system-generated email. Please do not reply to this address.</p>
+    </div>
+    <div class="footer">
+      <p>&copy; 2025 RegTech. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
