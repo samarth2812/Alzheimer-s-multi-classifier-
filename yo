@@ -1,101 +1,41 @@
-export const triggerManualReminderEmails = async (
-  emailType: EmailType,
-  reminderFromUserData: User,
-  emailData:
-    | ObligationEmailData
-    | IndentEmailData
-    | IncidentEmailData
-    | ObservationEmailData,
-  assignees: Assignee[]
-) => {
+export const addObligationRemark = async (
+  req: customRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const frontendUrl = process.env.FRONTEND_URL || "https://your-app.com";
+    const user = req.user!;
+    const { obligationId } = req.params;
+    const remarkData = req.body;
 
-    const moduleTypeMap: Record<EmailType, Module> = {
-      OBLIGATION: Module.OBLIGATION,
-      INDENT: Module.INDENT,
-      INCIDENT: Module.INCIDENT,
-      OBSERVATION: Module.ISE_OBSERVATION,
+    if (!obligationId) {
+      throw ApiError.badRequest("Obligation ID is required");
+    }
+
+    if (!remarkData.content) {
+      throw ApiError.badRequest("Remark content is required");
+    }
+
+    // FIXED: Convert database enum to UI string format for ROLE_MAPPING
+    const uiRoleFormat = mapEnumToUIRole(user.role);
+
+    // Validate and set user info with correct role format
+    const completeRemarkData = {
+      ...remarkData,
+      author: remarkData.author || uiRoleFormat, // FIXED: Use UI format
+      userId: remarkData.userId || user.id.toString(),
+      timestamp: remarkData.timestamp || new Date().toISOString()
     };
 
-    const templateType = "manualReminder";
+   
 
-    for (const assignee of assignees) {
-      try {
-        const commonFields = {
-          recipientName: assignee.name,
-          action: "Please review and take necessary action.",
-          department: emailData.department,
-          frontendUrl,
-          senderName: reminderFromUserData.name,
-          senderEmail: reminderFromUserData.email,
-          senderRole: reminderFromUserData.role.replace(/_/g, " "),
-        };
-
-        const mergedEmailData = {
-          ...commonFields,
-          ...(emailType === "OBLIGATION"
-            ? {
-                obligationId: (emailData as ObligationEmailData).obligationId,
-                obligationTitle: (emailData as ObligationEmailData)
-                  .obligationTitle,
-              }
-            : emailType === "INDENT"
-            ? {
-                category: (emailData as IndentEmailData).category.replace(
-                  /_/g,
-                  " "
-                ),
-              }
-            : emailType === "INCIDENT"
-            ? {
-                type: (emailData as IncidentEmailData).type.replace(/_/g, " "),
-              }
-            : {
-                theme: (emailData as ObservationEmailData).theme.replace(
-                  /_/g,
-                  " "
-                ),
-              }),
-        };
-
-        const subject = generateEmailSubject(emailType);
-
-        const emailBody = await renderModuleEmailTemplate(
-          emailType.toLowerCase(),
-          templateType,
-          mergedEmailData
-        );
-
-        await addEmailToQueue({
-          to: assignee.email,
-          subject,
-          body: emailBody,
-          moduleType: moduleTypeMap[emailType],
-        });
-
-        console.log(
-          `✅ Email queued for ${assignee.name} (${assignee.email}) - ${emailType}`
-        );
-      } catch (innerError) {
-        console.error(
-          `❌ Failed to queue email for ${assignee.name} (${assignee.email}) - ${emailType}`,
-          innerError
-        );
-      }
-    }
-
-    try {
-      await processPendingEmails();
-      console.log(`📬 Immediate email processing completed for ${emailType}`);
-    } catch (processError) {
-      console.error(`⚠️ Email processing failed for ${emailType}`, processError);
-    }
-  } catch (outerError) {
-    console.error(
-      `🚨 Unexpected error in triggerManualReminderEmails for ${emailType}`,
-      outerError
-    );
-    throw outerError; // rethrow if you want caller to handle it
+    await createObligationRemark(obligationId, completeRemarkData);
+    
+    res.status(201).json({
+      success: true,
+      message: "Obligation remark added successfully"
+    });
+  } catch (error: any) {
+    next(error);
   }
 };
