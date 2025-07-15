@@ -1,60 +1,3 @@
-import { Module, User } from "@prisma/client";
-import { renderModuleEmailTemplate } from "./emailTemplateService";
-import { addEmailToQueue, processPendingEmails } from "./emailService";
-
-type EmailType = "OBLIGATION" | "INDENT" | "INCIDENT" | "OBSERVATION";
-
-interface Assignee {
-  name: string;
-  email: string;
-  role: string;
-}
-
-type ObligationEmailData = {
-  obligationId: string;
-  obligationTitle: string;
-  department: string;
-};
-
-type IndentEmailData = {
-  category: string;
-  department: string;
-  dueDate: string;
-};
-
-type IncidentEmailData = {
-  department: string;
-  dueDate: string;
-  type: string;
-};
-
-type ObservationEmailData = {
-  theme: string;
-  department: string;
-  dueDate: string;
-};
-
-type ModuleEmailData =
-  | { emailType: "OBLIGATION"; data: ObligationEmailData }
-  | { emailType: "INDENT"; data: IndentEmailData }
-  | { emailType: "INCIDENT"; data: IncidentEmailData }
-  | { emailType: "OBSERVATION"; data: ObservationEmailData };
-
-const generateEmailSubject = (moduleType: EmailType) => {
-  switch (moduleType) {
-    case "OBLIGATION":
-      return "Reminder: Action Required on Obligation";
-    case "INDENT":
-      return "Reminder: Action Required on Indent";
-    case "INCIDENT":
-      return "Reminder: Action Required on Incident";
-    case "OBSERVATION":
-      return "Reminder: Action Required on ISE Observation";
-    default:
-      return "Reminder: Action Required";
-  }
-};
-
 export const triggerManualReminderEmails = async (
   emailType: EmailType,
   reminderFromUserData: User,
@@ -65,84 +8,94 @@ export const triggerManualReminderEmails = async (
     | ObservationEmailData,
   assignees: Assignee[]
 ) => {
-  const frontendUrl = process.env.FRONTEND_URL || "https://your-app.com";
-
-  const moduleTypeMap: Record<EmailType, Module> = {
-    OBLIGATION: Module.OBLIGATION,
-    INDENT: Module.INDENT,
-    INCIDENT: Module.INCIDENT,
-    OBSERVATION: Module.ISE_OBSERVATION,
-  };
-
-  const templateType = "manualReminder";
-
-  for (const assignee of assignees) {
-    try {
-      const commonFields = {
-        recipientName: assignee.name,
-        action: "Please review and take necessary action.",
-        department: emailData.department,
-        frontendUrl,
-        senderName: reminderFromUserData.name,
-        senderEmail: reminderFromUserData.email,
-        senderRole: reminderFromUserData.role.replace(/_/g, " "),
-      };
-
-      const mergedEmailData = {
-        ...commonFields,
-        ...(emailType === "OBLIGATION"
-          ? {
-              obligationId: (emailData as ObligationEmailData).obligationId,
-              obligationTitle: (emailData as ObligationEmailData)
-                .obligationTitle,
-            }
-          : emailType === "INDENT"
-          ? {
-              category: (emailData as IndentEmailData).category.replace(
-                /_/g,
-                " "
-              ),
-            }
-          : emailType === "INCIDENT"
-          ? { type: (emailData as IncidentEmailData).type.replace(/_/g, " ") }
-          : {
-              theme: (emailData as ObservationEmailData).theme.replace(
-                /_/g,
-                " "
-              ),
-            }),
-      };
-
-      const subject = generateEmailSubject(templateType as EmailType);
-
-      const emailBody = await renderModuleEmailTemplate(
-        emailType.toLowerCase(),
-        templateType,
-        mergedEmailData
-      );
-
-      await addEmailToQueue({
-        to: assignee.email,
-        subject,
-        body: emailBody,
-        moduleType: moduleTypeMap[emailType],
-      });
-
-      console.log(
-        `✅ Email queued for ${assignee.name} (${assignee.email}) - ${emailType}`
-      );
-    } catch (error) {
-      console.error(
-        `❌ Failed to queue email for ${assignee.name} (${assignee.email}) - ${emailType}`,
-        error
-      );
-    }
-  }
-
   try {
-    await processPendingEmails();
-    console.log(`📬 Immediate email processing completed for ${emailType}`);
-  } catch (error) {
-    console.error(`⚠️ Email processing failed for ${emailType}`, error);
+    const frontendUrl = process.env.FRONTEND_URL || "https://your-app.com";
+
+    const moduleTypeMap: Record<EmailType, Module> = {
+      OBLIGATION: Module.OBLIGATION,
+      INDENT: Module.INDENT,
+      INCIDENT: Module.INCIDENT,
+      OBSERVATION: Module.ISE_OBSERVATION,
+    };
+
+    const templateType = "manualReminder";
+
+    for (const assignee of assignees) {
+      try {
+        const commonFields = {
+          recipientName: assignee.name,
+          action: "Please review and take necessary action.",
+          department: emailData.department,
+          frontendUrl,
+          senderName: reminderFromUserData.name,
+          senderEmail: reminderFromUserData.email,
+          senderRole: reminderFromUserData.role.replace(/_/g, " "),
+        };
+
+        const mergedEmailData = {
+          ...commonFields,
+          ...(emailType === "OBLIGATION"
+            ? {
+                obligationId: (emailData as ObligationEmailData).obligationId,
+                obligationTitle: (emailData as ObligationEmailData)
+                  .obligationTitle,
+              }
+            : emailType === "INDENT"
+            ? {
+                category: (emailData as IndentEmailData).category.replace(
+                  /_/g,
+                  " "
+                ),
+              }
+            : emailType === "INCIDENT"
+            ? {
+                type: (emailData as IncidentEmailData).type.replace(/_/g, " "),
+              }
+            : {
+                theme: (emailData as ObservationEmailData).theme.replace(
+                  /_/g,
+                  " "
+                ),
+              }),
+        };
+
+        const subject = generateEmailSubject(emailType);
+
+        const emailBody = await renderModuleEmailTemplate(
+          emailType.toLowerCase(),
+          templateType,
+          mergedEmailData
+        );
+
+        await addEmailToQueue({
+          to: assignee.email,
+          subject,
+          body: emailBody,
+          moduleType: moduleTypeMap[emailType],
+        });
+
+        console.log(
+          `✅ Email queued for ${assignee.name} (${assignee.email}) - ${emailType}`
+        );
+      } catch (innerError) {
+        console.error(
+          `❌ Failed to queue email for ${assignee.name} (${assignee.email}) - ${emailType}`,
+          innerError
+        );
+      }
+    }
+
+    try {
+      await processPendingEmails();
+      console.log(`📬 Immediate email processing completed for ${emailType}`);
+    } catch (processError) {
+      console.error(`⚠️ Email processing failed for ${emailType}`, processError);
+    }
+  } catch (outerError) {
+    console.error(
+      `🚨 Unexpected error in triggerManualReminderEmails for ${emailType}`,
+      outerError
+    );
+    throw outerError; // rethrow if you want caller to handle it
   }
 };
