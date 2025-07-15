@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Indent Reminder | Action Required</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Indent Action Required</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -50,50 +50,47 @@
       border-left: 4px solid #4f2d7f;
       margin: 15px 0;
     }
-    .timeline-warning {
-      background-color: #fff3cd;
-      border: 1px solid #ffeaa7;
+    .sender-info {
+      background-color: #e9ecef;
       padding: 15px;
-      margin: 15px 0;
-      text-align: center;
       border-radius: 5px;
-    }
-    .days-left {
-      font-size: 20px;
-      font-weight: bold;
-      color: #856404;
-      margin: 10px 0;
+      margin: 15px 0;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>Indent Reminder</h1>
+      <h1>Indent Action Required</h1>
     </div>
     <div class="content">
       <p>Dear {{{recipientName}}},</p>
-      <p>This is a reminder that an indent under your responsibility is approaching its due date deadline.</p>
       
-      <div class="timeline-warning">
-        <div class="days-left">{{{daysLeft}}} Day(s) Remaining</div>
-        <p><strong>Due Date : {{{dueDate}}}</strong></p>
-        <p><strong>Category: {{{category}}}</strong></p>
+      <p>You are requested to take action on an indent assigned to you.</p>
+
+      <div class="sender-info">
+        <p><strong>Sent By:</strong></p>
+        <p>Name: {{{senderName}}}</p>
+        <p>Email: {{{senderEmail}}}</p>
+        <p>Role: {{{senderRole}}}</p>
       </div>
-      
+
+      <p><strong>Subject:</strong> {{{customSubject}}}</p>
+
       <div class="indent-details">
         <h3>Indent Details:</h3>
         <p><strong>Department:</strong> {{{department}}}</p>
+        <p><strong>Category:</strong> {{{category}}}</p>
+        <p><strong>Due Date:</strong> {{{dueDate}}}</p>
         <p><strong>Action Required:</strong> {{{action}}}</p>
       </div>
+
+      <p>Please log in to the system and complete the necessary actions at your earliest convenience.</p>
       
-      <p>Please ensure all necessary actions are completed before the due date.</p>
-      
-      <p>Click the button below to log in and take action:</p>
-      <a href="{{{frontendUrl}}}" class="button">Log In</a>
-      
-      <p>If you have any questions, feel free to contact our support team.</p>
-      <p>Note: This is a System Generated E-Mail. Please do not reply to this mail.</p>
+      <a href="{{{frontendUrl}}}" class="button">Log In to View Indent</a>
+
+      <p>If you have any questions, please reach out to the person who sent this reminder.</p>
+      <p>Note: This is a system-generated email. Please do not reply to this address.</p>
     </div>
     <div class="footer">
       <p>&copy; 2025 RegTech. All rights reserved.</p>
