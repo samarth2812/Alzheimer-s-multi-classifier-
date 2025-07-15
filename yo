@@ -1,48 +1,149 @@
-export interface customRequest extends Request {
-  user?: User | JwtPayload; // User from Prisma or JWT payload
-}
-
-import { NextFunction } from "express";
-import { customRequest } from "../../types/customDefiniton";
-import { ApiError } from "../../utils/ApiError";
-import { EmailType, triggerManualReminderEmails } from "../../services/email/manualEmailReminderService";
-import { User } from "@prisma/client";
+export const formatAssignees = (assignees, onSendMail) => {
+  return <AssigneesDisplay assignees={assignees} showEmailIcon={true} onSendMail={onSendMail} />;
+};
 
 
-export const sendManualReminderEmail = async (
-  req: customRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    const user = req.user!;
-    const { emailType } = req.params;
-    const { emailData, assignees } = req.body;
-
-    if (!emailType || !["OBLIGATION", "INDENT", "INCIDENT", "OBSERVATION"].includes(emailType)) {
-      throw ApiError.badRequest("Valid emailType is required");
-    }
-
-    if (!emailData || typeof emailData !== "object") {
-      throw ApiError.badRequest("Valid emailData is required");
-    }
-
-    if (!Array.isArray(assignees) || assignees.length === 0) {
-      throw ApiError.badRequest("At least one assignee is required");
-    }
-
-    await triggerManualReminderEmails(
-      emailType as EmailType,
-      user as User,
-      emailData,
-      assignees
+const AssigneesDisplay = ({ assignees, showEmailIcon = true, onSendMail }) => {
+  if (!assignees || assignees.length === 0) {
+    return (
+      <Typography
+        sx={{
+          color: (theme) => theme.palette.custom.text2,
+          fontSize: "11.2px !important",
+        }}
+      >
+        N/A
+      </Typography>
     );
-
-    res.status(200).json({
-      success: true,
-      message: "Reminder email(s) triggered successfully",
-    });
-  } catch (error) {
-    next(error);
   }
+
+  const firstAssignee = assignees[0];
+
+  // If only one assignee, show full details
+  if (assignees.length === 1) {
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+              textTransform: "capitalize !important",
+              fontWeight: 500,
+            }}
+          >
+            {firstAssignee.name}
+          </Typography>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text3,
+              fontSize: "10px !important",
+              textTransform: "capitalize !important",
+            }}
+          >
+            {firstAssignee.role?.replace(/_/g, " ")} - {firstAssignee.email}
+          </Typography>
+        </Box>
+        {showEmailIcon && (
+          <CustomTooltip title={`Send email to ${firstAssignee.name}`}>
+            <IconButton
+              size="small"
+              sx={{
+                color: (theme) => theme.palette.custom.text2,
+                ml: 0.5,
+                "&:hover": {
+                  color: (theme) => theme.palette.primary.main,
+                },
+              }}
+              onClick={() => onSendMail && onSendMail(firstAssignee)}
+            >
+              <Mail fontSize="small" sx={{ fontSize: "0.9rem !important" }} />
+            </IconButton>
+          </CustomTooltip>
+        )}
+      </Box>
+    );
+  }
+
+  // If multiple assignees, show first assignee details + avatar group
+  return (
+    <Box>
+      {/* First assignee details */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+        <Box>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+              textTransform: "capitalize !important",
+              fontWeight: 500,
+            }}
+          >
+            {firstAssignee.name}
+          </Typography>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text3,
+              fontSize: "10px !important",
+              textTransform: "capitalize !important",
+            }}
+          >
+            {firstAssignee.role?.replace(/_/g, " ")} - {firstAssignee.email}
+          </Typography>
+        </Box>
+        {showEmailIcon && (
+          <CustomTooltip title={`Send email to ${firstAssignee.name}`}>
+            <IconButton
+              size="small"
+              sx={{
+                color: (theme) => theme.palette.custom.text2,
+                ml: 0.5,
+                "&:hover": {
+                  color: (theme) => theme.palette.primary.main,
+                },
+              }}
+              onClick={() => onSendMail && onSendMail(firstAssignee)}
+            >
+              <Mail fontSize="small" sx={{ fontSize: "0.9rem !important" }} />
+            </IconButton>
+          </CustomTooltip>
+        )}
+      </Box>
+
+      {/* Avatar group showing all assignees */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography
+          sx={{
+            color: (theme) => theme.palette.custom.text3,
+            fontSize: "10px !important",
+            fontWeight: 500,
+          }}
+        >
+          Total Assignees:
+        </Typography>
+        <AvatarGroup
+          max={3}
+          sx={{
+            justifyContent: "flex-start",
+            "& .MuiAvatar-root": {
+              width: 20,
+              height: 20,
+              fontSize: "0.65rem",
+              backgroundColor: (theme) => theme.palette.custom.background1,
+              color: (theme) => theme.palette.custom.text1,
+            },
+          }}
+        >
+          {assignees.map((assignee) => (
+            <CustomTooltip
+              key={assignee.id}
+              title={`${assignee.name} - ${assignee.role?.replace(/_/g, " ")}`}
+            >
+              <Avatar>{assignee.name.charAt(0).toUpperCase()}</Avatar>
+            </CustomTooltip>
+          ))}
+        </AvatarGroup>
+      </Box>
+    </Box>
+  );
 };
