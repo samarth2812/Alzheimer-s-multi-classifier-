@@ -1,8 +1,13 @@
-import { Request, Response, NextFunction } from "express";
-import { triggerManualReminderEmails } from "../services/reminderEmailService";
-import { ApiError } from "../utils/ApiError";
-import { EmailType } from "../types/emailTypes"; // optional: extract type if needed
-import { customRequest } from "../types/customRequest";
+export interface customRequest extends Request {
+  user?: User | JwtPayload; // User from Prisma or JWT payload
+}
+
+import { NextFunction } from "express";
+import { customRequest } from "../../types/customDefiniton";
+import { ApiError } from "../../utils/ApiError";
+import { EmailType, triggerManualReminderEmails } from "../../services/email/manualEmailReminderService";
+import { User } from "@prisma/client";
+
 
 export const sendManualReminderEmail = async (
   req: customRequest,
@@ -11,7 +16,7 @@ export const sendManualReminderEmail = async (
 ): Promise<void> => {
   try {
     const user = req.user!;
-    const { emailType } = req.params; // expected to be: OBLIGATION, INDENT, etc.
+    const { emailType } = req.params;
     const { emailData, assignees } = req.body;
 
     if (!emailType || !["OBLIGATION", "INDENT", "INCIDENT", "OBSERVATION"].includes(emailType)) {
@@ -28,7 +33,7 @@ export const sendManualReminderEmail = async (
 
     await triggerManualReminderEmails(
       emailType as EmailType,
-      user,
+      user as User,
       emailData,
       assignees
     );
@@ -41,8 +46,3 @@ export const sendManualReminderEmail = async (
     next(error);
   }
 };
-
-
-
-
-POST /api/email/reminder/:emailType
