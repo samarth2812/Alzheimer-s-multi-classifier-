@@ -1,142 +1,108 @@
+// In your tableFormatters.js file, update the formatObligationTableData function:
 
+export const formatObligationTableData = (rawData, actions = {}, sendingReminderId) => {
+  console.log(2, sendingReminderId);
+  if (!Array.isArray(rawData)) {
+    return { columns: [], rows: [] };
+  }
 
-import { Mail } from "@mui/icons-material";
-import { Avatar, AvatarGroup, Box, CircularProgress, IconButton, Typography } from "@mui/material";
-import CustomTooltip from "layouts/resuableComponents/customTooltip";
+  const columns = [
+    { Header: "ID", accessor: "id", width: "60px", align: "left" },
+    { Header: "Current Step", accessor: "currentStepName", width: "20%", align: "left" },
+    { Header: "Assignees", accessor: "assignees", width: "40%", align: "left" },
+    { Header: "Actions", accessor: "actions", width: "10%", align: "center" },
+  ];
 
-const AssigneesDisplay = ({ assignees, showEmailIcon = true, onSendMail, isLoading = false }) => {
-  if (!assignees || assignees.length === 0) {
-    return (
+  const rows = rawData.map((item) => ({
+    id: (
       <Typography
         sx={{
           color: (theme) => theme.palette.custom.text2,
           fontSize: "11.2px !important",
+          fontWeight: 500,
+          minWidth: "40px",
+          maxWidth: "60px",
         }}
       >
-        N/A
+        {item.id || "N/A"}
       </Typography>
-    );
-  }
-
-  const firstAssignee = assignees[0];
-
-  // If only one assignee, show full details
-  if (assignees.length === 1) {
-    return (
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Box>
-          <Typography
-            sx={{
-              color: (theme) => theme.palette.custom.text2,
-              fontSize: "11.2px !important",
-              textTransform: "capitalize !important",
-              fontWeight: 500,
-            }}
-          >
-            {firstAssignee.name}
-          </Typography>
-          <Typography
-            sx={{
-              color: (theme) => theme.palette.custom.text3,
-              fontSize: "10px !important",
-              textTransform: "capitalize !important",
-            }}
-          >
-            {firstAssignee.role?.replace(/_/g, " ")} - {firstAssignee.email}
-          </Typography>
-        </Box>
-        {showEmailIcon && (
-          <CustomTooltip title={`Send email to ${firstAssignee.name}`}>
-            <IconButton
-              size="small"
-              disabled={isLoading}
-              sx={{
-                color: isLoading
-                  ? (theme) => theme.palette.custom.text3
-                  : (theme) => theme.palette.custom.text2,
-                ml: 0.5,
-                "&:hover": {
-                  color: (theme) => !isLoading && theme.palette.primary.main,
-                },
-              }}
-              onClick={() => !isLoading && onSendMail && onSendMail(assignees)}
-            >
-              {isLoading ? (
-                <CircularProgress size={14} color="inherit" />
-              ) : (
-                <Mail fontSize="small" sx={{ fontSize: "0.9rem !important" }} />
-              )}
-            </IconButton>
-          </CustomTooltip>
-        )}
+    ),
+    currentStepName: formatCurrentStep(item.currentStepName),
+    assignees: formatAssignees(
+      item.assignees,
+      () => actions.onSendMail && actions.onSendMail(item.assignees, item),
+      sendingReminderId === item.id // This is the key fix - check if this specific item is loading
+    ),
+    actions: (
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <CustomIconButton
+          icon={Visibility}
+          label="View More"
+          onClick={() => actions.onViewMore && actions.onViewMore(item)}
+          size="small"
+        />
       </Box>
-    );
-  }
+    ),
+  }));
 
-  // If multiple assignees, show first assignee details + avatar group
-  return (
-    <Box>
-      {/* First assignee details */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-        <Box>
-          <Typography
-            sx={{
-              color: (theme) => theme.palette.custom.text2,
-              fontSize: "11.2px !important",
-              textTransform: "capitalize !important",
-              fontWeight: 500,
-            }}
-          >
-            {firstAssignee.name}
-          </Typography>
-          <Typography
-            sx={{
-              color: (theme) => theme.palette.custom.text3,
-              fontSize: "10px !important",
-              textTransform: "capitalize !important",
-            }}
-          >
-            {firstAssignee.role?.replace(/_/g, " ")} - {firstAssignee.email}
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Avatar group showing all assignees */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Typography
-          sx={{
-            color: (theme) => theme.palette.custom.text3,
-            fontSize: "10px !important",
-            fontWeight: 500,
-          }}
-        >
-          Total Assignees:
-        </Typography>
-        <AvatarGroup
-          max={3}
-          sx={{
-            justifyContent: "flex-start",
-            "& .MuiAvatar-root": {
-              width: 20,
-              height: 20,
-              fontSize: "0.65rem",
-              backgroundColor: (theme) => theme.palette.custom.background1,
-              color: (theme) => theme.palette.custom.text1,
-            },
-          }}
-        >
-          {assignees.map((assignee) => (
-            <CustomTooltip
-              key={assignee.id}
-              title={`${assignee.name} - ${assignee.role?.replace(/_/g, " ")}`}
-            >
-              <Avatar>{assignee.name.charAt(0).toUpperCase()}</Avatar>
-            </CustomTooltip>
-          ))}
-        </AvatarGroup>
-      </Box>
-    </Box>
-  );
+  return { columns, rows };
 };
 
-export default AssigneesDisplay;
+// Also update the formatIBATableData function:
+export const formatIBATableData = (rawData, actions = {}, sendingReminderId) => {
+  if (!Array.isArray(rawData)) {
+    return { columns: [], rows: [] };
+  }
+
+  const columns = [
+    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "left" },
+    { Header: "Current Status", accessor: "currentStepName", width: "10%", align: "left" },
+    { Header: "Pending With", accessor: "pendingWith", width: "20%", align: "left" },
+    { Header: "Assignees", accessor: "assignees", width: "40%", align: "left" },
+    { Header: "Department", accessor: "department", width: "20%", align: "left" },
+    { Header: "Actions", accessor: "actions", width: "15%", align: "center" },
+  ];
+
+  const rows = rawData.map((item, index) => ({
+    serialNumber: (
+      <Typography
+        sx={{
+          color: (theme) => theme.palette.custom.text2,
+          fontSize: "11.2px !important",
+          fontWeight: 500,
+          minWidth: "40px",
+          maxWidth: "60px",
+        }}
+      >
+        {index + 1 || "N/A"}
+      </Typography>
+    ),
+    currentStepName: formatStatus(item.currentStatus),
+    pendingWith: formatCurrentStep(item.currentStepName),
+    assignees: formatAssignees(
+      item.assignees,
+      () => actions.onSendMail && actions.onSendMail(item.assignees, item),
+      sendingReminderId === item.id // This is the key fix - check if this specific item is loading
+    ),
+    department: (
+      <Typography
+        variant="caption"
+        sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.6rem" }}
+      >
+        {departmentLabels.find((d) => d.value === item.department)?.name || item.department || "-"}
+      </Typography>
+    ),
+    actions: (
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <CustomIconButton
+          icon={Visibility}
+          label="View More"
+          onClick={() => actions.onViewMore && actions.onViewMore(item)}
+          size="small"
+        />
+      </Box>
+    ),
+  }));
+
+  return { columns, rows };
+};
