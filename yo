@@ -1,2 +1,11 @@
-const assigneeArray = Array.isArray(assignees) ? assignees : [assignees];
- assignees: assigneeArray,
+          ...({item.assignees.length > 0} 
+          {
+            <Button
+              startIcon={<Mail fontSize="small" />}
+              size="small"
+              onClick={handleSendMailToAllAssignees}
+              sx={animatedButtonStyle}
+            >
+              Send Email to All Users
+            </Button>
+          }
