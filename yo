@@ -1,3 +1,20 @@
-const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
-
-
+<IconButton
+  size="small"
+  disabled={isLoading}
+  sx={{
+    color: isLoading
+      ? (theme) => theme.palette.custom.text3
+      : (theme) => theme.palette.custom.text2,
+    ml: 0.5,
+    "&:hover": {
+      color: (theme) => !isLoading && theme.palette.primary.main,
+    },
+  }}
+  onClick={() => !isLoading && onSendMail && onSendMail(assignees)}
+>
+  {isLoading ? (
+    <CircularProgress size={14} color="inherit" />
+  ) : (
+    <Mail fontSize="small" sx={{ fontSize: "0.9rem !important" }} />
+  )}
+</IconButton>
