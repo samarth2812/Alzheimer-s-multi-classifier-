@@ -1,23 +1,23 @@
-        onSendMail: (assignees, item) =>
-          handleSendMail(
-            assignees,
-            {
-              department: item.department,
-              dueDate: item.dueDate,
-              ...(moduleId === "indents"
-                ? {
-                    category: item.category,
-                  }
-                : moduleId === "incidents"
-                ? {
-                    type: item.type,
-                  }
-                : moduleId === "observation"
-                ? {
-                    theme: item.observationTheme,
-                  }
-                : {}),
-            },
-            "OBLIGATION",
-            item.id
-          ),
+onSendMail: (assignees, item) =>
+  handleSendMail(
+    assignees,
+    {
+      department: item.department,
+      dueDate: item.dueDate,
+      ...(moduleId === "indents"
+        ? { category: item.category }
+        : moduleId === "incidents"
+        ? { type: item.type }
+        : moduleId === "observation"
+        ? { theme: item.observationTheme }
+        : {}),
+    },
+    moduleId === "indents"
+      ? "INDENT"
+      : moduleId === "incidents"
+      ? "INCIDENT"
+      : moduleId === "observation"
+      ? "OBSERVATION"
+      : "OBLIGATION", // fallback
+    item.id
+  ),
