@@ -1,19 +1,142 @@
 
 
-<Button
-  startIcon={
-    sendingReminderId === item.id ? (
-      <CircularProgress size={14} color="inherit" />
-    ) : (
-      <Mail fontSize="small" />
-    )
+import { Mail } from "@mui/icons-material";
+import { Avatar, AvatarGroup, Box, CircularProgress, IconButton, Typography } from "@mui/material";
+import CustomTooltip from "layouts/resuableComponents/customTooltip";
+
+const AssigneesDisplay = ({ assignees, showEmailIcon = true, onSendMail, isLoading = false }) => {
+  if (!assignees || assignees.length === 0) {
+    return (
+      <Typography
+        sx={{
+          color: (theme) => theme.palette.custom.text2,
+          fontSize: "11.2px !important",
+        }}
+      >
+        N/A
+      </Typography>
+    );
   }
-  size="small"
-  onClick={() => handleSendMailToAllAssignees(item, moduleId)}
-  sx={animatedButtonStyle}
-  disabled={sendingReminderId === item.id}
->
-  {sendingReminderId === item.id
-    ? "Sending..."
-    : "Send Email to All Users"}
-</Button>
+
+  const firstAssignee = assignees[0];
+
+  // If only one assignee, show full details
+  if (assignees.length === 1) {
+    return (
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Box>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+              textTransform: "capitalize !important",
+              fontWeight: 500,
+            }}
+          >
+            {firstAssignee.name}
+          </Typography>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text3,
+              fontSize: "10px !important",
+              textTransform: "capitalize !important",
+            }}
+          >
+            {firstAssignee.role?.replace(/_/g, " ")} - {firstAssignee.email}
+          </Typography>
+        </Box>
+        {showEmailIcon && (
+          <CustomTooltip title={`Send email to ${firstAssignee.name}`}>
+            <IconButton
+              size="small"
+              disabled={isLoading}
+              sx={{
+                color: isLoading
+                  ? (theme) => theme.palette.custom.text3
+                  : (theme) => theme.palette.custom.text2,
+                ml: 0.5,
+                "&:hover": {
+                  color: (theme) => !isLoading && theme.palette.primary.main,
+                },
+              }}
+              onClick={() => !isLoading && onSendMail && onSendMail(assignees)}
+            >
+              {isLoading ? (
+                <CircularProgress size={14} color="inherit" />
+              ) : (
+                <Mail fontSize="small" sx={{ fontSize: "0.9rem !important" }} />
+              )}
+            </IconButton>
+          </CustomTooltip>
+        )}
+      </Box>
+    );
+  }
+
+  // If multiple assignees, show first assignee details + avatar group
+  return (
+    <Box>
+      {/* First assignee details */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+        <Box>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text2,
+              fontSize: "11.2px !important",
+              textTransform: "capitalize !important",
+              fontWeight: 500,
+            }}
+          >
+            {firstAssignee.name}
+          </Typography>
+          <Typography
+            sx={{
+              color: (theme) => theme.palette.custom.text3,
+              fontSize: "10px !important",
+              textTransform: "capitalize !important",
+            }}
+          >
+            {firstAssignee.role?.replace(/_/g, " ")} - {firstAssignee.email}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Avatar group showing all assignees */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography
+          sx={{
+            color: (theme) => theme.palette.custom.text3,
+            fontSize: "10px !important",
+            fontWeight: 500,
+          }}
+        >
+          Total Assignees:
+        </Typography>
+        <AvatarGroup
+          max={3}
+          sx={{
+            justifyContent: "flex-start",
+            "& .MuiAvatar-root": {
+              width: 20,
+              height: 20,
+              fontSize: "0.65rem",
+              backgroundColor: (theme) => theme.palette.custom.background1,
+              color: (theme) => theme.palette.custom.text1,
+            },
+          }}
+        >
+          {assignees.map((assignee) => (
+            <CustomTooltip
+              key={assignee.id}
+              title={`${assignee.name} - ${assignee.role?.replace(/_/g, " ")}`}
+            >
+              <Avatar>{assignee.name.charAt(0).toUpperCase()}</Avatar>
+            </CustomTooltip>
+          ))}
+        </AvatarGroup>
+      </Box>
+    </Box>
+  );
+};
+
+export default AssigneesDisplay;
