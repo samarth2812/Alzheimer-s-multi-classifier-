@@ -1,22 +1,2 @@
-  const handleSendMail = async (assignees, emailData, emailType, rowId) => {
-    try {
-      console.log(1, assignees, emailData, emailType);
-      setSendingReminderId(rowId);
-      const result = await apiRequest(
-        "POST",
-        `${
-          window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-        }/api/v1/email/reminder/${emailType}`,
-        emailData,
-        assignees
-      );
-
-      if (result.status === 200 || result.status === 204) {
-        toast.success("Reminder Email Sent Successfully.");
-      }
-    } catch (error) {
-      toast.error("Failed to send reminder email");
-    } finally {
-      setSendingReminderId(null);
-    }
-  };
+const assigneeArray = Array.isArray(assignees) ? assignees : [assignees];
+ assignees: assigneeArray,
