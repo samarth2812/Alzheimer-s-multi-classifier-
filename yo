@@ -1,119 +1,19 @@
-const handleSendMailToAssignee = async (assignee, item, moduleId) => {
-  try {
-    const emailType =
-      moduleId === "indents"
-        ? "INDENT"
-        : moduleId === "incidents"
-        ? "INCIDENT"
-        : moduleId === "ise-observation"
-        ? "OBSERVATION"
-        : "OBLIGATION"; // default fallback
 
-    const emailData =
-      emailType === "INDENT"
-        ? {
-            category: item.category,
-            department: item.department,
-            dueDate: item.dueDate,
-          }
-        : emailType === "INCIDENT"
-        ? {
-            type: item.type,
-            department: item.department,
-            dueDate: item.dueDate,
-          }
-        : emailType === "OBSERVATION"
-        ? {
-            theme: item.observationTheme,
-            department: item.department,
-            dueDate: item.dueDate,
-          }
-        : {
-            obligationId: item.id,
-            obligationTitle: item.title,
-            department: item.department,
-          };
 
-    const result = await apiRequest(
-      "POST",
-      `${
-        window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-      }/api/v1/emails/reminder/${emailType}`,
-      {
-        emailData,
-        assignees: [assignee], // wrap in array
-      }
-    );
-
-    if (result.status === 200 || result.status === 204) {
-      toast.success(`Reminder email sent to ${assignee.name}`);
-    }
-  } catch (error) {
-    console.error("Failed to send email to assignee:", error);
-    toast.error("Failed to send reminder email");
+<Button
+  startIcon={
+    sendingReminderId === item.id ? (
+      <CircularProgress size={14} color="inherit" />
+    ) : (
+      <Mail fontSize="small" />
+    )
   }
-};
-
-
-const handleSendMailToAllAssignees = async (item, moduleId) => {
-  try {
-    const emailType =
-      moduleId === "indents"
-        ? "INDENT"
-        : moduleId === "incidents"
-        ? "INCIDENT"
-        : moduleId === "ise-observation"
-        ? "OBSERVATION"
-        : "OBLIGATION";
-
-    const emailData =
-      emailType === "INDENT"
-        ? {
-            category: item.category,
-            department: item.department,
-            dueDate: item.dueDate,
-          }
-        : emailType === "INCIDENT"
-        ? {
-            type: item.type,
-            department: item.department,
-            dueDate: item.dueDate,
-          }
-        : emailType === "OBSERVATION"
-        ? {
-            theme: item.observationTheme,
-            department: item.department,
-            dueDate: item.dueDate,
-          }
-        : {
-            obligationId: item.id,
-            obligationTitle: item.title,
-            department: item.department,
-          };
-
-    const assignees = item.assignees || [];
-
-    if (!assignees.length) {
-      toast.warning("No assignees found");
-      return;
-    }
-
-    const result = await apiRequest(
-      "POST",
-      `${
-        window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-      }/api/v1/emails/reminder/${emailType}`,
-      {
-        emailData,
-        assignees,
-      }
-    );
-
-    if (result.status === 200 || result.status === 204) {
-      toast.success("Reminder emails sent to all assignees.");
-    }
-  } catch (error) {
-    console.error("Failed to send email to all assignees:", error);
-    toast.error("Failed to send reminder emails");
-  }
-};
+  size="small"
+  onClick={() => handleSendMailToAllAssignees(item, moduleId)}
+  sx={animatedButtonStyle}
+  disabled={sendingReminderId === item.id}
+>
+  {sendingReminderId === item.id
+    ? "Sending..."
+    : "Send Email to All Users"}
+</Button>
