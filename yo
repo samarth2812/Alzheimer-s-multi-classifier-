@@ -1,33 +1,3 @@
-const handleSendMail = async (assignees, emailData, emailType) => {
-  try {
-    await axios.post(`/api/email/reminder/${emailType}`, {
-      emailData,
-      assignees,
-    });
-
-    toast.success("Reminder email sent successfully to all assignees");
-  } catch (error) {
-    console.error("Error sending reminder email:", error);
-    toast.error("Failed to send reminder email");
-  }
-};
+const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
 
 
-assignees: formatAssignees(item.assignees, () =>
-  actions.onSendMail && actions.onSendMail(item.assignees, item)
-),
-const actions = {
-  onSendMail: (assignees, item) =>
-    handleSendMail(
-      assignees,
-      {
-        obligationId: item.id,
-        obligationTitle: item.title,
-        department: item.department,
-      },
-      "OBLIGATION"
-    ),
-  onViewMore: (item) => {
-    // your existing view logic
-  },
-};
