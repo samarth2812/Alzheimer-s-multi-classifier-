@@ -1,11 +1,38 @@
-          ...({item.assignees.length > 0} 
-          {
-            <Button
-              startIcon={<Mail fontSize="small" />}
-              size="small"
-              onClick={handleSendMailToAllAssignees}
-              sx={animatedButtonStyle}
-            >
-              Send Email to All Users
-            </Button>
-          }
+  // Handle email functions (placeholder for now)
+  const handleSendMailToAssignee = (assignee, item, moduleId) => {
+    console.log(10, assignee);
+    // Implementation will be added later
+  };
+
+  const handleSendMailToAllAssignees = (item, moduleId) => {
+    console.log(11, item);
+    // Implementation will be added later
+  };
+
+
+  const handleSendMail = async (assignees, emailData, emailType, rowId) => {
+    try {
+      console.log(1, assignees, emailData, emailType);
+      setSendingReminderId(rowId);
+      const assigneeArray = Array.isArray(assignees) ? assignees : [assignees];
+      console.log(1, assigneeArray, emailData, emailType);
+      const result = await apiRequest(
+        "POST",
+        `${
+          window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
+        }/api/v1/emails/reminder/${emailType}`,
+        {
+          emailData,
+          assignees: assigneeArray,
+        }
+      );
+
+      if (result.status === 200 || result.status === 204) {
+        toast.success("Reminder Email Sent Successfully.");
+      }
+    } catch (error) {
+      toast.error("Failed to send reminder email");
+    } finally {
+      setSendingReminderId(null);
+    }
+  };
