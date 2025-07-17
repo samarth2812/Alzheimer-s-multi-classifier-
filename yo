@@ -5,8 +5,25 @@ const twoDayReminderJob: CronJobWrapper = {
     async () => {
       try {
         console.log("Starting 2-day reminder job...");
-        const reminderResult = await sendRegulatoryTimelineReminders(2);
-        console.log("2-day reminder job completed:", reminderResult);
+
+        const [
+          obligationReminders,
+          indentReminders,
+          incidentReminders,
+          observationReminders,
+        ] = await Promise.all([
+          sendRegulatoryTimelineReminders(2),
+          sendIndentsDueDateReminders(2),
+          sendIncidentsDueDateReminders(2),
+          sendObservationDueDateReminders(2),
+        ]);
+
+        console.log("2-day reminder job completed:", {
+          obligationReminders,
+          indentReminders,
+          incidentReminders,
+          observationReminders,
+        });
       } catch (error: any) {
         console.error("2-day reminder job failed:", error);
       }
@@ -24,9 +41,26 @@ const oneDayReminderJob: CronJobWrapper = {
     "0 9 * * *",
     async () => {
       try {
-        console.log(" Starting 1-day reminder job...");
-        const reminderResult = await sendRegulatoryTimelineReminders(1);
-        console.log("1-day reminder job completed:", reminderResult);
+        console.log("Starting 1-day reminder job...");
+
+        const [
+          obligationReminders,
+          indentReminders,
+          incidentReminders,
+          observationReminders,
+        ] = await Promise.all([
+          sendRegulatoryTimelineReminders(1),
+          sendIndentsDueDateReminders(1),
+          sendIncidentsDueDateReminders(1),
+          sendObservationDueDateReminders(1),
+        ]);
+
+        console.log("1-day reminder job completed:", {
+          obligationReminders,
+          indentReminders,
+          incidentReminders,
+          observationReminders,
+        });
       } catch (error: any) {
         console.error("1-day reminder job failed:", error);
       }
@@ -45,14 +79,31 @@ const sameDayReminderJob: CronJobWrapper = {
     async () => {
       try {
         console.log("Starting SAME-DAY reminder job...");
-        const reminderResult = await sendRegulatoryTimelineReminders(0);
-        console.log("Same-day reminder job completed:", reminderResult);
 
-        if (reminderResult.totalObligations > 0) {
+        const [
+          obligationReminders,
+          indentReminders,
+          incidentReminders,
+          observationReminders,
+        ] = await Promise.all([
+          sendRegulatoryTimelineReminders(0),
+          sendIndentsDueDateReminders(0),
+          sendIncidentsDueDateReminders(0),
+          sendObservationDueDateReminders(0),
+        ]);
+
+        if (obligationReminders.totalObligations > 0) {
           console.warn(
-            ` CRITICAL: ${reminderResult.totalObligations} obligations are due TODAY!`
+            `CRITICAL: ${obligationReminders.totalObligations} obligations are due TODAY!`
           );
         }
+
+        console.log("Same-day reminder job completed:", {
+          obligationReminders,
+          indentReminders,
+          incidentReminders,
+          observationReminders,
+        });
       } catch (error: any) {
         console.error("Same-day reminder job failed:", error);
       }
@@ -62,52 +113,4 @@ const sameDayReminderJob: CronJobWrapper = {
       timezone: "Asia/Kolkata",
     } as any
   ),
-};
-
-export const triggerReminderJob = async (
-  type: "2_days" | "1_day" | "same_day"
-): Promise<any> => {
-  try {
-    console.log(`Manually triggering ${type} reminder job...`);
-
-    let daysBefore: number;
-    switch (type) {
-      case "2_days":
-        daysBefore = 2;
-        break;
-      case "1_day":
-        daysBefore = 1;
-        break;
-      case "same_day":
-        daysBefore = 0;
-        break;
-      default:
-        throw new Error("Invalid reminder type");
-    }
-
-    const [
-      obligationReminders,
-      indentReminders,
-      incidentReminders,
-      observationReminders,
-    ] = await Promise.all([
-      sendRegulatoryTimelineReminders(daysBefore),
-      sendIndentsDueDateReminders(daysBefore),
-      sendIncidentsDueDateReminders(daysBefore),
-      sendObservationDueDateReminders(daysBefore),
-    ]);
-
-    const result = {
-      obligationReminders,
-      indentReminders,
-      incidentReminders,
-      observationReminders,
-    };
-
-    console.log(`Manual ${type} reminder job completed:`, result);
-    return result;
-  } catch (error: any) {
-    console.error(`Manual ${type} reminder job failed:`, error);
-    throw error;
-  }
 };
