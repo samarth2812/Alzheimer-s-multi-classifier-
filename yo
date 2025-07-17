@@ -1,133 +1,106 @@
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  InputAdornment,
+  TextField,
+} from "@mui/material";
+import { useEffect, useState } from "react";
+import { InputField } from "./inputField";
+import { dialogButtonStyle, dialogCancelButtonStyle, dialogStyle, textfieldStyle } from "./styles";
+import { Visibility } from "@mui/icons-material";
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    if (name === "dueDate") {
-      const selectedDate = new Date(value);
-      const now = new Date();
-
-      if (selectedDate < now) {
-        setErrors((prev) => ({
-          ...prev,
-          dueDate: "Due date cannot be in the past",
-        }));
-
-        return;
-      } else {
-        setErrors((prev) => ({ ...prev, dueDate: null }));
-      }
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-
-
-import React, { useRef } from "react";
-import { Box, TextField, Typography } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
-
-export const CustomTextArea = ({
-  label,
-  placeholder = "",
+const InputWithDialog = ({
   value,
   onChange,
-  name,
+  placeholder,
+  label,
   error,
-  disabled = false,
-  autoFocus = false,
-  onKeyPress,
-  multiline = true,
-  maxRows = 5,
-  fullWidth = true,
-  size = "small",
+  icon: Icon,
+  type,
+  name,
+  dialogTitle = "Edit Text",
+  dialogPlaceholder = "Enter text...",
+  saveButtonLabel = "Save",
+  cancelButtonLabel = "Cancel",
+  isDisabled = false,
+  callOnSave = true,
 }) => {
-  const theme = useTheme();
-  const inputRef = useRef(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [tempValue, setTempValue] = useState("");
+
+  useEffect(() => {
+    if (dialogOpen) setTempValue(value);
+  }, [dialogOpen, value]);
+
+  const handleDialogSave = () => {
+    onChange(tempValue);
+    setDialogOpen(false);
+  };
 
   return (
-    <Box sx={{ width: "100%", opacity: disabled ? 0.5 : 1 }}>
-      {label && (
-        <Typography
-          component="label"
-          sx={{
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            color: theme.palette.custom.text2,
-            mb: 0.5,
-            ml: 1.6,
-            display: "block",
-          }}
-        >
-          {label}
-        </Typography>
-      )}
-
-      <TextField
-        inputRef={inputRef}
-        fullWidth={fullWidth}
-        multiline={multiline}
-        maxRows={maxRows}
-        name={name}
-        value={value}
-        onChange={onChange}
-        onKeyPress={onKeyPress}
+    <>
+      <InputField
         placeholder={placeholder}
-        autoFocus={autoFocus}
-        disabled={disabled}
-        size={size}
-        variant="outlined"
-        sx={{
-            fontSize: "0.7rem",
-          "& .MuiOutlinedInput-root": {
-            border: "2px solid",
-            borderColor: (theme) => theme.palette.custom.background1,
-            borderRadius: 3,
-            px: 1.5,
-            fontSize: "0.7rem",
-            backgroundColor: "white",
-          },
-          "& .MuiOutlinedInput-notchedOutline": {
-            border: "none",
-          },
-          "& .MuiInputBase-input": {
-            color: theme.palette.custom?.text1 || "#000",
-            "&::placeholder": {
-              color: (theme) => theme.palette.custom.text2,
-            },
-          },
-          transition: "border-color 0.2s",
-          backgroundColor: "white",
-          "&:hover": {
-            borderColor: "#5a3d83",
-          },
-          "&:focus": {
-            borderColor: "#5a3d83",
-          },
-          "&:active": {
-            borderColor: "#5a3d83",
-          },
-          transition: "border-color 0.2s",
-        }}
+        value={value}
+        onChange={isDisabled ? () => {} : (e) => onChange(e.target.value)}
+        error={error}
+        name={name}
+        type={type}
+        disabled={false}
+        endAdornment={
+          <InputAdornment position="end">
+            <Icon
+              sx={{
+                color: (theme) => theme.palette.custom.two,
+                fontSize: "1.2rem",
+                cursor: "pointer",
+              }}
+              onClick={() => setDialogOpen(true)}
+            />
+          </InputAdornment>
+        }
       />
-
-      {error && (
-        <Typography
-          variant="h6"
-          color="error"
-          sx={{
-            mt: 1,
-            fontSize: "0.6rem",
-            textAlign: "center",
-            fontWeight: 400,
-          }}
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+        sx={dialogStyle}
+      >
+        <DialogTitle
+          sx={{ color: (theme) => theme.palette.custom.two, fontSize: "0.9rem !important" }}
         >
-          {error}
-        </Typography>
-      )}
-    </Box>
+          {dialogTitle}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            multiline
+            disabled={isDisabled}
+            minRows={10}
+            maxRows={20}
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+            placeholder={dialogPlaceholder}
+            sx={{ ...textfieldStyle, opacity: isDisabled ? "0.5" : "1" }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)} size="small" sx={dialogCancelButtonStyle}>
+            {cancelButtonLabel}
+          </Button>
+          {callOnSave && (
+            <Button onClick={handleDialogSave} size="small" sx={dialogButtonStyle}>
+              {saveButtonLabel}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
+
+export default InputWithDialog;
