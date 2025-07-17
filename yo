@@ -1,7 +1,217 @@
-<CustomTextArea
-  value={title}
-  onChange={(e) => setTitle(e.target.value)}
-  placeholder="Enter title"
-  multiline={false} // Make it single-line
-  maxRows={1}
-/>
+// Custom text field component
+
+// @mui material components
+import Box from "@mui/material/Box";
+import InputBase from "@mui/material/InputBase";
+import Typography from "@mui/material/Typography";
+import React, { useRef } from "react";
+
+const getMinDateTime = () => {
+  const now = new Date();
+  now.setDate(now.getDate());
+  return now.toISOString().slice(0, 16); // format: yyyy-MM-ddTHH:mm
+};
+export const CustomTextField = ({
+  label,
+  placeholder,
+  value,
+  onChange,
+  name,
+  type = "text",
+  error,
+  endAdornment,
+  disabled,
+  autoComplete = "off",
+  showDateafterToday = "true",
+}) => {
+  const inputRef = useRef(null);
+  const openDatePicker = () => {
+    if (type === "datetime-local" && inputRef.current) {
+      inputRef.current.showPicker && inputRef.current.showPicker();
+    }
+  };
+
+  return (
+    <Box sx={{ width: "100%", opacity: disabled ? "0.5" : "1" }}>
+      <Typography
+        component="label"
+        sx={{
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          color: (theme) => theme.palette.custom.text2,
+          mb: 0.5,
+          ml: 1.6,
+          display: "block",
+        }}
+      >
+        {label}
+      </Typography>
+      <Box
+        sx={{
+          border: "2px solid",
+          borderColor: (theme) => theme.palette.custom.background1,
+          borderRadius: 3,
+          display: "flex",
+          alignItems: "center",
+          backgroundColor: "white",
+          "&:hover": {
+            borderColor: "#5a3d83",
+          },
+          "&:focus": {
+            borderColor: "#5a3d83",
+          },
+          "&:active": {
+            borderColor: "#5a3d83",
+          },
+          transition: "border-color 0.2s",
+        }}
+      >
+        <InputBase
+          inputRef={inputRef}
+          fullWidth
+          name={name}
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
+          inputProps={
+            type === "datetime-local" && showDateafterToday ? { min: getMinDateTime() } : {}
+          }
+          endAdornment={
+            type === "datetime-local"
+              ? React.cloneElement(endAdornment, {
+                  onClick: openDatePicker,
+                  style: { cursor: "pointer" },
+                })
+              : endAdornment
+          }
+          disabled={disabled}
+          sx={{
+            p: 1.5,
+            fontSize: "0.7rem",
+            height: "35px",
+            "& .MuiInputBase-input": {
+              padding: 0,
+              color: (theme) => theme.palette.custom.text2,
+            },
+
+            "& .Mui-disabled": {
+              color: "#636363",
+              WebkitTextFillColor: "#636363", // for Safari
+            },
+
+            "&::placeholder": {
+              color: (theme) => theme.palette.custom.text2,
+            },
+
+            "& .MuiInputAdornment-root": {
+              color: (theme) => theme.palette.custom.text2,
+            },
+            "&::-ms-reveal, &::-ms-clear": {
+              display: "none",
+            },
+            // For Chrome/Safari
+            "&::-webkit-contacts-auto-fill-button, &::-webkit-credentials-auto-fill-button": {
+              visibility: "hidden",
+              display: "none !important",
+              pointerEvents: "none",
+              height: "0",
+              width: "0",
+              margin: "0",
+            },
+            "& input[type='datetime-local']::-webkit-calendar-picker-indicator": {
+              display: "none",
+              opacity: 0,
+            },
+            "& input[type='datetime-local']::-webkit-inner-spin-button": {
+              display: "none",
+              opacity: 0,
+            },
+            "& input[type='password']::-webkit-calendar-picker-indicator": {
+              display: "none",
+              opacity: 0,
+            },
+            "& input[type='password']::-webkit-inner-spin-button": {
+              display: "none",
+              opacity: 0,
+            },
+            color: (theme) => theme.palette.custom.two,
+          }}
+        />
+      </Box>
+      {error && (
+        <Typography
+          variant="h6"
+          color="error"
+          sx={{ mt: 1, fontSize: "0.6rem", textAlign: "center", fontWeight: 400 }}
+        >
+          {error}
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
+import React from "react";
+import { TextField, TextFieldProps } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+
+
+export const CustomTextArea = ({
+  value,
+  onChange,
+  placeholder = "",
+  disabled = false,
+  autoFocus = false,
+  onKeyPress,
+  multiline = true,
+  maxRows = 5,
+  fullWidth = true,
+  size = "small",
+  ...rest
+}) => {
+  const theme = useTheme();
+
+  return (
+    <TextField
+      value={value}
+      onChange={onChange}
+      onKeyPress={onKeyPress}
+      placeholder={placeholder}
+      disabled={disabled}
+      autoFocus={autoFocus}
+      multiline={multiline}
+      maxRows={maxRows}
+      fullWidth={fullWidth}
+      size={size}
+      variant="outlined"
+      sx={{
+        "& .MuiOutlinedInput-root": {
+          borderRadius: "12px",
+          px: 1,
+          fontSize: "0.7rem",
+          backgroundColor: theme.palette.custom?.background1,
+          "& fieldset": {
+            border: "none",
+          },
+          "&:hover fieldset": {
+            border: "none",
+          },
+          "&.Mui-focused fieldset": {
+            border: "none",
+          },
+        },
+        "& .MuiInputBase-input": {
+          color: theme.palette.custom?.text1 || "#000",
+          "&::placeholder": {
+            color: theme.palette.custom?.text2 || "#999",
+            opacity: 0.7,
+          },
+        },
+      }}
+      {...rest}
+    />
+  );
+};
+
