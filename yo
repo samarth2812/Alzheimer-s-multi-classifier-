@@ -1,76 +1,18 @@
-import {
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  InputAdornment,
-  TextField,
-  Typography,
-  Button,
-} from "@mui/material";
-import { Visibility } from "@mui/icons-material";
-import { useState } from "react";
+const TruncatedTitle = ({ title }) => (
+  <Tooltip title={title} arrow placement="top">
+    <Box
+      sx={{
+        maxWidth: 300, // control width
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      <Typography variant="body2" fontWeight="bold">
+        {title}
+      </Typography>
+    </Box>
+  </Tooltip>
+);
 
-const truncateText = (text, wordLimit = 10) => {
-  const words = text.trim().split(/\s+/);
-  if (words.length <= wordLimit) return text;
-  return words.slice(0, wordLimit).join(" ") + " ...";
-};
-
-const TitlePreviewWithDialog = ({
-  value = "",
-  label = "Title",
-  dialogTitle = "Full Title",
-  placeholder = "No title available",
-  wordLimit = 10,
-  isDisabled = false,
-}) => {
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const handleOpen = () => {
-    if (!value) return;
-    setDialogOpen(true);
-  };
-
-  return (
-    <>
-      <TextField
-        label={label}
-        fullWidth
-        value={truncateText(value, wordLimit)}
-        disabled
-        multiline
-        maxRows={2}
-        InputProps={{
-          endAdornment: value && (
-            <InputAdornment position="end">
-              <IconButton onClick={handleOpen} size="small">
-                <Visibility fontSize="small" />
-              </IconButton>
-            </InputAdornment>
-          ),
-        }}
-        sx={{
-          "& .Mui-disabled": {
-            WebkitTextFillColor: "#000", // Ensure text shows even when disabled
-          },
-        }}
-      />
-
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>{dialogTitle}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-            {value || placeholder}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-    </>
-  );
-};
-
-export default TitlePreviewWithDialog;
+<TruncatedTitle title={row.title} />
