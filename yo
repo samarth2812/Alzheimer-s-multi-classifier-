@@ -1,106 +1,76 @@
 import {
-  Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   InputAdornment,
   TextField,
+  Typography,
+  Button,
 } from "@mui/material";
-import { useEffect, useState } from "react";
-import { InputField } from "./inputField";
-import { dialogButtonStyle, dialogCancelButtonStyle, dialogStyle, textfieldStyle } from "./styles";
 import { Visibility } from "@mui/icons-material";
+import { useState } from "react";
 
-const InputWithDialog = ({
-  value,
-  onChange,
-  placeholder,
-  label,
-  error,
-  icon: Icon,
-  type,
-  name,
-  dialogTitle = "Edit Text",
-  dialogPlaceholder = "Enter text...",
-  saveButtonLabel = "Save",
-  cancelButtonLabel = "Cancel",
+const truncateText = (text, wordLimit = 10) => {
+  const words = text.trim().split(/\s+/);
+  if (words.length <= wordLimit) return text;
+  return words.slice(0, wordLimit).join(" ") + " ...";
+};
+
+const TitlePreviewWithDialog = ({
+  value = "",
+  label = "Title",
+  dialogTitle = "Full Title",
+  placeholder = "No title available",
+  wordLimit = 10,
   isDisabled = false,
-  callOnSave = true,
 }) => {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [tempValue, setTempValue] = useState("");
 
-  useEffect(() => {
-    if (dialogOpen) setTempValue(value);
-  }, [dialogOpen, value]);
-
-  const handleDialogSave = () => {
-    onChange(tempValue);
-    setDialogOpen(false);
+  const handleOpen = () => {
+    if (!value) return;
+    setDialogOpen(true);
   };
 
   return (
     <>
-      <InputField
-        placeholder={placeholder}
-        value={value}
-        onChange={isDisabled ? () => {} : (e) => onChange(e.target.value)}
-        error={error}
-        name={name}
-        type={type}
-        disabled={false}
-        endAdornment={
-          <InputAdornment position="end">
-            <Icon
-              sx={{
-                color: (theme) => theme.palette.custom.two,
-                fontSize: "1.2rem",
-                cursor: "pointer",
-              }}
-              onClick={() => setDialogOpen(true)}
-            />
-          </InputAdornment>
-        }
-      />
-      <Dialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+      <TextField
+        label={label}
         fullWidth
-        maxWidth="md"
-        sx={dialogStyle}
-      >
-        <DialogTitle
-          sx={{ color: (theme) => theme.palette.custom.two, fontSize: "0.9rem !important" }}
-        >
-          {dialogTitle}
-        </DialogTitle>
+        value={truncateText(value, wordLimit)}
+        disabled
+        multiline
+        maxRows={2}
+        InputProps={{
+          endAdornment: value && (
+            <InputAdornment position="end">
+              <IconButton onClick={handleOpen} size="small">
+                <Visibility fontSize="small" />
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+        sx={{
+          "& .Mui-disabled": {
+            WebkitTextFillColor: "#000", // Ensure text shows even when disabled
+          },
+        }}
+      />
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent>
-          <TextField
-            fullWidth
-            multiline
-            disabled={isDisabled}
-            minRows={10}
-            maxRows={20}
-            value={tempValue}
-            onChange={(e) => setTempValue(e.target.value)}
-            placeholder={dialogPlaceholder}
-            sx={{ ...textfieldStyle, opacity: isDisabled ? "0.5" : "1" }}
-          />
+          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+            {value || placeholder}
+          </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)} size="small" sx={dialogCancelButtonStyle}>
-            {cancelButtonLabel}
-          </Button>
-          {callOnSave && (
-            <Button onClick={handleDialogSave} size="small" sx={dialogButtonStyle}>
-              {saveButtonLabel}
-            </Button>
-          )}
+          <Button onClick={() => setDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>
   );
 };
 
-export default InputWithDialog;
+export default TitlePreviewWithDialog;
