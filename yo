@@ -2,23 +2,7 @@ import React, { useRef } from "react";
 import { Box, TextField, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 
-interface CustomTextAreaProps {
-  label?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  name?: string;
-  error?: string;
-  disabled?: boolean;
-  autoFocus?: boolean;
-  onKeyPress?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
-  multiline?: boolean;
-  maxRows?: number;
-  fullWidth?: boolean;
-  size?: "small" | "medium";
-}
-
-export const CustomTextArea: React.FC<CustomTextAreaProps> = ({
+export const CustomTextArea = ({
   label,
   placeholder = "",
   value,
@@ -70,25 +54,27 @@ export const CustomTextArea: React.FC<CustomTextAreaProps> = ({
         variant="outlined"
         sx={{
           "& .MuiOutlinedInput-root": {
-            borderRadius: "12px",
+            border: "2px solid",
+            borderColor: (theme) => theme.palette.custom.background1,
+            borderRadius: 3,
             px: 1.5,
             fontSize: "0.7rem",
-            backgroundColor: theme.palette.custom?.background1 || "#f4f4f4",
-            "& fieldset": {
-              border: "none",
-            },
-            "&:hover fieldset": {
-              border: "none",
-            },
-            "&.Mui-focused fieldset": {
-              border: "none",
-            },
           },
+          backgroundColor: "white",
+          "&:hover": {
+            borderColor: "#5a3d83",
+          },
+          "&:focus": {
+            borderColor: "#5a3d83",
+          },
+          "&:active": {
+            borderColor: "#5a3d83",
+          },
+          transition: "border-color 0.2s",
           "& .MuiInputBase-input": {
             color: theme.palette.custom?.text1 || "#000",
             "&::placeholder": {
-              color: theme.palette.custom?.text2 || "#999",
-              opacity: 0.7,
+             color: (theme) => theme.palette.custom.text2,
             },
           },
         }}
