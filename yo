@@ -1,1 +1,306 @@
-URGENT: Incident with type CURRENT CHEST ISSUE - 0 Day(s) to Due Date Deadline
+            <TextField
+              fullWidth
+              multiline
+              autoFocus
+              maxRows={5}
+              value={newRemark}
+              onChange={(e) => setNewRemark(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={placeholder}
+              disabled={disabled || isLoading}
+              variant="outlined"
+              size="small"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "12px",
+                  px: 1,
+                  fontSize: "0.7rem",
+                  backgroundColor: theme.palette.custom.background1,
+                  "& fieldset": {
+                    border: "none",
+                  },
+                  "&:hover fieldset": {
+                    border: "none",
+                  },
+                  "&.Mui-focused fieldset": {
+                    border: "none",
+                  },
+                },
+                "& .MuiInputBase-input": {
+                  color: theme.palette.custom.text1,
+                  "&::placeholder": {
+                    color: theme.palette.custom.text2,
+                    opacity: 0.7,
+                  },
+                },
+              }}
+            />
+
+
+
+
+import { useRef, useState } from "react";
+import {
+  Box,
+  ClickAwayListener,
+  Fade,
+  InputAdornment,
+  InputBase,
+  Paper,
+  Popper,
+  Typography,
+} from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+
+export const SearchableDropdown = ({
+  label,
+  placeholder,
+  options,
+  value,
+  onChange,
+  name,
+  error,
+  disabled,
+  isAuth = false,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const anchorRef = useRef(null);
+
+  const filteredOptions = options.filter((option) =>
+    option.name.toLowerCase().includes(searchText.toLowerCase())
+  );
+
+  const handleToggle = () => setOpen((prev) => !prev);
+
+  const handleClose = (event) => {
+    if (anchorRef.current && anchorRef.current.contains(event.target)) return;
+    setOpen(false);
+  };
+
+  const handleOptionSelect = (optionName) => {
+    onChange({ target: { name, value: optionName } });
+    setOpen(false);
+    setSearchText("");
+  };
+
+  const handleSearchChange = (event) => {
+    setSearchText(event.target.value);
+  };
+
+  return (
+    <Box sx={{ position: "relative", width: "100%", opacity: disabled ? "0.5" : "1" }}>
+      {label && (
+        <Typography
+          component="label"
+          sx={{
+            fontSize: "0.75rem",
+            fontWeight: 500,
+            color: (theme) => theme.palette.custom.text2,
+            mb: 0.5,
+            ml: 1.6,
+            display: "block",
+          }}
+        >
+          {label}
+        </Typography>
+      )}
+      <Box
+        ref={anchorRef}
+        onClick={handleToggle}
+        sx={{
+          border: "2px solid",
+          borderColor: (theme) => theme.palette.custom.background1,
+          borderRadius: 3,
+          fontSize: "0.7rem",
+          height: "40px",
+          p: 1.5,
+          cursor: "pointer",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          backgroundColor: "white",
+          "&:hover, &:focus, &:active": {
+            borderColor: "#5a3d83",
+          },
+        }}
+      >
+        <Typography
+          sx={{
+            color: (theme) => theme.palette.custom.text2,
+            fontSize: "0.7rem",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            width: "100%",
+          }}
+        >
+          {isAuth
+            ? value?.length > 30
+              ? `${value.slice(0, 15)}...`
+              : value || placeholder
+            : value || placeholder}
+        </Typography>
+        <Box
+          component="div"
+          sx={{
+            width: 0,
+            height: 0,
+            borderLeft: "5px solid transparent",
+            borderRight: "5px solid transparent",
+            borderTop: "5px solid #757575",
+            ml: 1,
+          }}
+        />
+      </Box>
+
+      {error && (
+        <Typography
+          variant="h6"
+          color="error"
+          sx={{
+            mt: 1,
+            fontSize: "0.6rem",
+            textAlign: "center",
+            fontWeight: 400,
+          }}
+        >
+          {error}
+        </Typography>
+      )}
+
+      <Popper
+        open={disabled ? false : open}
+        anchorEl={anchorRef.current}
+        placement="bottom-start"
+        transition
+        disablePortal={disabled}
+        modifiers={[
+          {
+            name: "preventOverflow",
+            options: {
+              boundary: "viewport",
+            },
+          },
+        ]}
+        style={{
+          zIndex: 1500,
+          width: 400, // ✅ Increased width
+        }}
+      >
+        {({ TransitionProps }) => (
+          <Fade {...TransitionProps} timeout={200}>
+            <Paper
+              elevation={3}
+              sx={{
+                bgcolor: (theme) => theme.palette.custom.paper,
+                border: "none",
+                borderColor: (theme) => theme.palette.custom.background1,
+                mt: 0.5,
+                maxHeight: 150,
+                borderRadius: 3,
+                mt: 0.5,
+                maxHeight: 250,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                p: 2,
+                minWidth: 400, // ✅ Increased minWidth
+              }}
+            >
+              <Box
+                sx={{
+                  p: 0.2,
+                  px: 2,
+                  mb: 1,
+                  border: "2px solid",
+                  borderColor: (theme) => theme.palette.custom.background1,
+                  backgroundColor: (theme) => theme.palette.custom.background1,
+                  borderRadius: 2,
+                }}
+              >
+                <InputBase
+                  autoFocus
+                  placeholder="Search..."
+                  value={searchText}
+                  onChange={handleSearchChange}
+                  startAdornment={
+                    <InputAdornment position="start">
+                      <SearchIcon
+                        fontSize="small"
+                        sx={{
+                          color: (theme) => theme.palette.custom.text2,
+                          fontSize: "1rem !important",
+                        }}
+                      />
+                    </InputAdornment>
+                  }
+                  fullWidth
+                  sx={{
+                    fontSize: "0.7rem",
+                    color: (theme) => theme.palette.custom.text2,
+                  }}
+                />
+              </Box>
+
+              <ClickAwayListener onClickAway={handleClose}>
+                <Box
+                  sx={{
+                    overflowY: "auto",
+                    maxHeight: 200,
+                    "&::-webkit-scrollbar": { display: "none" },
+                    msOverflowStyle: "none",
+                    scrollbarWidth: "none",
+                  }}
+                >
+                  {filteredOptions.length > 0 ? (
+                    filteredOptions.map((option, index) => (
+                      <Box
+                        key={option.id || `${option.name}-${index}`}
+                        onClick={() => handleOptionSelect(option.name)}
+                        sx={{
+                          px: 1.5,
+                          py: 0.5,
+                          mb: 1,
+                          borderRadius: 1,
+                          cursor: "pointer",
+                          "&:hover": {
+                            backgroundColor: (theme) => theme.palette.custom.background1,
+                            color: "#000000",
+                          },
+                          ...(value === option.name && {
+                            backgroundColor: (theme) => theme.palette.custom.background1,
+                          }),
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: "0.7rem",
+                            color: (theme) => theme.palette.custom.text2,
+                          }}
+                        >
+                          {option.name}
+                        </Typography>
+                      </Box>
+                    ))
+                  ) : (
+                    <Box sx={{ p: 1.5, textAlign: "center" }}>
+                      <Typography
+                        sx={{
+                          fontSize: "0.7rem",
+                          color: (theme) => theme.palette.custom.text2,
+                        }}
+                      >
+                        No results found
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </ClickAwayListener>
+            </Paper>
+          </Fade>
+        )}
+      </Popper>
+    </Box>
+  );
+};
