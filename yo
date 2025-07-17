@@ -1,99 +1,20 @@
-import React, { useRef } from "react";
-import { Box, TextField, Typography } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
-
-export const CustomTextArea = ({
-  label,
-  placeholder = "",
-  value,
-  onChange,
-  name,
-  error,
-  disabled = false,
-  autoFocus = false,
-  onKeyPress,
-  multiline = true,
-  maxRows = 5,
-  fullWidth = true,
-  size = "small",
-}) => {
-  const theme = useTheme();
-  const inputRef = useRef(null);
-
-  return (
-    <Box sx={{ width: "100%", opacity: disabled ? 0.5 : 1 }}>
-      {label && (
-        <Typography
-          component="label"
-          sx={{
-            fontSize: "0.75rem",
-            fontWeight: 500,
-            color: theme.palette.custom.text2,
-            mb: 0.5,
-            ml: 1.6,
-            display: "block",
-          }}
-        >
-          {label}
-        </Typography>
-      )}
-
-      <TextField
-        inputRef={inputRef}
-        fullWidth={fullWidth}
-        multiline={multiline}
-        maxRows={maxRows}
-        name={name}
-        value={value}
-        onChange={onChange}
-        onKeyPress={onKeyPress}
-        placeholder={placeholder}
-        autoFocus={autoFocus}
-        disabled={disabled}
-        size={size}
-        variant="outlined"
-        sx={{
-          "& .MuiOutlinedInput-root": {
-            border: "2px solid",
-            borderColor: (theme) => theme.palette.custom.background1,
-            borderRadius: 3,
-            px: 1.5,
-            fontSize: "0.7rem",
-          },
-          backgroundColor: "white",
-          "&:hover": {
-            borderColor: "#5a3d83",
-          },
-          "&:focus": {
-            borderColor: "#5a3d83",
-          },
-          "&:active": {
-            borderColor: "#5a3d83",
-          },
-          transition: "border-color 0.2s",
-          "& .MuiInputBase-input": {
-            color: theme.palette.custom?.text1 || "#000",
-            "&::placeholder": {
-             color: (theme) => theme.palette.custom.text2,
-            },
-          },
-        }}
-      />
-
-      {error && (
-        <Typography
-          variant="h6"
-          color="error"
-          sx={{
-            mt: 1,
-            fontSize: "0.6rem",
-            textAlign: "center",
-            fontWeight: 400,
-          }}
-        >
-          {error}
-        </Typography>
-      )}
-    </Box>
-  );
-};
+sx={{
+  "& .MuiOutlinedInput-root": {
+    border: "2px solid",
+    borderColor: (theme) => theme.palette.custom.background1,
+    borderRadius: 3,
+    px: 1.5,
+    fontSize: "0.7rem",
+    backgroundColor: "white",
+  },
+  "& .MuiOutlinedInput-notchedOutline": {
+    border: "none",
+  },
+  "& .MuiInputBase-input": {
+    color: theme.palette.custom?.text1 || "#000",
+    "&::placeholder": {
+      color: (theme) => theme.palette.custom.text2,
+    },
+  },
+  transition: "border-color 0.2s",
+}}
