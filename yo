@@ -1,3 +1,31 @@
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    if (name === "dueDate") {
+      const selectedDate = new Date(value);
+      const now = new Date();
+
+      if (selectedDate < now) {
+        setErrors((prev) => ({
+          ...prev,
+          dueDate: "Due date cannot be in the past",
+        }));
+
+        return;
+      } else {
+        setErrors((prev) => ({ ...prev, dueDate: null }));
+      }
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+
+
 import React, { useRef } from "react";
 import { Box, TextField, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
