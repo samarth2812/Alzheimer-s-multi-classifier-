@@ -1,18 +1,66 @@
-const TruncatedTitle = ({ title }) => (
-  <Tooltip title={title} arrow placement="top">
-    <Box
-      sx={{
-        maxWidth: 300, // control width
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-      }}
-    >
-      <Typography variant="body2" fontWeight="bold">
-        {title}
-      </Typography>
-    </Box>
-  </Tooltip>
-);
+import React, { useState } from "react";
+import {
+  Tooltip,
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TableCell,
+} from "@mui/material";
 
-<TruncatedTitle title={row.title} />
+interface TruncatedTitleWithDialogProps {
+  title: string;
+  maxWidth?: number; // optional width in px
+}
+
+const TruncatedTitleWithDialog: React.FC<TruncatedTitleWithDialogProps> = ({
+  title,
+  maxWidth = 250,
+}) => {
+  const [open, setOpen] = useState(false);
+
+  const handleDialogOpen = () => setOpen(true);
+  const handleDialogClose = () => setOpen(false);
+
+  return (
+    <>
+      <TableCell
+        onClick={handleDialogOpen}
+        sx={{
+          cursor: "pointer",
+          maxWidth,
+        }}
+      >
+        <Tooltip title={title} arrow>
+          <Typography
+            noWrap
+            sx={{
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth,
+            }}
+          >
+            {title}
+          </Typography>
+        </Tooltip>
+      </TableCell>
+
+      <Dialog open={open} onClose={handleDialogClose} maxWidth="sm" fullWidth>
+        <DialogTitle>Full Title</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ whiteSpace: "pre-wrap" }}>
+            {title}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDialogClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+};
+
+export default TruncatedTitleWithDialog;
