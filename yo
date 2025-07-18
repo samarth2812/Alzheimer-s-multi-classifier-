@@ -310,8 +310,8 @@ export const formatTableData = (
     baseRow.submit = (
       <CustomIconButton
         icon={ArrowCircleUp}
-        label={isSubmitting && submittingIndentId === indentId ? "Submitting..." : "Submit"}
-        disabled={getSubmitDisabledState(item, formData, user, pageType)}
+        label={isSubmitting && submittingIndentId === item.indentId ? "Submitting..." : "Submit"}
+        disabled={getSubmitDisabledState(item, formData, user, pageType, isSubmitting, submittingIndentId)}
         onClick={() => handleSubmitIndent(item.indentId, item.department)}
       />
     );
@@ -323,14 +323,23 @@ export const formatTableData = (
 };
 
 // Helper function to determine if submit button should be disabled
-const getSubmitDisabledState = (item, formData, user, pageType) => {
+const getSubmitDisabledState = (item, formData, user, pageType, isSubmitting, submittingIndentId) => {
+  // If currently submitting this specific indent, disable the button
+  if (isSubmitting && submittingIndentId === item.indentId) {
+    return true;
+  }
+
   const remarks = item.remarkHistory || [];
   const lastMyRemark = [...remarks].reverse().find((r) => r.role === user.role);
   const lastMyRemarkTime = lastMyRemark?.createdAt;
   const lastBackToMeTime = item.lastStepChangeTime;
-  const addedNewRemark =
-    lastMyRemarkTime && new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
+  
+  // Check if user has added a new remark since last step change
+  const addedNewRemark = lastMyRemarkTime && 
+    lastBackToMeTime && 
+    new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
 
+  // For pages that require approval selection
   if (
     pageType === "latest" ||
     (pageType === "rejected" &&
@@ -339,8 +348,11 @@ const getSubmitDisabledState = (item, formData, user, pageType) => {
       !(item.department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"))
   ) {
     const approvalStatus = formData[item.indentId]?.approvalStatus;
+    
+    // Must have approval status and either have added new remark or not be submitting
     return !approvalStatus || (!addedNewRemark && !isSubmitting);
   }
 
-  return !addedNewRemark && !isSubmitting;
+  // For other pages, must have added new remark and not be submitting
+  return !addedNewRemark;
 };
