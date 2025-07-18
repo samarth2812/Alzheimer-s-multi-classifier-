@@ -180,7 +180,7 @@ export const useIndentManagement = (pageType) => {
     return () => debouncedSearch.cancel();
   }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams]);
 
-  // Modified handleSubmitRemark to NOT trigger data refetch
+  // Modified handleSubmitRemark - update local state instead of refetching
   const handleSubmitRemark = useCallback(
     async (indentId, remarkData) => {
       try {
@@ -194,28 +194,36 @@ export const useIndentManagement = (pageType) => {
 
         if (result.status === 201 || result.status === 204) {
           toast.success("Indent Remark Added Successfully");
-        }
-        // Only refetch if it's a valid combination
-        if (isValidRolePageCombination(user?.role, pageType)) {
-          const trimmedSearchTerm = searchTerm.trim();
-          await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+          
+          // Update local state instead of refetching
+          setData(prevData => 
+            prevData.map(item => 
+              item.indentId === indentId 
+                ? { 
+                    ...item, 
+                    remarkHistory: [...(item.remarkHistory || []), {
+                      id: result.data?.id || Date.now(), // Use server ID or timestamp as fallback
+                      remarkContent: remarkData.remarkContent,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                      role: user.role,
+                      createdBy: user.name || user.email,
+                      ...remarkData
+                    }]
+                  }
+                : item
+            )
+          );
         }
       } catch (error) {
+        console.error("Error submitting remark:", error);
         toast.error("An error occurred while submitting the Remark.");
       }
     },
-    [
-      fetchDataWithParams,
-      searchTerm,
-      currentPage,
-      rowsPerPage,
-      isValidRolePageCombination,
-      user?.role,
-      pageType,
-    ]
+    [user.role, user.name, user.email]
   );
 
-  // Modified handleEditRemark to NOT trigger data refetch
+  // Modified handleEditRemark - update local state instead of refetching
   const handleEditRemark = useCallback(
     async (remarkId, remarkContent) => {
       try {
@@ -229,25 +237,25 @@ export const useIndentManagement = (pageType) => {
 
         if (result.status === 201 || result.status === 204) {
           toast.success("Indent Remark Updated Successfully");
-        }
-        // Only refetch if it's a valid combination
-        if (isValidRolePageCombination(user?.role, pageType)) {
-          const trimmedSearchTerm = searchTerm.trim();
-          await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+          
+          // Update local state instead of refetching
+          setData(prevData => 
+            prevData.map(item => ({
+              ...item,
+              remarkHistory: (item.remarkHistory || []).map(remark =>
+                remark.id === remarkId 
+                  ? { ...remark, remarkContent, updatedAt: new Date().toISOString() }
+                  : remark
+              )
+            }))
+          );
         }
       } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
+        console.error("Error editing remark:", error);
+        toast.error("An error occurred while updating the Remark.");
       }
     },
-    [
-      fetchDataWithParams,
-      searchTerm,
-      currentPage,
-      rowsPerPage,
-      isValidRolePageCombination,
-      user?.role,
-      pageType,
-    ]
+    []
   );
 
   // Rest of the handlers remain the same...
@@ -282,16 +290,20 @@ export const useIndentManagement = (pageType) => {
 
       if (result.status === 200 || result.status === 204) {
         toast.success("Indent Deleted Successfully");
-        // Refetch data after deletion
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+        // Remove the deleted indent from local state
+        setData(prevData => prevData.filter(item => item.indentId !== indentToDelete.indentId));
+        
+        // Update total records count
+        setTotalRecords(prev => prev - 1);
       }
     } catch (error) {
       console.error("Error deleting indent:", error);
+      toast.error("An error occurred while deleting the Indent.");
     } finally {
       setIsDeleteDialogOpen(false);
+      setIndentToDelete(null);
     }
-  }, [indentToDelete, fetchDataWithParams, searchTerm, currentPage, rowsPerPage]);
+  }, [indentToDelete]);
 
   const handleSubmitIndent = useCallback(
     async (indentId, department) => {
@@ -411,12 +423,21 @@ export const useIndentManagement = (pageType) => {
             }
           }
 
-          // Refetch data after submit with a small delay to ensure backend is updated
-          setTimeout(async () => {
-            const trimmedSearchTerm = searchTerm.trim();
-            await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-            dispatch(fetchNotifications());
-          }, 500);
+          // Remove the submitted indent from local state (as it moves to a different workflow stage)
+          setData(prevData => prevData.filter(item => item.indentId !== indentId));
+          
+          // Update total records count
+          setTotalRecords(prev => Math.max(0, prev - 1));
+          
+          // Clear form data for this indent
+          setFormData(prev => {
+            const newFormData = { ...prev };
+            delete newFormData[indentId];
+            return newFormData;
+          });
+
+          // Refresh notifications
+          dispatch(fetchNotifications());
         }
       } catch (error) {
         console.error("Error submitting indent:", error);
@@ -430,11 +451,7 @@ export const useIndentManagement = (pageType) => {
       pageType,
       formData,
       user.role,
-      fetchDataWithParams,
       dispatch,
-      searchTerm,
-      currentPage,
-      rowsPerPage,
       isSubmitting,
       submittingIndentId,
     ]
@@ -543,353 +560,5 @@ export const useIndentManagement = (pageType) => {
   };
 };
 
-
-
-import {
-  ArrowCircleUp,
-  ChatBubbleOutline,
-  Delete,
-  Edit,
-  Visibility,
-  VisibilityOff,
-  VisibilitySharp,
-} from "@mui/icons-material";
-import { Box, IconButton, Stack, Tooltip } from "@mui/material";
-import MDTypography from "components/MDTypography";
-import { CustomDropdownChip } from "layouts/resuableComponents/customDropdownChipField";
-import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
-import InputWithDialog from "layouts/resuableComponents/InputWithDialog ";
-import RemarksInputDialog from "layouts/resuableComponents/RemarksInputDialog";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
-import { TruncatedTitleWithDialog } from "layouts/resuableComponents/titlePreviewWithDialog";
-
-const statusOptions = [
-  { label: "Approve", value: "approve" },
-  { label: "Reject", value: "reject" },
-];
-
-export const formatTableData = (
-  rawData,
-  pageType,
-  {
-    currentPage,
-    rowsPerPage,
-    user,
-    formData,
-    setCurrentDescription,
-    setDescriptionDialogOpen,
-    setEditIndentData,
-    setIsModalOpen,
-    setIndentToDelete,
-    setIsDeleteDialogOpen,
-    setIndentId,
-    setAttachments,
-    setViewAttachementDialogOpen,
-    handleChange,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSubmitIndent,
-    formatDateTime,
-    isSubmitting,
-    submittingIndentId,
-  }
-) => {
-  const isComplianceRoles = user.role === "COMPLIANCE_MAKER" || user.role === "COMPLIANCE_CHECKER";
-  const showDeleteAction = pageType === "created";
-  const showApproval = (department) => {
-    return (
-      pageType === "latest" ||
-      (pageType === "rejected" &&
-        !(department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER")) ||
-      (pageType === "closure" && !(department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"))
-    );
-  };
-
-  const showActions =
-    pageType === "created" ||
-    (pageType === "latest" && isComplianceRoles) ||
-    pageType === "closure" ||
-    pageType === "rejected";
-
-  // Base columns that are common to all page types
-  const baseColumns = [
-    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "center" },
-    { Header: "Department", accessor: "department", width: "15%", align: "left" },
-    { Header: "Title", accessor: "title", width: "30%", align: "center" },
-    { Header: "Category", accessor: "category", width: "15%", align: "left" },
-    { Header: "Description", accessor: "description", width: "15%", align: "left" },
-    { Header: "Status", accessor: "status", width: "10%", align: "center" },
-    { Header: "Priority", accessor: "priority", width: "15%", align: "left" },
-    { Header: "Assigned To", accessor: "assignedTo", width: "10%", align: "center" },
-    { Header: "Due Date", accessor: "dueDate", width: "10%", align: "center" },
-    { Header: "Created At", accessor: "createdAt", width: "10%", align: "center" },
-    { Header: "Comments", accessor: "comments", width: "15%", align: "left" },
-  ];
-
-  // Conditional columns based on page type
-  const conditionalColumns = [];
-
-  if (showActions) {
-    conditionalColumns.push({
-      Header: "Actions",
-      accessor: "actions",
-      width: "15%",
-      align: "center",
-    });
-  }
-
-  conditionalColumns.push({
-    Header: "Attachments",
-    accessor: "attachments",
-    width: "15%",
-    align: "center",
-  });
-
-  if (pageType !== "created") {
-    conditionalColumns.push({
-      Header: "Approval",
-      accessor: "approval",
-      width: "10%",
-      align: "center",
-    });
-  }
-
-  conditionalColumns.push({
-    Header: "Remarks",
-    accessor: "remarks",
-    width: "15%",
-    align: "center",
-  });
-  conditionalColumns.push({ Header: "Submit", accessor: "submit", width: "10%", align: "center" });
-
-  const columns = [...baseColumns, ...conditionalColumns];
-
-  const rows = rawData.map((item, index) => {
-    const baseRow = {
-      serialNumber: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {(currentPage - 1) * rowsPerPage + index + 1}
-        </MDTypography>
-      ),
-      department: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.department.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      title: <TruncatedTitleWithDialog title={item.title} dialogTitle="Title" />,
-      category: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.category.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      description: (
-        <Tooltip title="Preview Description">
-          <IconButton
-            sx={iconButtonStyle}
-            onClick={() => {
-              setCurrentDescription(item.description);
-              setDescriptionDialogOpen(true);
-            }}
-          >
-            <Visibility />
-          </IconButton>
-        </Tooltip>
-      ),
-      status: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.status.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      priority: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.priority.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      assignedTo: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.assignedTo}
-        </MDTypography>
-      ),
-      dueDate: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {formatDateTime(item.dueDate)}
-        </MDTypography>
-      ),
-      createdAt: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {formatDateTime(item.createdAt)}
-        </MDTypography>
-      ),
-      comments: (
-        <InputWithDialog
-          value={item.comments}
-          dialogTitle="Comments"
-          dialogPlaceholder="Comments"
-          cancelButtonLabel="Cancel"
-          icon={VisibilityOff}
-          name="name"
-          type="text"
-          callOnSave={false}
-          isDisabled={true}
-        />
-      ),
-      attachments: (
-        <Tooltip title="View Attachments">
-          <span>
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setIndentId(item.indentId);
-                setAttachments(item.attachments);
-                setViewAttachementDialogOpen(true);
-              }}
-            >
-              <VisibilitySharp />
-            </IconButton>
-          </span>
-        </Tooltip>
-      ),
-      remarks: (
-        <Box sx={{ minWidth: "150px" }}>
-          <RemarksInputDialog
-            name="remarks"
-            value={formData[item.indentId]?.remarks || ""}
-            onChange={(e) => handleChange(e, item.indentId)}
-            remarks={item.remarkHistory || []}
-            currentUser={user}
-            onSendRemark={(newRemark) => handleSubmitRemark(item.indentId, newRemark)}
-            onEditRemark={(remarkId, remarkText) => handleEditRemark(remarkId, remarkText)}
-            icon={ChatBubbleOutline}
-          />
-        </Box>
-      ),
-    };
-
-    // Add conditional columns based on page type
-    if (showActions) {
-      const actionButtons = [];
-
-      // Edit button (always present when actions are shown)
-      actionButtons.push(
-        <Tooltip key="edit" title="Edit Indent Details">
-          <IconButton
-            sx={iconButtonStyle}
-            onClick={() => {
-              setEditIndentData(item);
-              setIsModalOpen(true);
-            }}
-          >
-            <Edit />
-          </IconButton>
-        </Tooltip>
-      );
-
-      // Delete button (only for created page)
-      if (showDeleteAction) {
-        actionButtons.push(
-          <Tooltip key="delete" title="Delete Indent">
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setIndentToDelete(item);
-                setIsDeleteDialogOpen(true);
-              }}
-            >
-              <Delete />
-            </IconButton>
-          </Tooltip>
-        );
-      }
-
-      baseRow.actions = (
-        <Stack direction="row" spacing={1} justifyContent="center">
-          {actionButtons}
-        </Stack>
-      );
-    }
-
-    // Add approval dropdown for latest page
-    if (showApproval(item.department)) {
-      baseRow.approval = (
-        <CustomDropdownChip
-          options={statusOptions}
-          value={formData[item.indentId]?.approvalStatus || ""}
-          onChange={(e) => handleChange(e, item.indentId)}
-          name="approvalStatus"
-        />
-      );
-    } else {
-      baseRow.approval = (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {"N/A"}
-        </MDTypography>
-      );
-    }
-
-    // Add submit button with conditional logic
-    baseRow.submit = (
-      <CustomIconButton
-        icon={ArrowCircleUp}
-        label={isSubmitting && submittingIndentId === indentId ? "Submitting..." : "Submit"}
-        disabled={getSubmitDisabledState(item, formData, user, pageType)}
-        onClick={() => handleSubmitIndent(item.indentId, item.department)}
-      />
-    );
-
-    return baseRow;
-  });
-
-  return { columns, rows };
-};
-
-// Helper function to determine if submit button should be disabled
-const getSubmitDisabledState = (item, formData, user, pageType) => {
-  const remarks = item.remarkHistory || [];
-  const lastMyRemark = [...remarks].reverse().find((r) => r.role === user.role);
-  const lastMyRemarkTime = lastMyRemark?.createdAt;
-  const lastBackToMeTime = item.lastStepChangeTime;
-  const addedNewRemark =
-    lastMyRemarkTime && new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
-
-  if (
-    pageType === "latest" ||
-    (pageType === "rejected" &&
-      !(item.department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER")) ||
-    (pageType === "closure" &&
-      !(item.department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"))
-  ) {
-    const approvalStatus = formData[item.indentId]?.approvalStatus;
-    return !approvalStatus || (!addedNewRemark && !isSubmitting);
-  }
-
-  return !addedNewRemark && !isSubmitting;
-};
 
 
