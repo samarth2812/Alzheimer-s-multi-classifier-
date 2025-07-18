@@ -30,6 +30,28 @@ export const useIndentManagement = (pageType) => {
   const user = useSelector((state) => state.user.user);
   const dispatch = useDispatch();
 
+  // Helper function to define valid page types per role
+  const getValidPageTypesForRole = useCallback((role) => {
+    switch (role) {
+      case 'COMPLIANCE_MAKER':
+        return ['created', 'rejected', 'closure'];
+      case 'COMPLIANCE_CHECKER':
+        return ['latest', 'closure'];
+      case 'DEPARTMENT_MAKER':
+        return ['created', 'rejected']; // Add/modify based on your requirements
+      case 'DEPARTMENT_CHECKER':
+        return ['latest']; // Add/modify based on your requirements
+      default:
+        return [];
+    }
+  }, []);
+
+  // Check if current pageType is valid for the user's role
+  const isValidPageTypeForRole = useCallback((role, pageType) => {
+    const validPageTypes = getValidPageTypesForRole(role);
+    return validPageTypes.includes(pageType);
+  }, [getValidPageTypesForRole]);
+
   // API endpoint configuration based on page type
   const getApiEndpoint = useCallback(
     (searchQuery = "", page = currentPage, limit = rowsPerPage) => {
@@ -38,6 +60,12 @@ export const useIndentManagement = (pageType) => {
       const department = user?.department;
       const pagination = `page=${page}&limit=${limit}`;
       const searchParam = searchQuery;
+
+      // Check if the pageType is valid for this role
+      if (!isValidPageTypeForRole(role, pageType)) {
+        console.warn(`Invalid pageType "${pageType}" for role "${role}"`);
+        return null;
+      }
 
       switch (pageType) {
         case "created":
@@ -57,10 +85,10 @@ export const useIndentManagement = (pageType) => {
             ? `${baseUrl}/api/v1/indents/${role}/rejected/${searchParam}/${department}/?${pagination}`
             : `${baseUrl}/api/v1/indents/${role}/rejected/${department}/?${pagination}`;
         default:
-          return ``;
+          return null;
       }
     },
-    [pageType, user?.role, user?.department]
+    [pageType, user?.role, user?.department, isValidPageTypeForRole]
   );
 
   // Main fetch function that accepts all parameters
@@ -68,9 +96,22 @@ export const useIndentManagement = (pageType) => {
     async (searchQuery = "", page = 1, limit = 5) => {
       if (!user?.role) return;
 
+      // Check if the current pageType is valid for this role
+      if (!isValidPageTypeForRole(user.role, pageType)) {
+        console.warn(`Skipping data fetch: Invalid pageType "${pageType}" for role "${user.role}"`);
+        setLoading(false);
+        return;
+      }
+
+      const endpoint = getApiEndpoint(searchQuery, page, limit);
+      if (!endpoint) {
+        console.warn(`No valid endpoint for pageType "${pageType}" and role "${user.role}"`);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        const endpoint = getApiEndpoint(searchQuery, page, limit);
         const response = await apiRequest("GET", endpoint);
 
         setData(response.data.data);
@@ -85,12 +126,13 @@ export const useIndentManagement = (pageType) => {
           }
         }
       } catch (error) {
+        console.error("Error fetching indent data:", error);
         toast.error("Failed to fetch Indent");
       } finally {
         setLoading(false);
       }
     },
-    [getApiEndpoint, indentId, user?.role]
+    [getApiEndpoint, indentId, user?.role, pageType, isValidPageTypeForRole]
   );
 
   // Fetch data function using current state
@@ -119,17 +161,29 @@ export const useIndentManagement = (pageType) => {
     [fetchDataWithParams, rowsPerPage]
   );
 
-  // Effect for initial load only
+  // Effect for initial load - now with pageType validation
   useEffect(() => {
     if (!user?.role) return;
 
+    // Only fetch if the current pageType is valid for this user role
+    if (!isValidPageTypeForRole(user.role, pageType)) {
+      console.warn(`Skipping initial load: Invalid pageType "${pageType}" for role "${user.role}"`);
+      setLoading(false);
+      return;
+    }
+
     const trimmedSearchTerm = searchTerm.trim();
     fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-  }, [user?.role]); // Only depend on user role for initial load
+  }, [user?.role, pageType, isValidPageTypeForRole, fetchDataWithParams, currentPage, rowsPerPage, searchTerm]);
 
   // Effect for search term changes only
   useEffect(() => {
     if (!user?.role) return;
+
+    // Skip if invalid pageType for this role
+    if (!isValidPageTypeForRole(user.role, pageType)) {
+      return;
+    }
 
     const trimmedSearchTerm = searchTerm.trim();
 
@@ -142,7 +196,7 @@ export const useIndentManagement = (pageType) => {
     }
 
     return () => debouncedSearch.cancel();
-  }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams]);
+  }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams, pageType, isValidPageTypeForRole]);
 
   // Common handlers
   const handleSearch = useCallback((event) => {
@@ -434,6 +488,10 @@ export const useIndentManagement = (pageType) => {
     totalPages,
     displayData,
     user,
+
+    // Utility functions
+    getValidPageTypesForRole,
+    isValidPageTypeForRole,
 
     // Handlers
     handleSearch,
