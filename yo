@@ -1,484 +1,86 @@
-import { fetchNotifications } from "features/notificationSlice";
-import debounce from "lodash.debounce";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import toast from "react-hot-toast";
-import { useDispatch, useSelector } from "react-redux";
-import { apiRequest } from "../../axios/apiRequest";
-
-export const useIncidentManagement = (pageType) => {
-  // Common state
-  const [data, setData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editIncidentData, setEditIncidentData] = useState(null);
-  const [incidentToDelete, setIncidentToDelete] = useState(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
-  const [currentDescription, setCurrentDescription] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({});
-  const [viewAttachementDialogOpen, setViewAttachementDialogOpen] = useState(false);
-  const [attachments, setAttachments] = useState([]);
-  const [incidentId, setIncidentId] = useState("");
-
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [totalRecords, setTotalRecords] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
-  // Button state management
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittingIncidentId, setSubmittingIncidentId] = useState(null);
-
-  const user = useSelector((state) => state.user.user);
-  const dispatch = useDispatch();
-
-  // API endpoint configuration based on page type
-  const getApiEndpoint = useCallback(
-    (searchQuery = "", page = currentPage, limit = rowsPerPage) => {
-      const baseUrl = window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
-      const role = user?.role;
-      const department = user?.department;
-      const pagination = `page=${page}&limit=${limit}`;
-      const searchParam = searchQuery;
-
-      switch (pageType) {
-        case "created":
-          return `${baseUrl}/api/v1/incidents/${role}/created/${searchParam}?${pagination}`;
-        case "latest":
-          return role === "COMPLIANCE_CHECKER"
-            ? `${baseUrl}/api/v1/incidents/${role}/latest/${searchParam}?${pagination}`
-            : searchParam
-            ? `${baseUrl}/api/v1/incidents/${role}/latest/${searchParam}/${department}?${pagination}`
-            : `${baseUrl}/api/v1/incidents/${role}/latest/${department}?${pagination}`;
-        case "closure":
-          return `${baseUrl}/api/v1/incidents/${role}/closure/${searchParam}?${pagination}`;
-        case "rejected":
-          return role === "COMPLIANCE_MAKER"
-            ? `${baseUrl}/api/v1/incidents/${role}/rejected/${searchParam}?${pagination}`
-            : searchParam
-            ? `${baseUrl}/api/v1/incidents/${role}/rejected/${searchParam}/${department}/?${pagination}`
-            : `${baseUrl}/api/v1/incidents/${role}/rejected/${department}?${pagination}`;
-        default:
-          return `${baseUrl}/api/v1/incidents/${role}/created/${searchParam}?${pagination}`;
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Action Required | Indent Management</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
       }
-    },
-    [pageType, user?.role, user?.department]
-  );
-
-  // Main fetch function that accepts all parameters
-  const fetchDataWithParams = useCallback(
-    async (searchQuery = "", page = 1, limit = 5) => {
-      if (!user?.role) return;
-
-      setLoading(true);
-      try {
-        const endpoint = getApiEndpoint(searchQuery, page, limit);
-        const response = await apiRequest("GET", endpoint);
-
-        setData(response.data.data);
-        setTotalRecords(response.data.pagination.total);
-        setTotalPages(response.data.pagination.totalPages);
-
-        // Update attachments if incidentId exists
-        if (incidentId) {
-          const updatedIncident = response.data.data.find(
-            (incident) => incident.incidentId === incidentId
-          );
-          if (updatedIncident) {
-            setAttachments(updatedIncident.attachments || []);
-          }
-        }
-      } catch (error) {
-        toast.error("Failed to fetch incidents");
-      } finally {
-        setLoading(false);
+      .container {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        padding: 20px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       }
-    },
-    [getApiEndpoint, incidentId, user?.role]
-  );
-
-  // Fetch data function using current state
-  const fetchData = useCallback(
-    async (searchQuery = "") => {
-      await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
-    },
-    [fetchDataWithParams, currentPage, rowsPerPage]
-  );
-
-  // Separate function for fetching with search
-  const fetchDataWithSearch = useCallback(
-    async (searchQuery = "") => {
-      await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
-    },
-    [fetchDataWithParams, currentPage, rowsPerPage]
-  );
-
-  // Debounced search function for backend API calls
-  const debouncedSearch = useMemo(
-    () =>
-      debounce(async (searchQuery) => {
-        setCurrentPage(1);
-        await fetchDataWithParams(searchQuery, 1, rowsPerPage);
-      }, 500),
-    [fetchDataWithParams, rowsPerPage]
-  );
-
-  // Effect for initial load only
-  useEffect(() => {
-    if (!user?.role) return;
-
-    const trimmedSearchTerm = searchTerm.trim();
-    fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-  }, [user?.role]); // Only depend on user role for initial load
-
-  // Effect for search term changes only
-  useEffect(() => {
-    if (!user?.role) return;
-
-    const trimmedSearchTerm = searchTerm.trim();
-
-    if (trimmedSearchTerm) {
-      debouncedSearch(trimmedSearchTerm);
-    } else {
-      debouncedSearch.cancel();
-      setCurrentPage(1);
-      fetchDataWithParams("", 1, rowsPerPage);
-    }
-
-    return () => debouncedSearch.cancel();
-  }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams]);
-
-  // Common handlers
-  const handleSearch = useCallback((event) => {
-    setSearchTerm(event.target.value);
-  }, []);
-
-  const handleAddIncidentClick = useCallback(() => {
-    setEditIncidentData(null);
-    setIsModalOpen(true);
-  }, []);
-
-  const handleChange = useCallback((e, incidentId) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [incidentId]: {
-        ...prev[incidentId],
-        [name]: value,
-      },
-    }));
-  }, []);
-
-  const handleIncidentDelete = useCallback(async () => {
-    if (!incidentToDelete) return;
-
-    try {
-      const deleteIncidentUrl = `${
-        window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-      }/api/v1/incidents/${incidentToDelete.incidentId}`;
-      const result = await apiRequest("DELETE", deleteIncidentUrl);
-
-      if (result.status === 200 || result.status === 204) {
-        toast.success("Incident Deleted Successfully");
-        // Refetch data after deletion
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+      .header {
+        background-color: #4f2d7f;
+        color: #ffffff;
+        padding: 10px 0;
+        text-align: center;
       }
-    } catch (error) {
-      console.error("Error deleting incident:", error);
-      toast.error("An error occurred while deleting the Incident.");
-    } finally {
-      setIsDeleteDialogOpen(false);
-      setIncidentToDelete(null);
-    }
-  }, [incidentToDelete, fetchDataWithParams, searchTerm, currentPage, rowsPerPage]);
-
-  const handleSubmitIncident = useCallback(
-    async (incidentId, department) => {
-      // Prevent multiple submissions
-      if (isSubmitting || submittingIncidentId === incidentId) {
-        return;
+      .content {
+        padding: 20px;
+        text-align: left;
       }
-
-      // Validate required data
-      if (!incidentId || !department || !user?.role) {
-        return;
+      .button {
+        display: inline-block;
+        padding: 10px 20px;
+        margin: 20px 0;
+        background-color: #4f2d7f;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 5px;
       }
-
-      setIsSubmitting(true);
-      setSubmittingIncidentId(incidentId);
-
-      try {
-        const isComplianceDepartment = department === "COMPLIANCE";
-        const payload = {
-          updatedFields: {
-            updateType: "WORKFLOW_UPDATE",
-            rejectedStatus:
-              (pageType === "latest" || pageType === "rejected" || pageType === "closure") &&
-              formData[incidentId]?.approvalStatus === "reject"
-                ? true
-                : false,
-          },
-        };
-
-        const result = await apiRequest(
-          "PUT",
-          `${
-            window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-          }/api/v1/incidents/${user.role}/${department}/${incidentId}`,
-          payload
-        );
-
-        if (result.status === 200 || result.status === 204) {
-          // Success message logic based on page type and approval status
-          if (pageType === "created") {
-            toast.success("Incident Sent to Compliance Checker Successfully");
-          } else if (pageType === "latest") {
-            const approvalStatus = formData[incidentId]?.approvalStatus;
-            // Add specific success messages based on role and approval status
-            if (isComplianceDepartment) {
-              if (approvalStatus === "approve") {
-                toast.success("Incident Sent to Compliance Maker for Closure Successfully");
-              } else {
-                toast.success("Incident Sent to back to Compliance Maker Successfully");
-              }
-            } else {
-              if (approvalStatus === "approve") {
-                if (user.role === "COMPLIANCE_CHECKER") {
-                  toast.success("Incident Sent to Department Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Incident Sent to Department Checker Successfully");
-                } else {
-                  toast.success("Incident Sent to Compliance Maker Successfully");
-                }
-              } else {
-                if (user.role === "COMPLIANCE_CHECKER") {
-                  toast.success("Incident Sent to back to Compliance Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Incident Sent to back to Compliance Maker Successfully");
-                } else {
-                  toast.success("Incident Sent to back to Department Maker Successfully");
-                }
-              }
-            }
-          } else if (pageType === "rejected") {
-            if (isComplianceDepartment) {
-              toast.success("Incident Sent to Compliance Checker Successfully");
-            } else {
-              if (formData[incidentId]?.approvalStatus === "approve") {
-                if (user.role === "COMPLIANCE_MAKER") {
-                  toast.success("Incident Sent to Compliance Checker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Incident Sent to Department Checker Successfully");
-                } else {
-                  toast.success("Incident Sent Successfully");
-                }
-              } else {
-                if (user.role === "COMPLIANCE_MAKER") {
-                  toast.success("Incident Sent to back to Department Maker Successfully");
-                } else if (user.role === "DEPARTMENT_MAKER") {
-                  toast.success("Incident Sent to back to Compliance Maker Successfully");
-                } else {
-                  toast.success("Incident Sent Successfully");
-                }
-              }
-            }
-          } else if (pageType === "closure") {
-            if (formData[incidentId]?.approvalStatus === "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Incident Sent For Closure to Compliance Checker Successfully");
-              } else if (user.role === "COMPLIANCE_CHECKER") {
-                toast.success("Incident Closed Successfully");
-              }
-            } else if (formData[incidentId]?.approvalStatus !== "approve") {
-              if (user.role === "COMPLIANCE_MAKER") {
-                toast.success("Incident Sent to Compliance Checker Successfully");
-              } else if (user.role === "COMPLIANCE_CHECKER") {
-                toast.success("Incident Sent Back to Compliance Maker Successfully");
-              }
-            } else {
-              toast.success("Incident Sent to Compliance Checker Successfully");
-            }
-          }
-
-          // Refetch data after submit
-          const trimmedSearchTerm = searchTerm.trim();
-          await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-
-          // Refresh notifications
-          dispatch(fetchNotifications());
-        }
-      } catch (error) {
-        console.error("Error submitting incident:", error);
-        toast.error("An error occurred while submitting the Incident.");
-      } finally {
-        setIsSubmitting(false);
-        setSubmittingIncidentId(null);
+      .footer {
+        text-align: center;
+        padding: 10px;
+        font-size: 12px;
+        color: #777777;
       }
-    },
-    [
-      pageType,
-      formData,
-      user.role,
-      fetchDataWithParams,
-      dispatch,
-      searchTerm,
-      currentPage,
-      rowsPerPage,
-      isSubmitting,
-      submittingIncidentId,
-    ]
-  );
-
-  const handleSubmitRemark = useCallback(
-    async (incidentId, remarkData) => {
-      try {
-        const result = await apiRequest(
-          "POST",
-          `${
-            window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-          }/api/v1/incidents/remarks/${incidentId}`,
-          remarkData
-        );
-
-        if (result.status === 201 || result.status === 204) {
-          toast.success("Incident Remark Added Successfully");
-        }
-        // Refetch data after remark submission
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-      } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
+      .indent-details {
+        background-color: #f9f9f9;
+        padding: 15px;
+        border-left: 4px solid #4f2d7f;
+        margin: 15px 0;
       }
-    },
-    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage]
-  );
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Action Required</h1>
+      </div>
+      <div class="content">
+        <p>Dear {{{recipientName}}},</p>
+        <p>
+          A new indent under the {{{department}}} department and {{{category}}}
+          category has been assigned to you and requires your immediate
+          attention.
+        </p>
 
-  const handleEditRemark = useCallback(
-    async (incidentId, remarkContent) => {
-      try {
-        const result = await apiRequest(
-          "PUT",
-          `${
-            window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
-          }/api/v1/incidents/remarks/${incidentId}`,
-          { remarkContent }
-        );
+        <div class="indent-details">
+          <p><strong>Action Required:</strong> {{{action}}}</p>
+        </div>
 
-        if (result.status === 201 || result.status === 204) {
-          toast.success("Incident Remark Updated Successfully");
-        }
-        // Refetch data after remark edit
-        const trimmedSearchTerm = searchTerm.trim();
-        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
-      } catch (error) {
-        toast.error("An error occurred while submitting the Remark.");
-      }
-    },
-    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage]
-  );
+        <p>Click the button below to log in and take the necessary action:</p>
+        <a href="{{{frontendUrl}}}" class="button">Log In</a>
 
-  const handleSortBySeverity = useCallback(() => {
-    const severityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-    const sortedData = [...data].sort((a, b) => {
-      return severityOrder[b.severity] - severityOrder[a.severity];
-    });
-    setData(sortedData);
-  }, [data]);
-
-  const handlePageChange = useCallback(
-    async (event, newPage) => {
-      setCurrentPage(newPage);
-
-      // Immediately fetch data for the new page
-      const trimmedSearchTerm = searchTerm.trim();
-      await fetchDataWithParams(trimmedSearchTerm, newPage, rowsPerPage);
-    },
-    [searchTerm, fetchDataWithParams, rowsPerPage]
-  );
-
-  const handleRowsPerPageChange = useCallback(
-    async (event) => {
-      const { numericValue, resetToFirstPage } = event;
-
-      setRowsPerPage(numericValue);
-
-      const newPage = resetToFirstPage ? 1 : currentPage;
-      if (resetToFirstPage) {
-        setCurrentPage(1);
-      }
-
-      // Immediately fetch data with new parameters
-      const trimmedSearchTerm = searchTerm.trim();
-      await fetchDataWithParams(trimmedSearchTerm, newPage, numericValue);
-    },
-    [currentPage, searchTerm, fetchDataWithParams]
-  );
-
-  // Utility functions
-  const formatDateTime = useCallback((dateString) => {
-    return new Date(dateString).toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  }, []);
-
-  // Remove filteredData and displayData logic since search is now handled by backend
-  const displayData = data;
-
-  return {
-    // State
-    data,
-    searchTerm,
-    isModalOpen,
-    setIsModalOpen,
-    editIncidentData,
-    setEditIncidentData,
-    incidentToDelete,
-    setIncidentToDelete,
-    isDeleteDialogOpen,
-    setIsDeleteDialogOpen,
-    descriptionDialogOpen,
-    setDescriptionDialogOpen,
-    currentDescription,
-    setCurrentDescription,
-    loading,
-    formData,
-    setFormData,
-    viewAttachementDialogOpen,
-    setViewAttachementDialogOpen,
-    attachments,
-    setAttachments,
-    incidentId,
-    setIncidentId,
-    currentPage,
-    rowsPerPage,
-    totalRecords,
-    totalPages,
-    displayData,
-    user,
-    isSubmitting,
-    submittingIncidentId,
-
-    // Handlers
-    handleSearch,
-    handleAddIncidentClick,
-    handleChange,
-    handleIncidentDelete,
-    handleSubmitIncident,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSortBySeverity,
-    handlePageChange,
-    handleRowsPerPageChange,
-    fetchData,
-    fetchDataWithSearch,
-    formatDateTime,
-  };
-};
+        <p>If you have any questions, feel free to contact our support team.</p>
+        <p>
+          Note: This is a System Generated E-Mail. Please do not reply to this
+          mail.
+        </p>
+      </div>
+      <div class="footer">
+        <p>&copy; 2025 RegTech. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
