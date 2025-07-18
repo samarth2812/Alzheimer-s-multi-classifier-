@@ -1,86 +1,168 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Action Required | Indent Management</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        width: 100%;
-        max-width: 600px;
-        margin: 0 auto;
-        background-color: #ffffff;
-        padding: 20px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      .header {
-        background-color: #4f2d7f;
-        color: #ffffff;
-        padding: 10px 0;
-        text-align: center;
-      }
-      .content {
-        padding: 20px;
-        text-align: left;
-      }
-      .button {
-        display: inline-block;
-        padding: 10px 20px;
-        margin: 20px 0;
-        background-color: #4f2d7f;
-        color: #ffffff;
-        text-decoration: none;
-        border-radius: 5px;
-      }
-      .footer {
-        text-align: center;
-        padding: 10px;
-        font-size: 12px;
-        color: #777777;
-      }
-      .indent-details {
-        background-color: #f9f9f9;
-        padding: 15px;
-        border-left: 4px solid #4f2d7f;
-        margin: 15px 0;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h1>Action Required</h1>
-      </div>
-      <div class="content">
-        <p>Dear {{{recipientName}}},</p>
-        <p>
-          A new indent under the {{{department}}} department and {{{category}}}
-          category has been assigned to you and requires your immediate
-          attention.
-        </p>
+export const generateIndentExcel = async (
+  res: ExpressResponse,
+  userRole: Position,
+  userDepartment: Department,
+  filters: {
+    status?: "open" | "Closed";
+    priorityLevel?: IndentPriority;
+    department?: Department;
+    category?: IndentCategory;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }
+) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Indent Management System";
+    workbook.created = new Date();
 
-        <div class="indent-details">
-          <p><strong>Action Required:</strong> {{{action}}}</p>
-        </div>
+    const worksheet = workbook.addWorksheet("Indents", {
+      views: [{ state: "frozen", ySplit: 1 }],
+    });
 
-        <p>Click the button below to log in and take the necessary action:</p>
-        <a href="{{{frontendUrl}}}" class="button">Log In</a>
+    const headers = [
+      "Serial Number",
+      "Status",
+      "Description",
+      "Priority",
+      "Category",
+      "Department",
+      "Assigned To",
+      "Current Step",
+      "Open Status",
+      "Closed Date",
+      "Comments",
+    ];
 
-        <p>If you have any questions, feel free to contact our support team.</p>
-        <p>
-          Note: This is a System Generated E-Mail. Please do not reply to this
-          mail.
-        </p>
-      </div>
-      <div class="footer">
-        <p>&copy; 2025 RegTech. All rights reserved.</p>
-      </div>
-    </div>
-  </body>
-</html>
+    const headerRow = worksheet.addRow(headers);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "F0F0F0" },
+    };
+
+    const where: any = { AND: [{ isDeleted: false }] };
+
+    if (
+      (userRole === "DEPARTMENT_MAKER" || userRole === "DEPARTMENT_CHECKER") &&
+      userDepartment
+    ) {
+      where.AND.push({ department: userDepartment });
+    }
+
+    if (filters.status === "Closed") {
+      where.AND.push({ openStatus: false });
+    } else {
+      where.AND.push({ openStatus: true });
+    }
+
+    if (filters.priorityLevel) {
+      where.AND.push({
+        priority: INDENT_PRIORITY_MAPPING[filters.priorityLevel],
+      });
+    }
+
+    if (filters.department) {
+      where.AND.push({ department: DEPARTMENT_MAPPING[filters.department] });
+    }
+
+    if (filters.category) {
+      where.AND.push({ category: INDENT_CATEGORY_MAPPING[filters.category] });
+    }
+
+    if (filters.startDate) {
+      where.AND.push({ createdAt: { gte: new Date(filters.startDate) } });
+    }
+
+    if (filters.endDate) {
+      where.AND.push({ closedDate: { lte: new Date(filters.endDate) } });
+    }
+
+    if (filters.search?.trim()) {
+      const searchTerm = filters.search.trim();
+      where.AND.push({
+        OR: [
+          { description: { contains: searchTerm, mode: "insensitive" } },
+          { comments: { contains: searchTerm, mode: "insensitive" } },
+          { indentId: { contains: searchTerm, mode: "insensitive" } },
+        ],
+      });
+    }
+
+    const indents = await prisma.indents.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const formatDate = (date: Date | null): string => {
+      if (!date) return "N/A";
+      return date.toLocaleDateString("en-GB");
+    };
+
+    for (let index = 0; index < indents.length; index++) {
+      const indent = indents[index];
+      const pendingWith = getNameFromStep(indent.currStep, indent.prevStep);
+      const currentStepName = getStepName(
+        indent.currStep,
+        indent.prevStep,
+        indent.department
+      );
+      let assigneeName = "N/A";
+
+      if (pendingWith !== "Closed") {
+        try {
+          const response = await fetchUsersList({
+            ...(pendingWith === "DEPARTMENT_MAKER" ||
+            pendingWith === "DEPARTMENT_CHECKER"
+              ? { department: indent.department }
+              : {}),
+            role: pendingWith as Position,
+          });
+
+          const userList = response || [];
+
+          if (pendingWith === "DEPARTMENT_MAKER") {
+            const match = userList.find(
+              (user: any) => user.email === indent.assignedTo
+            );
+            if (match) assigneeName = match.name || match.email;
+          } else if (userList.length) {
+            assigneeName = userList
+              .map((u: any) => u.name || u.email)
+              .join(", ");
+          }
+        } catch (err) {
+          console.warn("Error fetching assignee list:", err);
+        }
+      }
+      const row = [
+        index + 1, // Serial Number
+        indent.status || "N/A",
+        indent.description || "N/A",
+        indent.priority || "N/A",
+        indent.category || "N/A",
+        indent.department || "N/A",
+        assigneeName,
+        currentStepName,
+        indent.openStatus ? "Open" : "Closed",
+        formatDate(indent.closedDate),
+        indent.comments || "N/A",
+      ];
+
+      worksheet.addRow(row);
+    }
+
+    worksheet.columns.forEach((column: any) => {
+      if (column) column.width = 18;
+    });
+
+    await workbook.xlsx.write(res as unknown as Stream);
+    res.end();
+    return true;
+  } catch (error: any) {
+    console.error("Error in generateIndentExcel:", error);
+    throw new Error(`Indent Excel export failed: ${error.message}`);
+  }
+};
