@@ -1,344 +1,520 @@
-import {
-  ArrowCircleUp,
-  ChatBubbleOutline,
-  Delete,
-  Edit,
-  Visibility,
-  VisibilityOff,
-  VisibilitySharp,
-} from "@mui/icons-material";
-import { Box, IconButton, Stack, Tooltip } from "@mui/material";
-import MDTypography from "components/MDTypography";
-import { CustomDropdownChip } from "layouts/resuableComponents/customDropdownChipField";
-import CustomIconButton from "layouts/resuableComponents/CustomIconButton";
-import InputWithDialog from "layouts/resuableComponents/InputWithDialog ";
-import RemarksInputDialog from "layouts/resuableComponents/RemarksInputDialog";
-import { iconButtonStyle } from "layouts/resuableComponents/styles";
-import { TruncatedTitleWithDialog } from "layouts/resuableComponents/titlePreviewWithDialog";
+import { fetchNotifications } from "features/notificationSlice";
+import debounce from "lodash.debounce";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
+import { useDispatch, useSelector } from "react-redux";
+import { apiRequest } from "../../axios/apiRequest";
 
-const statusOptions = [
-  { label: "Approve", value: "approve" },
-  { label: "Reject", value: "reject" },
-];
-
-export const formatTableData = (
-  rawData,
-  pageType,
-  {
-    currentPage,
-    rowsPerPage,
-    user,
-    formData,
-    setCurrentDescription,
-    setDescriptionDialogOpen,
-    setEditIndentData,
-    setIsModalOpen,
-    setIndentToDelete,
-    setIsDeleteDialogOpen,
-    setIndentId,
-    setAttachments,
-    setViewAttachementDialogOpen,
-    handleChange,
-    handleSubmitRemark,
-    handleEditRemark,
-    handleSubmitIndent,
-    formatDateTime,
+export const useIndentManagement = (pageType) => {
+  if (!pageType) {
+    return;
   }
-) => {
-  const isComplianceRoles = user.role === "COMPLIANCE_MAKER" || user.role === "COMPLIANCE_CHECKER";
-  const showDeleteAction = pageType === "created";
-  const showApproval = (department) => {
-    return (
-      pageType === "latest" ||
-      (pageType === "rejected" &&
-        !(department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER")) ||
-      (pageType === "closure" && !(department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"))
-    );
-  };
+  // Common state
+  const [data, setData] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editIndentData, setEditIndentData] = useState(null);
+  const [indentToDelete, setIndentToDelete] = useState(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [descriptionDialogOpen, setDescriptionDialogOpen] = useState(false);
+  const [currentDescription, setCurrentDescription] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({});
+  const [viewAttachementDialogOpen, setViewAttachementDialogOpen] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [indentId, setIndentId] = useState("");
 
-  const showActions =
-    pageType === "created" ||
-    (pageType === "latest" && isComplianceRoles) ||
-    pageType === "closure" ||
-    pageType === "rejected";
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [totalRecords, setTotalRecords] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Base columns that are common to all page types
-  const baseColumns = [
-    { Header: "S.No", accessor: "serialNumber", width: "5%", align: "center" },
-    { Header: "Department", accessor: "department", width: "15%", align: "left" },
-    { Header: "Title", accessor: "title", width: "30%", align: "center" },
-    { Header: "Category", accessor: "category", width: "15%", align: "left" },
-    { Header: "Description", accessor: "description", width: "15%", align: "left" },
-    { Header: "Status", accessor: "status", width: "10%", align: "center" },
-    { Header: "Priority", accessor: "priority", width: "15%", align: "left" },
-    { Header: "Assigned To", accessor: "assignedTo", width: "10%", align: "center" },
-    { Header: "Due Date", accessor: "dueDate", width: "10%", align: "center" },
-    { Header: "Created At", accessor: "createdAt", width: "10%", align: "center" },
-    { Header: "Comments", accessor: "comments", width: "15%", align: "left" },
-  ];
+  // Button state management
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingIndentId, setSubmittingIndentId] = useState(null);
 
-  // Conditional columns based on page type
-  const conditionalColumns = [];
+  const user = useSelector((state) => state.user.user);
+  const dispatch = useDispatch();
 
-  if (showActions) {
-    conditionalColumns.push({
-      Header: "Actions",
-      accessor: "actions",
-      width: "15%",
-      align: "center",
-    });
-  }
-
-  conditionalColumns.push({
-    Header: "Attachments",
-    accessor: "attachments",
-    width: "15%",
-    align: "center",
-  });
-
-  if (pageType !== "created") {
-    conditionalColumns.push({
-      Header: "Approval",
-      accessor: "approval",
-      width: "10%",
-      align: "center",
-    });
-  }
-
-  conditionalColumns.push({
-    Header: "Remarks",
-    accessor: "remarks",
-    width: "15%",
-    align: "center",
-  });
-  conditionalColumns.push({ Header: "Submit", accessor: "submit", width: "10%", align: "center" });
-
-  const columns = [...baseColumns, ...conditionalColumns];
-
-  const rows = rawData.map((item, index) => {
-    const baseRow = {
-      serialNumber: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {(currentPage - 1) * rowsPerPage + index + 1}
-        </MDTypography>
-      ),
-      department: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.department.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      title: <TruncatedTitleWithDialog title={item.title} dialogTitle="Title" />,
-      category: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.category.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      description: (
-        <Tooltip title="Preview Description">
-          <IconButton
-            sx={iconButtonStyle}
-            onClick={() => {
-              setCurrentDescription(item.description);
-              setDescriptionDialogOpen(true);
-            }}
-          >
-            <Visibility />
-          </IconButton>
-        </Tooltip>
-      ),
-      status: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.status.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      priority: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.priority.replace(/_/g, " ")}
-        </MDTypography>
-      ),
-      assignedTo: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {item.assignedTo}
-        </MDTypography>
-      ),
-      dueDate: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {formatDateTime(item.dueDate)}
-        </MDTypography>
-      ),
-      createdAt: (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {formatDateTime(item.createdAt)}
-        </MDTypography>
-      ),
-      comments: (
-        <InputWithDialog
-          value={item.comments}
-          dialogTitle="Comments"
-          dialogPlaceholder="Comments"
-          cancelButtonLabel="Cancel"
-          icon={VisibilityOff}
-          name="name"
-          type="text"
-          callOnSave={false}
-          isDisabled={true}
-        />
-      ),
-      attachments: (
-        <Tooltip title="View Attachments">
-          <span>
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setIndentId(item.indentId);
-                setAttachments(item.attachments);
-                setViewAttachementDialogOpen(true);
-              }}
-            >
-              <VisibilitySharp />
-            </IconButton>
-          </span>
-        </Tooltip>
-      ),
-      remarks: (
-        <Box sx={{ minWidth: "150px" }}>
-          <RemarksInputDialog
-            name="remarks"
-            value={formData[item.indentId]?.remarks || ""}
-            onChange={(e) => handleChange(e, item.indentId)}
-            remarks={item.remarkHistory || []}
-            currentUser={user}
-            onSendRemark={(newRemark) => handleSubmitRemark(item.indentId, newRemark)}
-            onEditRemark={(remarkId, remarkText) => handleEditRemark(remarkId, remarkText)}
-            icon={ChatBubbleOutline}
-          />
-        </Box>
-      ),
+  // Validate role and pageType combination
+  const isValidRolePageCombination = useCallback((role, pageType) => {
+    const validCombinations = {
+      'COMPLIANCE_MAKER': ['created', 'rejected', 'closure'],
+      'COMPLIANCE_CHECKER': ['latest', 'rejected', 'closure'],
+      'DEPARTMENT_MAKER': ['created', 'rejected'],
+      'DEPARTMENT_CHECKER': ['latest', 'rejected']
     };
+    
+    return validCombinations[role]?.includes(pageType) || false;
+  }, []);
 
-    // Add conditional columns based on page type
-    if (showActions) {
-      const actionButtons = [];
+  // API endpoint configuration based on page type
+  const getApiEndpoint = useCallback(
+    (searchQuery = "", page = currentPage, limit = rowsPerPage) => {
+      const baseUrl = window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL;
+      const role = user?.role;
+      const department = user?.department;
+      const pagination = `page=${page}&limit=${limit}`;
+      const searchParam = searchQuery;
 
-      // Edit button (always present when actions are shown)
-      actionButtons.push(
-        <Tooltip key="edit" title="Edit Indent Details">
-          <IconButton
-            sx={iconButtonStyle}
-            onClick={() => {
-              setEditIndentData(item);
-              setIsModalOpen(true);
-            }}
-          >
-            <Edit />
-          </IconButton>
-        </Tooltip>
-      );
-
-      // Delete button (only for created page)
-      if (showDeleteAction) {
-        actionButtons.push(
-          <Tooltip key="delete" title="Delete Indent">
-            <IconButton
-              sx={iconButtonStyle}
-              onClick={() => {
-                setIndentToDelete(item);
-                setIsDeleteDialogOpen(true);
-              }}
-            >
-              <Delete />
-            </IconButton>
-          </Tooltip>
-        );
+      // Validate the combination before making API call
+      if (!isValidRolePageCombination(role, pageType)) {
+        console.error(`Invalid combination: ${role} cannot access ${pageType} endpoint`);
+        return null;
       }
 
-      baseRow.actions = (
-        <Stack direction="row" spacing={1} justifyContent="center">
-          {actionButtons}
-        </Stack>
-      );
-    }
+      switch (pageType) {
+        case "created":
+          return `${baseUrl}/api/v1/indents/${role}/created/${searchParam}?${pagination}`;
+        case "latest":
+          return role === "COMPLIANCE_CHECKER"
+            ? `${baseUrl}/api/v1/indents/${role}/latest/${searchParam}?${pagination}`
+            : searchParam
+            ? `${baseUrl}/api/v1/indents/${role}/latest/${searchParam}/${department}?${pagination}`
+            : `${baseUrl}/api/v1/indents/${role}/latest/${department}?${pagination}`;
+        case "closure":
+          return `${baseUrl}/api/v1/indents/${role}/closure/${searchParam}?${pagination}`;
+        case "rejected":
+          return role === "COMPLIANCE_MAKER"
+            ? `${baseUrl}/api/v1/indents/${role}/rejected/${searchParam}?${pagination}`
+            : searchParam
+            ? `${baseUrl}/api/v1/indents/${role}/rejected/${searchParam}/${department}/?${pagination}`
+            : `${baseUrl}/api/v1/indents/${role}/rejected/${department}/?${pagination}`;
+        default:
+          return null;
+      }
+    },
+    [pageType, user?.role, user?.department, isValidRolePageCombination]
+  );
 
-    // Add approval dropdown for latest page
-    if (showApproval(item.department)) {
-      baseRow.approval = (
-        <CustomDropdownChip
-          options={statusOptions}
-          value={formData[item.indentId]?.approvalStatus || ""}
-          onChange={(e) => handleChange(e, item.indentId)}
-          name="approvalStatus"
-        />
-      );
+  // Main fetch function that accepts all parameters
+  const fetchDataWithParams = useCallback(
+    async (searchQuery = "", page = 1, limit = 5) => {
+      if (!user?.role) return;
+
+      const endpoint = getApiEndpoint(searchQuery, page, limit);
+      
+      // Don't make API call if endpoint is invalid
+      if (!endpoint) {
+        console.error(`Cannot fetch data: Invalid role-pageType combination (${user?.role} - ${pageType})`);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const response = await apiRequest("GET", endpoint);
+
+        setData(response.data.data);
+        setTotalRecords(response.data.pagination.total);
+        setTotalPages(response.data.pagination.totalPages);
+
+        // Update attachments if indentId exists
+        if (indentId) {
+          const updatedIndent = response.data.data.find((indent) => indent.indentId === indentId);
+          if (updatedIndent) {
+            setAttachments(updatedIndent.attachments || []);
+          }
+        }
+      } catch (error) {
+        console.error("API Error:", error);
+        toast.error("Failed to fetch Indent");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [getApiEndpoint, indentId, user?.role, pageType]
+  );
+
+  // Fetch data function using current state
+  const fetchData = useCallback(
+    async (searchQuery = "") => {
+      await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
+    },
+    [fetchDataWithParams, currentPage, rowsPerPage]
+  );
+
+  // Separate function for fetching with search
+  const fetchDataWithSearch = useCallback(
+    async (searchQuery = "") => {
+      await fetchDataWithParams(searchQuery, currentPage, rowsPerPage);
+    },
+    [fetchDataWithParams, currentPage, rowsPerPage]
+  );
+
+  // Debounced search function for backend API calls
+  const debouncedSearch = useMemo(
+    () =>
+      debounce(async (searchQuery) => {
+        setCurrentPage(1);
+        await fetchDataWithParams(searchQuery, 1, rowsPerPage);
+      }, 500),
+    [fetchDataWithParams, rowsPerPage]
+  );
+
+  // Effect for initial load only
+  useEffect(() => {
+    if (!user?.role) return;
+
+    const trimmedSearchTerm = searchTerm.trim();
+    fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+  }, [user?.role]); // Only depend on user role for initial load
+
+  // Effect for search term changes only
+  useEffect(() => {
+    if (!user?.role) return;
+
+    const trimmedSearchTerm = searchTerm.trim();
+
+    if (trimmedSearchTerm) {
+      debouncedSearch(trimmedSearchTerm);
     } else {
-      baseRow.approval = (
-        <MDTypography
-          variant="button"
-          sx={{ color: (theme) => theme.palette.custom.text2, fontSize: "0.7rem !important" }}
-        >
-          {"N/A"}
-        </MDTypography>
-      );
+      debouncedSearch.cancel();
+      setCurrentPage(1);
+      fetchDataWithParams("", 1, rowsPerPage);
     }
 
-    // Add submit button with conditional logic
-    baseRow.submit = (
-      <CustomIconButton
-        icon={ArrowCircleUp}
-        label="Submit"
-        disabled={getSubmitDisabledState(item, formData, user, pageType)}
-        onClick={() => handleSubmitIndent(item.indentId, item.department)}
-      />
-    );
+    return () => debouncedSearch.cancel();
+  }, [searchTerm, user?.role, rowsPerPage, fetchDataWithParams]);
 
-    return baseRow;
-  });
+  // Modified handleSubmitRemark to NOT trigger data refetch
+  const handleSubmitRemark = useCallback(
+    async (indentId, remarkData) => {
+      try {
+        const result = await apiRequest(
+          "POST",
+          `${
+            window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
+          }/api/v1/indents/remarks/${indentId}`,
+          remarkData
+        );
 
-  return { columns, rows };
-};
+        if (result.status === 201 || result.status === 204) {
+          toast.success("Indent Remark Added Successfully");
+        }
+        // Only refetch if it's a valid combination
+        if (isValidRolePageCombination(user?.role, pageType)) {
+          const trimmedSearchTerm = searchTerm.trim();
+          await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+        }
+      } catch (error) {
+        toast.error("An error occurred while submitting the Remark.");
+      }
+    },
+    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage, isValidRolePageCombination, user?.role, pageType]
+  );
 
-// Helper function to determine if submit button should be disabled
-const getSubmitDisabledState = (item, formData, user, pageType) => {
-  const remarks = item.remarkHistory || [];
-  const lastMyRemark = [...remarks].reverse().find((r) => r.role === user.role);
-  const lastMyRemarkTime = lastMyRemark?.createdAt;
-  const lastBackToMeTime = item.lastStepChangeTime;
-  const addedNewRemark =
-    lastMyRemarkTime && new Date(lastMyRemarkTime) > new Date(lastBackToMeTime);
+  // Modified handleEditRemark to NOT trigger data refetch
+  const handleEditRemark = useCallback(
+    async (remarkId, remarkContent) => {
+      try {
+        const result = await apiRequest(
+          "PUT",
+          `${
+            window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
+          }/api/v1/indents/remarks/${remarkId}`,
+          { remarkContent }
+        );
 
-  if (
-    pageType === "latest" ||
-    (pageType === "rejected" &&
-      !(item.department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER")) ||
-    (pageType === "closure" &&
-      !(item.department === "COMPLIANCE" && user.role === "COMPLIANCE_MAKER"))
-  ) {
-    const approvalStatus = formData[item.indentId]?.approvalStatus;
-    return !approvalStatus || !addedNewRemark;
-  }
+        if (result.status === 201 || result.status === 204) {
+          toast.success("Indent Remark Updated Successfully");
+        }
+        // Only refetch if it's a valid combination
+        if (isValidRolePageCombination(user?.role, pageType)) {
+          const trimmedSearchTerm = searchTerm.trim();
+          await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+        }
+      } catch (error) {
+        toast.error("An error occurred while submitting the Remark.");
+      }
+    },
+    [fetchDataWithParams, searchTerm, currentPage, rowsPerPage, isValidRolePageCombination, user?.role, pageType]
+  );
 
-  return !addedNewRemark;
+  // Rest of the handlers remain the same...
+  const handleSearch = useCallback((event) => {
+    setSearchTerm(event.target.value);
+  }, []);
+
+  const handleAddIndentClick = useCallback(() => {
+    setEditIndentData(null);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleChange = useCallback((e, indentId) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [indentId]: {
+        ...prev[indentId],
+        [name]: value,
+      },
+    }));
+  }, []);
+
+  const handleIndentDelete = useCallback(async () => {
+    if (!indentToDelete) return;
+
+    try {
+      const deleteIndentUrl = `${
+        window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
+      }/api/v1/indents/${indentToDelete.indentId}`;
+      const result = await apiRequest("DELETE", deleteIndentUrl);
+
+      if (result.status === 200 || result.status === 204) {
+        toast.success("Indent Deleted Successfully");
+        // Refetch data after deletion
+        const trimmedSearchTerm = searchTerm.trim();
+        await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+      }
+    } catch (error) {
+      console.error("Error deleting indent:", error);
+    } finally {
+      setIsDeleteDialogOpen(false);
+    }
+  }, [indentToDelete, fetchDataWithParams, searchTerm, currentPage, rowsPerPage]);
+
+  const handleSubmitIndent = useCallback(
+    async (indentId, department) => {
+      // Prevent multiple submissions
+      if (isSubmitting || submittingIndentId === indentId) {
+        console.log('Already submitting, ignoring click');
+        return;
+      }
+
+      // Validate required data
+      if (!indentId || !department || !user?.role) {
+        toast.error("Missing required data for submission");
+        return;
+      }
+
+      setIsSubmitting(true);
+      setSubmittingIndentId(indentId);
+
+      try {
+        const isComplianceDepartment = department === "COMPLIANCE";
+        const payload = {
+          updatedFields: {
+            type: "WORKFLOW_UPDATE",
+            rejectedStatus:
+              (pageType === "latest" || pageType === "rejected" || pageType === "closure") &&
+              formData[indentId]?.approvalStatus === "reject"
+                ? true
+                : false,
+          },
+        };
+
+        console.log('Submitting indent:', { indentId, department, userRole: user.role, pageType, payload });
+
+        const result = await apiRequest(
+          "PUT",
+          `${
+            window._env_?.REACT_APP_BACKEND_URL || process.env.REACT_APP_BACKEND_URL
+          }/api/v1/indents/${user.role}/${department}/${indentId}`,
+          payload
+        );
+
+        if (result.status === 200 || result.status === 204) {
+          // Success message logic based on page type and approval status
+          if (pageType === "created") {
+            toast.success("Indent Sent to Compliance Checker Successfully");
+          } else if (pageType === "latest") {
+            const approvalStatus = formData[indentId]?.approvalStatus;
+            // Add specific success messages based on role and approval status
+            if (isComplianceDepartment) {
+              if (approvalStatus === "approve") {
+                toast.success("Indent Sent to Compliance Maker for Closure Successfully");
+              } else {
+                toast.success("Indent Sent to back to Compliance Maker Successfully");
+              }
+            } else {
+              if (approvalStatus === "approve") {
+                if (user.role === "COMPLIANCE_CHECKER") {
+                  toast.success("Indent Sent to Department Maker Successfully");
+                } else if (user.role === "DEPARTMENT_MAKER") {
+                  toast.success("Indent Sent to Department Checker Successfully");
+                } else {
+                  toast.success("Indent Sent to Compliance Maker Successfully");
+                }
+              } else {
+                if (user.role === "COMPLIANCE_CHECKER") {
+                  toast.success("Indent Sent to back to Compliance Maker Successfully");
+                } else if (user.role === "DEPARTMENT_MAKER") {
+                  toast.success("Indent Sent to back to Compliance Maker Successfully");
+                } else {
+                  toast.success("Indent Sent to back to Department Maker Successfully");
+                }
+              }
+            }
+          } else if (pageType === "rejected") {
+            if (isComplianceDepartment) {
+              toast.success("Indent Sent to Compliance Checker Successfully");
+            } else {
+              if (formData[indentId]?.approvalStatus === "approve") {
+                if (user.role === "COMPLIANCE_MAKER") {
+                  toast.success("Indent Sent to Compliance Checker Successfully");
+                } else if (user.role === "DEPARTMENT_MAKER") {
+                  toast.success("Indent Sent to Department Checker Successfully");
+                } else {
+                  toast.success("Indent Sent Successfully");
+                }
+              } else {
+                if (user.role === "COMPLIANCE_MAKER") {
+                  toast.success("Indent Sent to back to Department Maker Successfully");
+                } else if (user.role === "DEPARTMENT_MAKER") {
+                  toast.success("Indent Sent to back to Compliance Maker Successfully");
+                } else {
+                  toast.success("Indent Sent Successfully");
+                }
+              }
+            }
+          } else if (pageType === "closure") {
+            if (formData[indentId]?.approvalStatus === "approve") {
+              if (user.role === "COMPLIANCE_MAKER") {
+                toast.success("Indent Sent For Closure to Compliance Checker Successfully");
+              } else if (user.role === "COMPLIANCE_CHECKER") {
+                toast.success("Indent Closed Successfully");
+              }
+            } else if (formData[indentId]?.approvalStatus !== "approve") {
+              if (user.role === "COMPLIANCE_MAKER") {
+                toast.success("Indent Sent to Compliance Checker Successfully");
+              } else if (user.role === "COMPLIANCE_CHECKER") {
+                toast.success("Indent Sent Back to Compliance Maker Successfully");
+              }
+            } else {
+              toast.success("Indent Sent to Compliance Checker Successfully");
+            }
+          }
+
+          // Refetch data after submit with a small delay to ensure backend is updated
+          setTimeout(async () => {
+            const trimmedSearchTerm = searchTerm.trim();
+            await fetchDataWithParams(trimmedSearchTerm, currentPage, rowsPerPage);
+            dispatch(fetchNotifications());
+          }, 500);
+        }
+      } catch (error) {
+        console.error('Error submitting indent:', error);
+        toast.error("An error occurred while submitting the Indent.");
+      } finally {
+        setIsSubmitting(false);
+        setSubmittingIndentId(null);
+      }
+    },
+    [
+      pageType,
+      formData,
+      user.role,
+      fetchDataWithParams,
+      dispatch,
+      searchTerm,
+      currentPage,
+      rowsPerPage,
+      isSubmitting,
+      submittingIndentId,
+    ]
+  );
+
+  const handleSortByPriority = useCallback(() => {
+    const priorityOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const sortedData = [...data].sort((a, b) => {
+      return priorityOrder[b.priority] - priorityOrder[a.priority];
+    });
+    setData(sortedData);
+  }, [data]);
+
+  const handlePageChange = useCallback(
+    async (event, newPage) => {
+      setCurrentPage(newPage);
+
+      // Immediately fetch data for the new page
+      const trimmedSearchTerm = searchTerm.trim();
+      await fetchDataWithParams(trimmedSearchTerm, newPage, rowsPerPage);
+    },
+    [searchTerm, fetchDataWithParams, rowsPerPage]
+  );
+
+  const handleRowsPerPageChange = useCallback(
+    async (event) => {
+      const { numericValue, resetToFirstPage } = event;
+
+      setRowsPerPage(numericValue);
+
+      const newPage = resetToFirstPage ? 1 : currentPage;
+      if (resetToFirstPage) {
+        setCurrentPage(1);
+      }
+
+      // Immediately fetch data with new parameters
+      const trimmedSearchTerm = searchTerm.trim();
+      await fetchDataWithParams(trimmedSearchTerm, newPage, numericValue);
+    },
+    [currentPage, searchTerm, fetchDataWithParams]
+  );
+
+  // Utility functions
+  const formatDateTime = useCallback((dateString) => {
+    return new Date(dateString).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }, []);
+
+  // Remove filteredData and displayData logic since search is now handled by backend
+  const displayData = data;
+
+  return {
+    // State
+    data,
+    searchTerm,
+    isModalOpen,
+    setIsModalOpen,
+    editIndentData,
+    setEditIndentData,
+    indentToDelete,
+    setIndentToDelete,
+    isDeleteDialogOpen,
+    setIsDeleteDialogOpen,
+    descriptionDialogOpen,
+    setDescriptionDialogOpen,
+    currentDescription,
+    setCurrentDescription,
+    loading,
+    formData,
+    setFormData,
+    viewAttachementDialogOpen,
+    setViewAttachementDialogOpen,
+    attachments,
+    setAttachments,
+    indentId,
+    setIndentId,
+    currentPage,
+    rowsPerPage,
+    totalRecords,
+    totalPages,
+    displayData,
+    user,
+    isSubmitting,
+    submittingIndentId,
+
+    // Handlers
+    handleSearch,
+    handleAddIndentClick,
+    handleChange,
+    handleIndentDelete,
+    handleSubmitIndent,
+    handleSubmitRemark,
+    handleEditRemark,
+    handleSortByPriority,
+    handlePageChange,
+    handleRowsPerPageChange,
+    fetchData,
+    fetchDataWithSearch,
+    formatDateTime,
+  };
 };
